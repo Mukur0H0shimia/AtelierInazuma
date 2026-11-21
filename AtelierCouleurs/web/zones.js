@@ -13,7 +13,7 @@ const Z = { tex: {}, zones: [], sel: new Set(), survol: -1, outil: 'choisir', pr
 // ------------------------------------------------------------------ préparation : îles du patron UV -> carte des zones
 function zonesTexCle(o, p) { const x = texPrincipale(o, p); return x ? o.nom + '/' + x.nom : null; }
 function zonesPreparer() {
-  Z.tex = {}; Z.zones = []; Z.sel.clear(); Z.survol = -1; Z.pret = false;
+  Z.tex = {}; Z.zones = []; Z.sel.clear(); Z.survol = -1; Z.pret = false; Z.nPx = []; Z.chev = new Map();
   if (!E.tech || !E.tech.perso) { zonesDessiner(); if (window.atelierApresOuverture) atelierApresOuverture(); return; }
   for (const o of E.objets) { if (o.erreur) continue;
     for (const p of o.pieces || []) { if (!p.geo || !p.vue) continue;
@@ -22,6 +22,7 @@ function zonesPreparer() {
       if (!T) { const W = x.cur.width, H = x.cur.height;
         T = Z.tex[cle] = { cle, x, W, H, label: new Int32Array(W * H).fill(-1), pieces: [] }; }
       zonesIles(T, o, p); } }
+  zonesFusionner();
   for (const T of Object.values(Z.tex)) zonesFinir(T);
   Z.pret = true; zonesDessiner(); zonesAfficher3D();
   // (15/11/2026) un seul endroit pour peindre : l'atelier ouvert, les blocs de technique repliés
@@ -55,7 +56,29 @@ function zonesIles(T, o, p) {
     for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) { const px = x + 0.5, py = y + 0.5;
       const w0 = ((x1 - px) * (y2 - py) - (x2 - px) * (y1 - py)) * Math.sign(ar), w1 = ((x2 - px) * (y0 - py) - (x0 - px) * (y2 - py)) * Math.sign(ar),
         w2 = ((x0 - px) * (y1 - py) - (x1 - px) * (y0 - py)) * Math.sign(ar);
-      if (w0 >= e && w1 >= e && w2 >= e) L[y * W + x] = z; } }
+      if (w0 >= e && w1 >= e && w2 >= e) { const i = y * W + x, avant = L[i];
+        if (avant !== z) { Z.nPx[z] = (Z.nPx[z] || 0) + 1;
+          // (21/11) pixel déjà pris par une AUTRE île (même texture) : les deux se partagent ces pixels (compté pour la fusion)
+          if (avant >= 0) { const k = avant < z ? avant * 1048576 + z : z * 1048576 + avant; Z.chev.set(k, (Z.chev.get(k) || 0) + 1); } }
+        L[i] = z; } } }
+}
+
+// (21/11, bug trouvé par muku : onglet Maillots, mode dessin, « la sélection ne correspond pas à la partie cliquée »)
+// Un modèle du jeu peut avoir plusieurs pièces superposées qui utilisent LES MÊMES pixels de la texture (le maillot : une
+// version par corpulence, manches symétriques…). Chaque île écrivait la carte « pixel -> pièce » par-dessus la précédente :
+// la pièce cliquée en 3D (la plus proche) pouvait n'avoir plus aucun pixel (16 des 24 pièces du short du maillot de Raimon)
+// -> sélection vide ou minuscule, ailleurs que là où on a cliqué. Les îles qui partagent une bonne part de leurs pixels
+// deviennent UNE pièce (on ne peut de toute façon pas colorier l'une sans l'autre) ; un simple bord commun ne compte pas.
+function zonesFusionner() {
+  const par = Z.zones.map((_, i) => i), rac = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+  for (const [k, n] of Z.chev) { const a = Math.floor(k / 1048576), b = k % 1048576;
+    const petit = Math.min(Z.nPx[a] || 0, Z.nPx[b] || 0);
+    if (petit > 0 && n >= 0.2 * petit) { const ra = rac(a), rb = rac(b); if (ra !== rb) par[Math.max(ra, rb)] = Math.min(ra, rb); } }
+  const R = par.map((_, i) => rac(i));
+  if (R.every((r, i) => r === i)) return;
+  for (const o of E.objets) for (const p of o.pieces || []) if (p.zonesTri) for (let t = 0; t < p.zonesTri.length; t++) p.zonesTri[t] = R[p.zonesTri[t]];
+  for (const T of Object.values(Z.tex)) { const L = T.label; for (let i = 0; i < L.length; i++) if (L[i] >= 0) L[i] = R[L[i]]; }
+  for (const z of Z.zones) if (R[z.id] !== z.id) z.fusion = R[z.id];
 }
 function zonesFinir(T) {
   const W = T.W, H = T.H, L = T.label;

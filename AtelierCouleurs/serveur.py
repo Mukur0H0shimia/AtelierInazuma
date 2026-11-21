@@ -528,6 +528,7 @@ def lecteur_natif(demande):
         return {'erreur': 'dossier AtelierNatif introuvable'}
     d = os.path.dirname(X.__file__)
     code = demande.get('technique')
+    APERCU['projet'] = demande.get('projet') or None     # (21/11) bannière perso du projet ouvert (telop_apercu)
     if demande.get('images'):                    # VÉRIFICATION : animation calculée par la page (ancienne méthode), gardée
         dos = exporter_technique_natif(code)['dossier']
         json.dump(demande, open(os.path.join(dos, 'demande_page.json'), 'w', encoding='utf-8'))
@@ -625,6 +626,7 @@ def planche_natif(code, temps):
     des vidéos). Le lecteur dessine toutes les images depuis 0 (adaptation de la luminosité) et garde celles demandées."""
     import subprocess, html
     X = _natif()
+    APERCU['projet'] = None                      # (21/11) comparaison aux vidéos : toujours la bannière du jeu
     with _verrou_d3d:
         s = X.exporter_stade('s10g001')
     r = exporter_technique_natif(code)
@@ -881,26 +883,34 @@ def telop_png(code):
     return out
 
 
-def telop_apercu(code_tech, code_telop):
+APERCU = {'projet': None}       # projet ouvert pour l'export du lecteur natif (lecteur_natif ; vide pour les planches de vérification)
+
+
+def telop_apercu(code_tech, code_telop, projet=None):
     """(21/11) bannière à MONTRER dans les aperçus (web et lecteur natif) pour la technique code_tech :
-    1. celle faite dans l'onglet Bannières (« Utiliser pour la technique ouverte ») : cache/bannieres_apercu/<code>.png ;
+    1. celle faite dans l'onglet Bannières pour CE PROJET (« Utiliser pour la technique ouverte ») :
+       cache/bannieres_apercu/<projet>.png. (21/11, retour de muku : rangée avant sous le code de la technique DU JEU, elle
+       remplaçait la vraie bannière de Choc de la vouivre partout, même ouverte sans son projet.) ;
     2. celle d'une copie déjà créée (sortie/<mod>/content/telops/any/<code>.png), ou d'un mod installé ;
     3. sinon celle du jeu (code_telop : la bannière de la cinématique d'origine)."""
+    projet = APERCU['projet'] if projet is None else projet
     c = os.path.basename(code_tech or '')
+    pj = os.path.basename(projet or '')
+    if pj and os.path.isfile(os.path.join(CACHE, 'bannieres_apercu', pj + '.png')):
+        return os.path.join(CACHE, 'bannieres_apercu', pj + '.png')
     if c:
-        for p in [os.path.join(CACHE, 'bannieres_apercu', c + '.png')] + \
-                 glob.glob(os.path.join(ICI, 'sortie', '*', 'content', 'telops', 'any', c + '.png')) + \
+        for p in glob.glob(os.path.join(ICI, 'sortie', '*', 'content', 'telops', 'any', c + '.png')) + \
                  glob.glob(os.path.join(CFG.get('jeu_dir') or ICI, 'mods', '*', 'content', 'telops', 'any', c + '.png')):
             if os.path.isfile(p):
                 return p
     return telop_png(code_telop or code_tech)
 
 
-def telop_apercu_version(code_tech):
-    """date de la bannière perso de la technique (0 sans) : l'aperçu web recharge l'image quand elle change"""
+def telop_apercu_version(code_tech, projet=None):
+    """date de la bannière perso du projet / de la technique (0 sans) : l'aperçu web recharge l'image quand elle change"""
     c = os.path.basename(code_tech or '')
-    p = os.path.join(CACHE, 'bannieres_apercu', c + '.png')
-    l = [p] + glob.glob(os.path.join(ICI, 'sortie', '*', 'content', 'telops', 'any', c + '.png'))
+    l = ([os.path.join(CACHE, 'bannieres_apercu', os.path.basename(projet) + '.png')] if projet else []) + \
+        glob.glob(os.path.join(ICI, 'sortie', '*', 'content', 'telops', 'any', c + '.png'))
     return max([os.path.getmtime(x) for x in l if os.path.isfile(x)] or [0])
 
 
@@ -1089,6 +1099,18 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
                     m['texture'] = dossier + '/' + t0
     except Exception as ex:
         print('acteurs Direct3D :', ex)
+    # (21/11, LU nie.exe 0x140591fc0 / 0x140591d60) ordre de dessin des pièces : clé = entier G4MD +0x72 du matériau, seau = octet +8
+    # de la fiche du matériau (table +0x64) ; la page en tire l'ordre (app.js ordrePieces), comme le lecteur natif
+    for m in ms:
+        try:
+            md_, i_ = m.get('_md'), m.get('_i')
+            if md_ is None or i_ is None:
+                continue
+            b_, im_ = struct.unpack_from('<H', md_, 0x0A)[0], md_[0xA0 + 0x50 * i_ + 0x43]
+            m['cle'] = struct.unpack_from('<I', md_, (b_ + struct.unpack_from('<H', md_, 0x72)[0] + im_) * 4)[0]
+            m['seau'] = struct.unpack_from('<b', md_, (b_ + struct.unpack_from('<H', md_, 0x64)[0] + im_ * 4) * 4 + 8)[0]
+        except struct.error:
+            pass
     b = modele.binaire(ms)
     with _verrou:
         _modeles[cle] = b
@@ -1661,9 +1683,9 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/telop_png':
                 return self._fichier(telop_png(q['code'][0]))
             if u.path == '/api/telop_apercu':              # bannière des aperçus : la perso si elle existe, sinon celle du jeu
-                return self._fichier(telop_apercu(q.get('tech', [''])[0], q.get('telop', [''])[0]))
+                return self._fichier(telop_apercu(q.get('tech', [''])[0], q.get('telop', [''])[0], q.get('projet', [''])[0]))
             if u.path == '/api/telop_apercu_version':
-                return self._envoyer(200, {'v': telop_apercu_version(q.get('tech', [''])[0])})
+                return self._envoyer(200, {'v': telop_apercu_version(q.get('tech', [''])[0], q.get('projet', [''])[0])})
             if u.path == '/api/etat':
                 return self._envoyer(200, {'jeu_ouvert': export.jeu_ouvert(), 'deja': export._deja_dans_le_mod(os.path.join(ICI, 'sortie', export.MOD_ID)),
                                        'esprits': esprits.contenu(CFG), 'maillots': os.path.isfile(MAILLOTS)})
@@ -1744,9 +1766,9 @@ class Gestion(BaseHTTPRequestHandler):
                 os.replace(tmp, f)
                 return self._envoyer(200, {'ok': True})
             if u.path == '/api/banniere_apercu':          # (21/11) bannière perso de la technique ouverte : aussi pour les aperçus
-                c = os.path.basename(demande.get('code') or '')
+                c = os.path.basename(demande.get('projet') or '')       # (21/11) rangée sous le PROJET, pas sous le code du jeu
                 if not c:
-                    return self._envoyer(200, {'ok': False, 'erreur': 'technique inconnue'})
+                    return self._envoyer(200, {'ok': False, 'erreur': 'projet inconnu'})
                 export.ecrire_png_banniere(demande['image'], os.path.join(CACHE, 'bannieres_apercu', c + '.png'))
                 return self._envoyer(200, {'ok': True})
             if u.path == '/api/banniere':

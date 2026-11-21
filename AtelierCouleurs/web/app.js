@@ -317,7 +317,7 @@ async function animationPage() {
   } finally { V.cv.style.width = st0[0]; V.cv.style.height = st0[1]; V._dessinerUne(Math.floor(V.image)); }
   $('l-film-info').textContent = 'Lecteur natif : export (la 1re fois pour ce stade : ~1 min)…';
   try {
-    const r = await api('/api/natif', { stade: E.stadeCode, technique: E.tech && E.tech.code, images: imgs, reglages: regl, modifs, largeur: 1280, hauteur: 720, verification: true });
+    const r = await api('/api/natif', { stade: E.stadeCode, technique: E.tech && E.tech.code, projet: E.projet, images: imgs, reglages: regl, modifs, largeur: 1280, hauteur: 720, verification: true });
     $('l-film-info').textContent = r.erreur ? 'Lecteur natif : ' + r.erreur : `Lecteur natif lancé (${r.images} images)`;
   } catch (e) { $('l-film-info').textContent = 'Lecteur natif : erreur ' + e.message; }
 }
@@ -429,7 +429,7 @@ async function lancerNatif(V, caches, cle, numero) {
     const jeton = 'L' + Math.random().toString(36).slice(2, 10), titre = document.title.replace(/ · L[a-z0-9]+$/, '');
     document.title = titre + ' · ' + jeton; setTimeout(() => { document.title = titre; }, 4000);
     const opt = optionsActuelles();
-    const r = await api('/api/natif', { stade: E.stadeCode || 's10g001', technique: E.tech.code, modifs, caches, couleurs: opt.couleurs, sommets: opt.sommets,
+    const r = await api('/api/natif', { stade: E.stadeCode || 's10g001', technique: E.tech.code, projet: E.projet, modifs, caches, couleurs: opt.couleurs, sommets: opt.sommets,
       particules: opt.particules, largeur: w, hauteur: h, incruste: true, rect, jeton });
     if (r.erreur) { $('l-film-info').textContent = 'Lecteur natif : ' + r.erreur; return; }
     if (NATIF.numero !== numero || !E.tech || E.vue !== V) {     // annulé pendant le lancement : CE lecteur seulement
@@ -1448,7 +1448,7 @@ async function exporter() {
     couleur_tir: $('f-couleur').value === '' ? null : +$('f-couleur').value, prix: $('f-prix').value ? +$('f-prix').value : null,
     banniere: { texte: $('f-ban').value.trim(), couleur: $('f-ban-c').value, contour: $('f-ban-o').value },
     trainee: $('f-trainee').value ? { famille: $('f-trainee').value, element: $('f-trainee-el').value } : null, objets, auras };
-  if (E.banniereImage && E.banniereImage.code === E.tech.code) d.banniere.image = E.banniereImage.image;
+  if (E.banniereImage && E.banniereImage.projet === E.projet) d.banniere.image = E.banniereImage.image;   // (21/11) liée au projet
   majRapport('Création du mod…');
   try { const r = await api('/api/exporter', d);
     majRapport(r.ok ? 'Mod créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') : 'Erreur : ' + r.erreur);
@@ -1868,7 +1868,7 @@ async function chargerAnimation(t) {
   $('l-info').textContent = 'Lecture de l\'animation…';
   const d = await api('/api/anim?code=' + t.code);
   if (E.tech !== t) return;                                       // une autre technique a été ouverte entre-temps
-  try { E.telopV = (await api('/api/telop_apercu_version?tech=' + encodeURIComponent(t.code))).v; } catch (e) { }   // bannière perso à jour
+  try { E.telopV = (await api('/api/telop_apercu_version?tech=' + encodeURIComponent(t.code) + '&projet=' + encodeURIComponent(E.projet || ''))).v; } catch (e) { }   // bannière perso à jour
   const L = new Lecteur(d);
   E.vue.lumieresDefs = [];                                          // lumières ponctuelles (CCustomPointLight) des objets de l'effet
   for (const o of E.objets) { if (o.erreur || !L.objets[o.acteur]) continue;
@@ -1912,12 +1912,11 @@ async function chargerAnimation(t) {
 async function chargerPeau(url, acteur) {
   const buf = await api(url), dv = new DataView(buf), lg = dv.getUint32(0, true);
   const meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, lg))); let p = 4 + lg;
-  // (15/11/2026) VERSIONS D'UN OBJET DE TECHNIQUE (evNN_…) : maillages de même taille = versions du même objet ; une seule par
-  // acteur (« _s00 »-« _s79 » : la 1re, « _s80 »+ : la 2e). DÉDUIT de 2 vidéos (Choc de la vouivre, Cris d'Eden) ; même règle
-  // que le lecteur natif (AtelierNatif/exporter.py, « montrer »).
+  // (21/11, LU nie.exe — remplace la règle DÉDUITE du 15/11 « _s00 -> 1re version, _s80 -> 2e ») toutes les pièces sont
+  // dessinées ; leur ORDRE est celui du jeu (ordrePieces, même tri que le lecteur natif) : de deux maillages superposés (dragon
+  // clair / sombre de Choc de la vouivre), le jeu garde le DERNIER dessiné (passe couleur en profondeur EQUAL). La vue WebGL n'a
+  // pas de passe de profondeur préalable (test LESS : le PREMIER dessiné l'emporte) : elle dessine donc ces pièces en ordre INVERSE.
   const cacher = new Set();
-  if (/^ev\d\d_/.test(acteur)) { const ms = /_s(\d\d)_/.exec(acteur), choix = ms && +ms[1] >= 80 ? 1 : 0, t = meta.map(m => m.nv + ':' + m.ni);
-    t.forEach((x, i) => { const g = []; t.forEach((y, j) => { if (y === x) g.push(j); }); if (g.length > 1 && g[Math.min(choix, g.length - 1)] !== i) cacher.add(i); }); }
   for (const [i, m] of meta.entries()) {
     const pos = new Float32Array(buf.slice(p, p + m.nv * 12)); p += m.nv * 12;
     const normales = new Float32Array(buf.slice(p, p + m.nv * 12)); p += m.nv * 12;
@@ -1937,6 +1936,46 @@ async function chargerPeau(url, acteur) {
     else if (m.texture) { try { const img = await chargerImage('/tex/' + m.texture + '.png'); const cv = document.createElement('canvas');
       cv.width = img.width; cv.height = img.height; cv.getContext('2d').drawImage(img, 0, 0); E.vue.texture('peau:' + m.texture, cv); v.texCle = 'peau:' + m.texture; } catch (e) { /* sans texture */ } }
   }
+  // ordre de dessin (voir plus haut) : les pièces de cet acteur reprennent leurs places dans E.vue.pieces, en ordre jeu inversé
+  if (meta.some(m => m.cle != null)) {
+    const voulu = ordrePieces(meta.map(m => m.cle >>> 0), meta.map(m => m.seau | 0), meta.length).reverse().map(i => acteur + '/' + i);
+    const P = E.vue.pieces, places = [], parCle = new Map();
+    P.forEach((q, k) => { if (q.cle && voulu.includes(q.cle)) { places.push(k); parCle.set(q.cle, q); } });
+    if (places.length === voulu.length) voulu.forEach((c, j) => { P[places[j]] = parCle.get(c); });
+  }
+}
+// (21/11, LU nie.exe) ordre de dessin des pièces d'un modèle : 0x140591fc0 les ajoute de 0 à n-1, chacune dans le seau « octet +8 de
+// la fiche de son matériau », triée par 0x140591d60 (portée telle quelle, comme AtelierNatif/src/technique.h ordre_pieces) : clé = entier
+// G4MD +0x72 du matériau, valeur = profondeur du modèle (la même pour toutes ses pièces). Seaux dans l'ordre de leur 1re apparition.
+function ordrePieces(cle, seau, n) {
+  const out = [], seaux = [];
+  for (let i = 0; i < n; i++) if (!seaux.includes(seau[i] || 0)) seaux.push(seau[i] || 0);
+  for (const s of seaux) {
+    const prv = new Array(n).fill(-1), nxt = new Array(n).fill(-1); let tete = -1, queue = -1;
+    const K = i => cle[i] >>> 0;
+    const avant = (c, x) => { const p = prv[c]; prv[c] = x; nxt[x] = c; prv[x] = p; if (p >= 0) nxt[p] = x; else tete = x; };
+    const apres = (c, x) => { const q = nxt[c]; nxt[c] = x; prv[x] = c; nxt[x] = q; if (q >= 0) prv[q] = x; else queue = x; };
+    const retirer = c => { const p = prv[c], q = nxt[c]; if (q >= 0) prv[q] = p; else queue = p; if (p >= 0) nxt[p] = q; else tete = q; prv[c] = nxt[c] = -1; };
+    for (let x = 0; x < n; x++) {
+      if ((seau[x] || 0) !== s) continue;
+      let cur = tete, deplace = -1, k5 = 0, fait = false;
+      while (cur >= 0) {
+        const k3 = K(cur);
+        if (deplace < 0) {
+          if (k3 === K(x)) { avant(cur, x); fait = true; break; }
+          else if (k3 !== k5) { avant(cur, x); deplace = x; cur = x; }
+        } else if (k3 === K(x)) {
+          let c = cur; while (c >= 0) { if (K(c) !== K(x)) break; const q = nxt[c]; retirer(c); apres(deplace, c); deplace = c; c = q; }
+          fait = true; break;
+        }
+        k5 = K(cur); cur = nxt[cur];
+      }
+      if (fait || deplace >= 0) continue;
+      if (queue < 0) { tete = queue = x; prv[x] = nxt[x] = -1; } else apres(queue, x);
+    }
+    for (let c = tete; c >= 0; c = nxt[c]) out.push(c);
+  }
+  return out;
 }
 // bannière par-dessus la cinématique : entrée en grossissant, sortie en fondu (celle de l'éditeur si tu en as fait une)
 function majTelop(f) {
@@ -1949,8 +1988,9 @@ function majTelop(f) {
   const sortie = C && f >= fin ? (f - fin) * (t.vitesse_out || 1) : null;
   if (!t || !E.vue.lecteur || !$('l-banniere').checked || f < t.debut || (f >= fin && (!C || sortie > 10))) { el.style.display = 'none'; return; }
   // (21/11) bannière perso (onglet Bannières ou copie déjà créée) si elle existe, sinon celle du jeu ; v : date de la perso
-  const src = E.banniereImage && E.tech && E.banniereImage.code === E.tech.code ? E.banniereImage.image
-    : '/api/telop_apercu?tech=' + encodeURIComponent(E.tech ? E.tech.code : '') + '&telop=' + encodeURIComponent(t.code) + '&v=' + (E.telopV || 0);
+  // (21/11, retour de muku) la bannière perso est celle du PROJET ouvert : la technique du jeu ouverte sans lui montre la vraie
+  const src = E.banniereImage && E.tech && E.banniereImage.projet === E.projet ? E.banniereImage.image
+    : '/api/telop_apercu?tech=' + encodeURIComponent(E.tech ? E.tech.code : '') + '&telop=' + encodeURIComponent(t.code) + '&projet=' + encodeURIComponent(E.projet || '') + '&v=' + (E.telopV || 0);
   if (el.dataset.src !== src) { el.src = src; el.dataset.src = src; }
   let s, op;
   if (C) { if (sortie === null) { const u = (f - t.debut) * (t.vitesse_in || 0.5); s = val(C.echelle_in, u, 1); op = val(C.fondu_in, u, 1); }
@@ -2053,8 +2093,8 @@ async function ouvrirBannieres() {
     $('b-graine').onclick = () => { B.ed.p.graine = Math.floor(Math.random() * 1e6); dessinerBanniere(); };
     $('b-utiliser').onclick = () => {
       if (!E.tech || E.tech.perso) return $('b-rapport').textContent = "Ouvre d'abord une technique dans l'onglet Techniques.";
-      E.banniereImage = { code: E.tech.code, image: B.ed.image() };
-      api('/api/banniere_apercu', { code: E.tech.code, image: E.banniereImage.image }).then(() => { E.telopV = Date.now(); }).catch(() => {});   // aussi pour le lecteur natif
+      E.banniereImage = { code: E.tech.code, projet: E.projet, image: B.ed.image() };
+      api('/api/banniere_apercu', { code: E.tech.code, projet: E.projet, image: E.banniereImage.image }).then(() => { E.telopV = Date.now(); }).catch(() => {});   // aussi pour le lecteur natif
       $('b-rapport').textContent = `Bannière prête pour « ${E.tech.nom} » : elle partira avec « Créer le mod » (onglet Techniques).`; };
     $('b-enregistrer').onclick = async () => {
       if (!B.choix || B.choix.ouverte) return $('b-rapport').textContent = 'Choisis à gauche une copie déjà créée.';

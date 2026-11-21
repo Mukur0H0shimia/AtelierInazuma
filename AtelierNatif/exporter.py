@@ -645,7 +645,7 @@ def ecrire_images(chemin, images_, effets=None):
 # web/vue3d.js et web/app.js) : la page n'a plus rien à calculer. Ici, une fois par technique (gardé dans
 # scenes/tech_<code>), ce que la page prépare au chargement : données d'animation (/api/anim), pièces dans l'ordre de la
 # vue (V.pieces), émetteurs de particules, lumières ponctuelles, personnages, réglages de lumière des plans.
-VERSION_TECH = 35           # (30 : 17/11/2026, techniques des mods recomposées par VRFW) à changer à chaque modification de tech.json / effets.bin (la technique est alors refaite)
+VERSION_TECH = 36           # (30 : 17/11/2026, techniques des mods recomposées par VRFW) à changer à chaque modification de tech.json / effets.bin (la technique est alors refaite)
 VERSION_SCENE = 5          # décor seul (scene.bin) : ne dépend plus des réglages de la technique
 SRV = None                 # module du serveur de l'Atelier (posé par serveur.py ; sinon importé)
 
@@ -817,22 +817,22 @@ def exporter_technique(code, force=False):
             k = E.acteur(quoi, c)
         except Exception as ex:
             print('acteur', a.get('acteur'), ex); k = None
-        # (15/11/2026) VERSIONS D'UN OBJET DE TECHNIQUE (chr/_waza/evNN_…) : plusieurs maillages de MÊME TAILLE (nombre de sommets
-        # et d'indices) = versions du même objet (Choc de la vouivre : dragon clair _10 / sombre _20, sommets identiques ; Cris
-        # d'Eden : pomme orange / pomme violette croquée). Le jeu n'en montre qu'une par acteur. DÉDUIT de 2 vidéos officielles
-        # (la règle n'est pas encore trouvée dans nie.exe) : acteur « _s00 » à « _s79 » -> 1re version, « _s80 » et plus -> 2e.
-        # Les maillages sans double restent tous dessinés. Avant : tout était dessiné, la dernière version recouvrait la 1re.
-        montrer = []
-        if k is not None and quoi == 'chr' and re.match(r'^ev\d\d_', c or ''):
+        # (21/11, LU nie.exe — remplace la règle DÉDUITE du 15/11 « _s00 -> 1re version, _s80 -> 2e ») ORDRE DE DESSIN DES PIÈCES :
+        # tous les maillages sont visibles (ensemble de bits rempli de 0xFF à la création, 0x140561dc0) ; 0x140591fc0 les ajoute dans
+        # l'ordre 0 -> n-1, chacun dans le seau « octet +8 de la fiche de son matériau » (table G4MD +0x64), trié par 0x140591d60 :
+        # clé = entier de la table G4MD +0x72 à l'indice du matériau, valeur = profondeur du MODÈLE (la même pour toutes ses pièces).
+        # La passe couleur des personnages teste la profondeur en EQUAL : de deux maillages superposés, le dernier dessiné reste.
+        # (Choc de la vouivre : dragon clair et sombre superposés, même palette d'os ; le tri dessine le sombre puis le clair.)
+        cles, seaux = [], []
+        if k is not None:
             ac_ = acteur_modele(quoi, c)
-            tailles = [(p['m']['nv'], p['m']['ni']) for p in ac_.pieces] if ac_ is not None else []
-            ms = re.search(r'_s(\d\d)_', a['acteur'])
-            choix = 1 if ms and int(ms.group(1)) >= 80 else 0
-            for i, t in enumerate(tailles):
-                groupe = [j for j, u in enumerate(tailles) if u == t]
-                montrer.append(len(groupe) == 1 or groupe[min(choix, len(groupe) - 1)] == i)
+            for p in (ac_.pieces if ac_ is not None else []):
+                md_, im_ = p['md'], p['m']['mat']
+                b_ = struct.unpack_from('<H', md_, 0x0A)[0]
+                cles.append(struct.unpack_from('<I', md_, (b_ + struct.unpack_from('<H', md_, 0x72)[0] + im_) * 4)[0])
+                seaux.append(struct.unpack_from('<b', md_, (b_ + struct.unpack_from('<H', md_, 0x64)[0] + im_ * 4) * 4 + 8)[0])
         acteurs.append({'acteur': a['acteur'], 'modele': -1 if k is None else k, 'pieces': 0 if k is None else len(E.acteurs[k]),
-                        'montrer': montrer})
+                        'cles': cles, 'seaux': seaux})
     LP = an.pop('lumiere_plans', None) or {}         # 5) réglages de lumière des plans -> jeux de réglages (lums.bin)
     regl, ri, plan_lum = [], {}, {}
     for nom, g in LP.items():

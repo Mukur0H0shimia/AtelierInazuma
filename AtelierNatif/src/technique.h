@@ -29,7 +29,50 @@ struct LumL { uint32_t pos, col; double type; };
 struct ShL { uint32_t mat; int idx; uint32_t ref; int type; };
 struct LumDefT { std::string acteur; int obj = -1; std::unordered_map<uint32_t, std::vector<double>> params; std::vector<RefL> refs; std::vector<LumL> lumieres; std::vector<ShL> shader; };
 struct ParamSh { int idx, masque; std::vector<double> v; };
-struct ActT { std::string acteur; int modele = -1, npieces = 0; std::vector<char> montrer; };   // montrer : versions d'un objet (exporter.py, DÉDUIT)
+struct ActT { std::string acteur; int modele = -1, npieces = 0; std::vector<uint32_t> cles; std::vector<int> seaux; std::vector<int> ordre; };
+
+// (21/11, LU nie.exe) ORDRE DE DESSIN DES PIÈCES D'UN MODÈLE (remplace la règle DÉDUITE « _s00 -> 1re version, _s80 -> 2e »).
+// 0x140591fc0 ajoute les maillages dans l'ordre 0 -> n-1, chacun dans le seau « octet +8 de la fiche de son matériau », par
+// 0x140591d60 (portée ici telle quelle) : clé = entier G4MD +0x72 du matériau (cles), valeur = profondeur du modèle, la même pour
+// toutes ses pièces (donc « f <= f » toujours vrai entre elles). Liste doublement chaînée : un nouvel élément passe AVANT le 1er de
+// même clé, ou avant le 1er d'une autre clé (puis la suite de même clé est ramenée derrière lui). La passe couleur des personnages
+// teste la profondeur en EQUAL : de deux maillages superposés (dragon clair / sombre de Choc de la vouivre), le DERNIER dessiné reste.
+// Seaux : dans l'ordre de leur 1re apparition (l'ordre de parcours des seaux par le moteur n'est pas encore lu ; il ne compte
+// qu'entre pièces de seaux différents exactement superposées).
+static std::vector<int> ordre_pieces(const std::vector<uint32_t>& cle, const std::vector<int>& seau, int n) {
+    std::vector<int> out, seauxVus;
+    for (int i = 0; i < n; i++) { const int s = i < (int)seau.size() ? seau[i] : 0; if (std::find(seauxVus.begin(), seauxVus.end(), s) == seauxVus.end()) seauxVus.push_back(s); }
+    for (int s : seauxVus) {
+        std::vector<int> prv(n, -1), nxt(n, -1); int tete = -1, queue = -1;
+        auto K = [&](int i) { return i < (int)cle.size() ? cle[i] : 0u; };
+        auto avant = [&](int c, int x) { const int p = prv[c]; prv[c] = x; nxt[x] = c; prv[x] = p; if (p >= 0) nxt[p] = x; else tete = x; };
+        auto apres = [&](int c, int x) { const int q = nxt[c]; nxt[c] = x; prv[x] = c; nxt[x] = q; if (q >= 0) prv[q] = x; else queue = x; };
+        auto retirer = [&](int c) { const int p = prv[c], q = nxt[c]; if (q >= 0) prv[q] = p; else queue = p; if (p >= 0) nxt[p] = q; else tete = q; prv[c] = nxt[c] = -1; };
+        for (int x = 0; x < n; x++) {
+            if ((x < (int)seau.size() ? seau[x] : 0) != s) continue;
+            int cur = tete, deplace = -1; uint32_t k5 = 0; bool fait = false;
+            while (cur >= 0) {
+                const uint32_t k3 = K(cur);
+                if (deplace < 0) {
+                    if (k3 == K(x)) {                                   // même clé : valeur égale -> avant lui
+                        avant(cur, x); fait = true; break;
+                    } else if (k3 != k5) {                              // autre clé (valeur égale) : avant lui, puis on continue
+                        avant(cur, x); deplace = x; cur = x;
+                    }
+                } else if (k3 == K(x)) {                                // la suite de même clé est ramenée derrière le nouveau
+                    int c = cur;
+                    while (c >= 0) { if (K(c) != K(x)) break; const int q = nxt[c]; retirer(c); apres(deplace, c); deplace = c; c = q; }
+                    fait = true; break;
+                }
+                k5 = K(cur); cur = nxt[cur];
+            }
+            if (fait || deplace >= 0) continue;
+            if (queue < 0) { tete = queue = x; prv[x] = nxt[x] = -1; } else apres(queue, x);
+        }
+        for (int c = tete; c >= 0; c = nxt[c]) out.push_back(c);
+    }
+    return out;
+}
 struct AuraT { std::string acteur; double debut, fin, duree = 1, entree = 0, sortie = 0; bool boucle = true, aCourbes = false; int prio = 3, genre = 0; std::vector<std::vector<std::vector<double>>> courbes; };
 
 struct Technique {
@@ -80,7 +123,9 @@ struct Technique {
             for (auto& r : d["shader"].a) l.shader.push_back({(uint32_t)(int64_t)r["matNameCrc"].num(), (int)r["setShaderParamIdx"].num(), (uint32_t)(int64_t)r["refParamNameCrc"].num(), (int)r["refParamType"].num()});
             lums.push_back(std::move(l)); }
         for (auto& x : J["acteurs"].a) { ActT t{x["acteur"].s, (int)x["modele"].num(), (int)x["pieces"].num()};
-            for (auto& v : x["montrer"].a) t.montrer.push_back(v.vrai() ? 1 : 0);
+            for (auto& v : x["cles"].a) t.cles.push_back((uint32_t)(int64_t)v.num());
+            for (auto& v : x["seaux"].a) t.seaux.push_back((int)v.num());
+            t.ordre = ordre_pieces(t.cles, t.seaux, t.npieces);
             acteurs.push_back(t); }
         for (auto& p : J["plan_lum"].o) { planLum[p.first] = (int)p.second.num(); if (p.first == "_base") lumBase = (int)p.second.num(); }
         for (auto& x : J["anim"]["aura_balle"].a) { AuraT a; a.acteur = x["acteur"].s; a.debut = x["debut"].num(); a.fin = x["fin"].num(); a.aCourbes = x["courbes"].vrai();
@@ -380,7 +425,7 @@ struct Technique {
             if (it == res.peaux.end() || a.modele < 0 || a.npieces <= 0 || sansActeurs) continue;
             ActeurImage x; x.modele = (uint32_t)a.modele;
             { auto fi = res.fondus.find(a.acteur); x.alpha = fi != res.fondus.end() ? (float)std::min(1.0, fi->second) : 1.0f; }   // (15/11/2026) fondu
-            for (int i = 0; i < a.npieces; i++) if (i >= (int)a.montrer.size() || a.montrer[i]) x.pieces.push_back(i);   // (15/11/2026) une version
+            for (int i : a.ordre) x.pieces.push_back(i);   // (21/11) toutes les pièces, dans l'ordre de dessin du jeu (ordre_pieces, LU)
             x.mats.resize(16 * it->second.size()); for (size_t b = 0; b < it->second.size(); b++) for (int i = 0; i < 16; i++) x.mats[16 * b + i] = it->second[b][i];
             x.statut = aStatut && (stActeur == a.acteur || (stActeur.rfind("b000001", 0) == 0 && a.acteur.rfind("b000001", 0) == 0)) ? 1 : 0;
             if (x.statut) { const float st[12] = {(float)stCol[0], (float)stCol[1], (float)stCol[2], 1, (float)stRim[0], (float)stRim[1], (float)stRim[2], (float)stRimW, (float)ou(stPow, 1), 0, 0, 0}; memcpy(x.st, st, sizeof st); }

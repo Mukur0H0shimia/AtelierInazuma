@@ -10,6 +10,7 @@ Outil pour créer des mods d'**Inazuma Eleven : Victory Road** (PC) : recolorer 
 
 1. Téléchargez le zip, puis **clic droit → Extraire tout…** (n'importe où : Bureau, Documents…).
 2. Ouvrez le dossier `AtelierInazuma` et double-cliquez sur **`Atelier Inazuma.exe`**.
+   Windows demande peut-être une confirmation la première fois (programme non signé) : cliquez **Exécuter**, ou **Informations complémentaires → Exécuter quand même**. Ensuite il ne redemande plus.
 3. Au premier lancement, un raccourci **Atelier Inazuma** apparaît sur votre bureau. Les fois suivantes, lancez l'Atelier depuis ce raccourci.
 
 Le **premier lancement** prépare l'Atelier pendant quelques minutes, avec une barre de progression. Ensuite, il s'ouvre en quelques secondes.
@@ -62,6 +63,7 @@ A modding tool for **Inazuma Eleven: Victory Road** (PC): recolour techniques, *
 
 1. Download the zip, then **right-click → Extract All…** (anywhere: Desktop, Documents…).
 2. Open the `AtelierInazuma` folder and double-click **`Atelier Inazuma.exe`**.
+   Windows may ask for confirmation the first time (unsigned program): click **Run**, or **More info → Run anyway**. It won't ask again.
 3. On the first run, an **Atelier Inazuma** shortcut appears on your desktop. Use it to start the Atelier from then on.
 
 The **first run** gets the Atelier ready for a few minutes, with a progress bar. After that it opens in a few seconds.

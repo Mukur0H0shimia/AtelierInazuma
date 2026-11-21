@@ -32,7 +32,7 @@ static class Lanceur
         AppDomain.CurrentDomain.AssemblyResolve += (s, e) =>
         {
             string p = Path.Combine(Libs, new AssemblyName(e.Name).Name + ".dll");
-            return File.Exists(p) ? Assembly.LoadFrom(p) : null;
+            return File.Exists(p) ? Assembly.UnsafeLoadFrom(p) : null;   // Unsafe : fichiers venus d'internet (zip téléchargé)
         };
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
@@ -42,8 +42,31 @@ static class Lanceur
                    "\n\nGarde « Atelier Inazuma.exe » dans le dossier AtelierCouleurs (utilise un raccourci pour le bureau).");
             return;
         }
+        Debloquer();
         RaccourciBureau();
         Lancer();
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    static extern bool DeleteFile(string nom);
+
+    // zip téléchargé : Windows marque chaque fichier « venu d'internet » (flux Zone.Identifier) et redemande à chaque
+    // lancement s'il faut l'exécuter. Une fois l'Atelier lancé, on retire cette marque de SES fichiers (une seule fois) :
+    // le dossier téléchargé entier s'il a son python\, sinon seulement AtelierCouleurs.
+    static void Debloquer()
+    {
+        try
+        {
+            string marque = Path.Combine(Dossier, "cache", "debloque.txt");
+            if (File.Exists(marque)) return;
+            string parent = Path.GetFullPath(Path.Combine(Dossier, ".."));
+            string racine = Directory.Exists(Path.Combine(parent, "python")) ? parent : Dossier;
+            foreach (string f in Directory.EnumerateFiles(racine, "*", SearchOption.AllDirectories))
+                DeleteFile(f + ":Zone.Identifier");
+            Directory.CreateDirectory(Path.GetDirectoryName(marque));
+            File.WriteAllText(marque, racine);
+        }
+        catch (Exception) { }
     }
 
     // raccourci « Atelier Inazuma » sur le bureau, créé au 1er lancement seulement (s'il est supprimé, il ne revient pas)

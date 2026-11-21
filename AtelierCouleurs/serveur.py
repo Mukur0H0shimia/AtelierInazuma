@@ -1902,8 +1902,17 @@ class Gestion(BaseHTTPRequestHandler):
 EDGE = [r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', r'C:\Program Files\Microsoft\Edge\Application\msedge.exe']
 
 
-def ouvrir_fenetre(url):
-    """fenêtre d'app à elle (Edge --app : pas de barre d'adresse, son icône dans la barre des tâches), sinon le navigateur"""
+def ouvrir_fenetre(url, port=None):
+    """(22/11, muku : « c'est censé être une appli, pas un truc sur Edge ») la VRAIE fenêtre de l'Atelier : Atelier Inazuma.exe
+    (WinForms + WebView2) avec --port, qui reprend ce serveur (même dossier, même version : /api/identite) au lieu d'en lancer un.
+    Edge --app / navigateur seulement si le programme manque (autre système, dossier incomplet)."""
+    exe = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Atelier Inazuma.exe')
+    if os.name == 'nt' and os.path.isfile(exe):
+        try:
+            subprocess.Popen([exe] + (['--port', str(port)] if port else []), cwd=os.path.dirname(exe))
+            return
+        except OSError as ex:
+            print("fenêtre de l'Atelier :", ex)
     edge = next((e for e in EDGE if os.path.isfile(e)), None)
     if edge:
         profil = os.path.join(CACHE, 'fenetre')        # profil à part : la fenêtre garde sa taille, rien ne se mélange
@@ -1999,7 +2008,7 @@ def main():
     url = 'http://127.0.0.1:%d/' % port
     print('Atelier Inazuma : %s  (%d techniques, %d esprits et totems)  -  fermer cette fenêtre pour arrêter' % (url, len(INDEX), len(PERSOS)))
     if '--sans-navigateur' not in sys.argv:
-        threading.Timer(0.8, lambda: ouvrir_fenetre(url)).start()
+        threading.Timer(0.8, lambda: ouvrir_fenetre(url, port)).start()
     import atexit
     atexit.register(arreter_natifs)              # (serveur fermé : ses lecteurs aussi)
     srv.serve_forever()

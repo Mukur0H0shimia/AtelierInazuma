@@ -22,11 +22,15 @@ static class Lanceur
 {
     public const string TITRE = "Atelier Inazuma";
     public static string Dossier, Libs;
+    public static int PortDemande;                  // (22/11) --port N : serveur déjà lancé (python serveur.py / .bat) sur ce port
 
     [STAThread]
     static void Main()
     {
         Dossier = AppDomain.CurrentDomain.BaseDirectory;
+        string[] arg = Environment.GetCommandLineArgs();
+        for (int i = 1; i + 1 < arg.Length; i++)
+            if (arg[i] == "--port") int.TryParse(arg[i + 1], out PortDemande);
         Libs = Path.Combine(Dossier, "lanceur", "webview2");
         // les bibliothèques WebView2 sont dans lanceur\webview2 (pas à côté de l'exe)
         AppDomain.CurrentDomain.AssemblyResolve += (s, e) =>
@@ -436,6 +440,7 @@ static class Lanceur
 
     public static int LirePort()
     {
+        if (PortDemande > 0) return PortDemande;
         try
         {
             var m = Regex.Match(File.ReadAllText(Path.Combine(Dossier, "config.json")), "\"port\"\\s*:\\s*(\\d+)");

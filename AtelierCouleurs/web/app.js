@@ -20,6 +20,9 @@ const ONGLETS = {
   objets: { cherche: 'Chercher un objet du jeu (Crampons, Pendentif, Boisson…)', pieces: 'Icône', tout: 'Icône', note: 'Objet du jeu : son icône (à recolorer en mode dessin).' },
   bannieres: { cherche: '', pieces: '', tout: '', note: '' },
 };
+// (21/11) éléments des techniques : le catalogue les donne en anglais (wind, fire…) -> noms du jeu en français
+const EL_FR = { wind: 'Air', fire: 'Feu', forest: 'Forêt', mountain: 'Montagne', void: 'Néant' };
+const libElement = e => (window.ATELIER_LANGUE === 'en' ? (e ? e.charAt(0).toUpperCase() + e.slice(1) : e) : EL_FR[e] || e);
 const ONGLETS_JEU = ['maillots', 'tenues', 'armures', 'personnages', 'objets'];     // (15/11/2026) tout le jeu (moteur/jeu.py)
 const estPerso = () => E.onglet === 'esprits' || E.onglet === 'totems' || ONGLETS_JEU.includes(E.onglet);
 // E.textures[cle] = {obj, nom, info, orig: ImageData, cur: canvas, modif: bool, moyenne: [r,g,b]}
@@ -491,7 +494,7 @@ async function ouvrir_(code) {
   E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
   if (perso) { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}`;
     $('p-nom').value = t.nom + ' (couleurs)'; $('p-desc').value = ''; if ($('rt-nom')) $('rt-nom').value = t.nom + ' (couleurs)'; if ($('cp-nom')) { $('cp-nom').value = ''; $('cp-nom').placeholder = t.nom + ' bis'; } }
-  else { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}${t.element ? ' · ' + t.element : ''}  ·  cinématique ${t.cinematique}`;
+  else { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}${t.element ? ' · ' + libElement(t.element) : ''}  ·  cinématique ${t.cinematique}`;
     $('f-nom').value = t.nom + ' (couleurs)'; $('f-ban').value = (t.nom + ' couleurs').toUpperCase(); }
   // textures
   for (const o of E.objets) {
@@ -1391,9 +1394,8 @@ function dessinerHub() {
     d.querySelector('.hub-image').onclick = ouvrirC; d.querySelector('[data-a="modifier"]').onclick = ouvrirC;
     const bi = d.querySelector('[data-a="installer"]');
     if (bi) bi.onclick = async () => {
-      const perdus = c.mod === 'MesEsprits' ? HUB.creations.filter(x => x.jeuSeul && x.mod === c.mod).map(x => '« ' + x.nom + ' »') : [];
-      if (perdus.length && !confirm(`Installer remplace le mod ${c.mod} du jeu : ${perdus.join(', ')} en sera retiré (une sauvegarde est faite avant).\nContinuer ?`)) return;
-      await installer(c.mod); $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub(); };
+      await installer(c.mod);              // (21/11) créations du jeu qui seraient retirées : demandé par installer()
+      $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub(); };
     l.appendChild(d); }
   // préréglages
   const pr = $('hub-prereglages'); pr.innerHTML = '';
@@ -1850,7 +1852,12 @@ window.addEventListener('load', () => { if (!$('oj-exporter')) return;
   $('oj-exporter').onclick = () => ojExporter().catch(e => majRapport('Erreur : ' + e.message)); $('oj-installer').onclick = () => installer('MesObjets'); });
 async function installer(mod) {
   majRapport('Installation…');
-  try { const r = await api('/api/installer', { mod: mod || 'MesTechniques' });
+  try { let r = await api('/api/installer', { mod: mod || 'MesTechniques' });
+    // (21/11) le mod du jeu a des créations absentes de cet Atelier (autre dossier, autre PC) : installer les retirerait
+    if (!r.ok && r.perdus && r.perdus.length) {
+      if (!confirm(`Installer remplace le mod ${mod} du jeu. Ces créations n'existent pas dans cet Atelier et seront retirées du jeu :\n`
+        + r.perdus.map(n => '- ' + n).join('\n') + '\n\n(une sauvegarde est faite avant ; « Annuler » pour ne rien changer)\nContinuer ?')) return majRapport('Installation annulée : rien n’a changé.');
+      r = await api('/api/installer', { mod: mod || 'MesTechniques', forcer: true }); }
     majRapport(r.ok ? 'Installé dans ' + r.dossier + '\nSauvegarde : ' + r.sauvegarde + '\nLance le jeu, puis regarde le journal de VRFW (aucune ligne ERROR).'
                       + (r.avertissement ? '\n⚠ ' + r.avertissement : '') : 'Pas installé : ' + r.erreur);
   } catch (e) { majRapport('Erreur : ' + e.message); }
@@ -2147,7 +2154,7 @@ window.addEventListener('load', async () => {
       .concat(SERIES.map(s => [s, s, tous.filter(t => (t.series || []).includes(s) && parSource(t) && parGenre(t)).length]).filter(x => x[2])));
     if (GENRES && genres.length > 1) puces += rangee('genre', fGenre, [['', 'Tout', Object.values(nbG).reduce((a, b) => a + b, 0)]].concat(genres.map(g => [g, g, nbG[g]])));
     res.innerHTML = `<div class="compte-liste">${puces}${l.length} résultat${l.length > 1 ? 's' : ''}</div>` + l.map((t, i) =>
-      `<div data-i="${i}"><span>${echapper(t.nom)}</span><small>${echapper(t.code)} · ${echapper(t.genre)}${t.element ? ' · ' + echapper(t.element) : ''}</small></div>`).join('');
+      `<div data-i="${i}"><span>${echapper(t.nom)}</span><small>${echapper(t.code)} · ${echapper(t.genre)}${t.element ? ' · ' + echapper(libElement(t.element)) : ''}</small></div>`).join('');
     res.onclick = ev => { const bg = ev.target.closest('[data-genre],[data-source],[data-serie]');
       if (bg) { ev.stopPropagation();                         // tri : la liste reste ouverte
         if ('genre' in bg.dataset) E.filtreGenre = bg.dataset.genre || null;

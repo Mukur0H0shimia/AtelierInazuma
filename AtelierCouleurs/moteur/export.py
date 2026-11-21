@@ -426,9 +426,41 @@ def jeu_ouvert():
     return 'nie.exe' in r.stdout.lower()
 
 
-def installer(cfg, mod_id=MOD_ID):
+def perdus_a_l_installation(src, dst, mod_id):
+    """(21/11) noms des créations présentes dans <jeu>/mods/<mod> mais PAS dans la sortie : « Installer » les retirerait du jeu
+    (le mod du jeu est remplacé ; MesTechniques seul est complété). Registres outil_*.json ; maillots : objets du mod."""
+    if mod_id == 'MesTechniques' or not os.path.isdir(dst):
+        return []
+    perdus = []
+    for f_j in glob.glob(os.path.join(dst, 'outil_*.json')):
+        try:
+            reg_j = json.load(open(f_j, encoding='utf-8'))
+            f_s = os.path.join(src, os.path.basename(f_j))
+            reg_s = json.load(open(f_s, encoding='utf-8')) if os.path.isfile(f_s) else {}
+        except (OSError, ValueError):
+            continue
+        if isinstance(reg_j, dict):
+            perdus += [(v.get('nom') if isinstance(v, dict) else None) or k for k, v in reg_j.items() if k not in reg_s]
+    if mod_id == 'MesMaillots':
+        def objets(d):
+            out = {}
+            for p in glob.glob(os.path.join(d, 'content', 'items', '*.toml')):
+                try:
+                    for it in tomllib.load(open(p, 'rb')).get('item') or []:
+                        txt = (it.get('text') or {})
+                        out[it.get('name')] = ((txt.get('fr') or txt.get('en') or {}).get('name')) or it.get('name')
+                except (OSError, ValueError):
+                    pass
+            return out
+        o_s = objets(src)
+        perdus += [n for k, n in objets(dst).items() if k not in o_s]
+    return list(dict.fromkeys(perdus))                 # un nom une fois (maillot domicile + extérieur : même nom)
+
+
+def installer(cfg, mod_id=MOD_ID, forcer=False):
     """copie sortie/<mod_id> (MesTechniques ou MesEsprits) dans <jeu>/mods (sauvegarde avant), ajoute le mod à
-    enabled.toml ; jeu fermé seulement"""
+    enabled.toml ; jeu fermé seulement. (21/11) forcer=False : refuse si des créations du jeu absentes de la sortie
+    seraient retirées (« perdus », la page demande confirmation puis renvoie forcer=True)."""
     if mod_id not in ('MesTechniques', 'MesEsprits', 'MesPersonnages', 'MesTenues', 'MesObjets', 'MesMaillots'):   # (pas de MesRetouches : jamais de remplacement)   # (15/11/2026) MesRetouches : remplacements
         return {'ok': False, 'erreur': 'Mod inconnu : ' + str(mod_id)}
     if jeu_ouvert():
@@ -440,7 +472,10 @@ def installer(cfg, mod_id=MOD_ID):
         tomllib.load(open(p, 'rb'))
     mods = os.path.join(cfg['jeu_dir'], 'mods')
     dst = os.path.join(mods, mod_id)
-    sauv = os.path.join(cfg['sauvegardes_dir'], mod_id + '_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+    perdus = perdus_a_l_installation(src, dst, mod_id)
+    if perdus and not forcer:
+        return {'ok': False, 'perdus': perdus, 'erreur': 'Installer retirerait du jeu : %s (absents de cet Atelier).' % ', '.join(perdus)}
+    sauv =os.path.join(cfg['sauvegardes_dir'], mod_id + '_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
     os.makedirs(sauv, exist_ok=True)
     if os.path.isdir(dst):
         shutil.copytree(dst, os.path.join(sauv, mod_id), dirs_exist_ok=True)

@@ -1834,7 +1834,7 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/exporter_personnage':
                 return self._envoyer(200, esprits.exporter(CFG, demande, PERSO_CODE[demande['code']]))
             if u.path == '/api/installer':
-                return self._envoyer(200, export.installer(CFG, demande.get('mod', export.MOD_ID)))
+                return self._envoyer(200, export.installer(CFG, demande.get('mod', export.MOD_ID), forcer=bool(demande.get('forcer'))))
             if u.path == '/api/ouvrir_maillots':
                 if not os.path.isfile(MAILLOTS):
                     return self._envoyer(200, {'ok': False, 'erreur': 'Atelier Maillots introuvable : ' + MAILLOTS})

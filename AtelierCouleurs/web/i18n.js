@@ -67,6 +67,12 @@
     [/^Création (de la tenue|de l’armure|du nouveau joueur|de la copie)…$/, function (_, q) {
       return 'Creating ' + { 'de la tenue': 'the outfit', 'de l’armure': 'the armour', 'du nouveau joueur': 'the new player', 'de la copie': 'the copy' }[q] + '…'; }],
     [/^Installation…$/, 'Installing…'],
+    [/^Installer remplace le mod (\S+) du jeu\. Ces créations n'existent pas dans cet Atelier et seront retirées du jeu :$/,
+     '“Install” replaces the $1 mod of the game. These creations are not in this Atelier and will be removed from the game:'],
+    [/^\(une sauvegarde est faite avant ; « Annuler » pour ne rien changer\)$/, '(a backup is made first; “Cancel” to change nothing)'],
+    [/^Continuer \?$/, 'Continue?'],
+    [/^Installation annulée : rien n’a changé\.$/, 'Installation cancelled: nothing changed.'],
+    [/^Installer retirerait du jeu : (.+) \(absents de cet Atelier\)\.$/, '“Install” would remove from the game: $1 (not in this Atelier).'],
     [/^Texture déjà colorée \((.+?)\) : la couleur du matériau la MULTIPLIE \(orange × bleu = presque noir\)\. Pour changer la teinte, recolore plutôt la texture \(bloc Textures\) et laisse le matériau blanc\.$/,
      'Already coloured texture ($1): the material colour MULTIPLIES it (orange × blue = almost black). To change the hue, recolour the texture instead (Textures block) and leave the material white.']
   ];

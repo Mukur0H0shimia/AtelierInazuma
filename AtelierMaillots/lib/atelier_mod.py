@@ -34,9 +34,43 @@ def reglages():
     else:
         json.dump(r, open(REGLAGES, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
     v = os.environ.get('ATELIER_JEU_DIRECT')          # lancé par l'Atelier en lecture directe
-    if v and not os.path.isfile(os.path.join(r['donnees'], 'common', 'text', 'fr', 'chara_text.cfg.bin')):
-        r['donnees'] = v.split(os.pathsep, 1)[1]
+    if not os.path.isfile(os.path.join(r['donnees'], 'common', 'text', 'fr', 'chara_text.cfg.bin')):
+        if v:
+            r['donnees'] = v.split(os.pathsep, 1)[1]
+        else:                                          # (21/11) lancé SEUL sans fichiers extraits : lecture directe aussi
+            ac, jeu = _jeu_de_l_atelier()
+            if jeu and os.path.isfile(os.path.join(jeu, 'data', 'cpk_list.cfg.bin')):
+                try:
+                    from moteur import donnees_virtuelles as _dv
+                    r['donnees'] = _dv.activer(jeu, os.path.join(ac, 'cache', 'data_jeu'))
+                except Exception as ex:
+                    print('lecture directe :', ex)
+    # (21/11) dossier « mods » : celui du jeu de l'Atelier quand celui des réglages n'est pas dans un vrai jeu (avant :
+    # chemin écrit en dur, faux pour un jeu dans une autre bibliothèque Steam ou une copie de dépôt -> maillots invisibles)
+    if r.get('mods') == DEFAUT['mods'] or not os.path.isfile(os.path.join(os.path.dirname(os.path.normpath(r.get('mods') or '')), 'nie.exe')):
+        jeu = _jeu_de_l_atelier()[1]
+        if jeu:
+            r['mods'] = os.path.join(jeu, 'mods')
     return r
+
+
+def _jeu_de_l_atelier():
+    """(dossier AtelierCouleurs, dossier du jeu) : celui de la config de l'Atelier, sinon trouvé comme lui le trouve"""
+    ac = os.path.join(os.path.dirname(ICI), 'AtelierCouleurs')
+    try:
+        j = json.load(open(os.path.join(ac, 'config.json'), encoding='utf-8')).get('jeu_dir')
+        if j and os.path.isfile(os.path.join(j, 'nie.exe')):
+            return ac, j
+    except (OSError, ValueError):
+        pass
+    try:
+        import sys
+        if ac not in sys.path:
+            sys.path.insert(0, ac)
+        from moteur import config_auto
+        return ac, config_auto.trouver_jeu(ac)
+    except Exception:
+        return ac, None
 
 
 # -------------------------------------------------------------------------------------------- catalogue
@@ -572,12 +606,21 @@ def construire_mod(projet, cat_par_cle, rgl, pool=None, journal=print):
     shutil.rmtree(tmp)
     # activation dans enabled.toml
     en = os.path.join(mods, 'enabled.toml')
-    s = open(en, encoding='utf-8').read()
+    s = open(en, encoding='utf-8').read() if os.path.isfile(en) else ''      # (21/11) jeu sans enabled.toml : créé
     if ('"%s"' % MOD_ID) not in s:
         sauv = os.path.join(ICI, 'enabled_avant_atelier.toml')
-        if not os.path.exists(sauv):
+        if not os.path.exists(sauv) and os.path.isfile(en):
             shutil.copy(en, sauv)
-        s = re.sub(r'\]\s*$', ', "%s"]\n' % MOD_ID, s.rstrip(), count=1)
+        # (21/11) liste vide -> ["MesMaillots"] (avant : « [, "MesMaillots"] », TOML invalide ; et plantage sans le fichier)
+        m_ = re.search(r'enabled\s*=\s*\[(.*?)\]', s, re.S)
+        if m_:
+            dedans = m_.group(1).strip().rstrip(',').strip()
+            s = s[:m_.start()] + 'enabled = [%s"%s"]' % (dedans + ', ' if dedans else '', MOD_ID) + s[m_.end():]
+        else:
+            s = s.rstrip() + ('\n' if s.strip() else '') + 'enabled = ["%s"]\n' % MOD_ID
+        import tomllib as _tl
+        _tl.loads(s)
+        os.makedirs(mods, exist_ok=True)
         open(en, 'w', encoding='utf-8').write(s)
         journal('mod « Mes maillots » activé')
     journal('mod installé : %d maillot(s) dans %s' % (len(projet['maillots']), cible))

@@ -445,7 +445,8 @@ def installer(cfg, mod_id=MOD_ID):
     if os.path.isdir(dst):
         shutil.copytree(dst, os.path.join(sauv, mod_id), dirs_exist_ok=True)
     en = os.path.join(mods, 'enabled.toml')
-    shutil.copy(en, os.path.join(sauv, 'enabled.toml'))
+    if os.path.isfile(en):                              # (21/11) jeu sans enabled.toml : rien à sauvegarder (avant : plantage)
+        shutil.copy(en, os.path.join(sauv, 'enabled.toml'))
     # (15/11/2026) techniques : AJOUT au mod du jeu (les techniques déjà installées restent, ex. La Flamme absente de la
     # sortie). Avant : le mod du jeu était vidé puis remplacé, ce qui retirait ces techniques. Esprits : remplacé comme
     # avant (mes_esprits.toml liste tous les esprits de la sortie). Dans les deux cas, l'ancienne version est sauvegardée.
@@ -458,12 +459,30 @@ def installer(cfg, mod_id=MOD_ID):
         vieux = os.path.join(dst, os.path.relpath(r_, src))[:-len('.retire')]
         if os.path.isfile(vieux):
             os.remove(vieux)
-    t = open(en, encoding='utf-8').read()
-    if '"%s"' % mod_id not in t:
-        t2 = re.sub(r'enabled = \[(.*?)\]', lambda m: 'enabled = [%s, "%s"]' % (m.group(1), mod_id), t, count=1, flags=re.S)
-        tomllib.loads(t2)
-        open(en, 'w', encoding='utf-8').write(t2)
-    return {'ok': True, 'dossier': dst, 'sauvegarde': sauv}
+    activer_mod(en, mod_id)
+    r = {'ok': True, 'dossier': dst, 'sauvegarde': sauv}
+    if not os.path.isdir(os.path.join(mods, 'VRFW')):   # (21/11) sans le chargeur de mods, rien ne se charge en jeu
+        r['avertissement'] = ('VRFW n’est pas dans le dossier mods du jeu : installe-le (avec Inazuma Fantasy), sinon le mod '
+                              'ne se chargera pas.')
+    return r
+
+
+def activer_mod(en, mod_id):
+    """(21/11) ajoute mod_id à enabled.toml de VRFW (créé s'il manque) ; une liste vide donne ["mod"] (avant : « [, "mod"] »,
+    TOML invalide). Renvoie True si le fichier a changé."""
+    os.makedirs(os.path.dirname(en), exist_ok=True)
+    t = open(en, encoding='utf-8').read() if os.path.isfile(en) else 'enabled = []\n'
+    if '"%s"' % mod_id in t:
+        return False
+    m = re.search(r'enabled\s*=\s*\[(.*?)\]', t, re.S)
+    if m:
+        dedans = m.group(1).strip().rstrip(',').strip()
+        t2 = t[:m.start()] + 'enabled = [%s"%s"]' % (dedans + ', ' if dedans else '', mod_id) + t[m.end():]
+    else:
+        t2 = t.rstrip() + ('\n' if t.strip() else '') + 'enabled = ["%s"]\n' % mod_id
+    tomllib.loads(t2)
+    open(en, 'w', encoding='utf-8').write(t2)
+    return True
 
 
 

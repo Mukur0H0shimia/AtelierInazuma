@@ -619,12 +619,21 @@ def construire_mod(projet, cat_par_cle, rgl, pool=None, journal=print, cible=Non
         return
     # activation dans enabled.toml
     en = os.path.join(mods, 'enabled.toml')
-    s = open(en, encoding='utf-8').read()
+    s = open(en, encoding='utf-8').read() if os.path.isfile(en) else ''      # (21/11) jeu sans enabled.toml : créé
     if ('"%s"' % MOD_ID) not in s:
         sauv = os.path.join(ICI, 'enabled_avant_atelier.toml')
-        if not os.path.exists(sauv):
+        if not os.path.exists(sauv) and os.path.isfile(en):
             shutil.copy(en, sauv)
-        s = re.sub(r'\]\s*$', ', "%s"]\n' % MOD_ID, s.rstrip(), count=1)
+        # (21/11) liste vide -> ["MesMaillots"] (avant : « [, "MesMaillots"] », TOML invalide ; et plantage sans le fichier)
+        m_ = re.search(r'enabled\s*=\s*\[(.*?)\]', s, re.S)
+        if m_:
+            dedans = m_.group(1).strip().rstrip(',').strip()
+            s = s[:m_.start()] + 'enabled = [%s"%s"]' % (dedans + ', ' if dedans else '', MOD_ID) + s[m_.end():]
+        else:
+            s = s.rstrip() + ('\n' if s.strip() else '') + 'enabled = ["%s"]\n' % MOD_ID
+        import tomllib as _tl
+        _tl.loads(s)
+        os.makedirs(mods, exist_ok=True)
         open(en, 'w', encoding='utf-8').write(s)
         journal('mod « Mes maillots » activé')
     journal('mod installé : %d maillot(s) dans %s' % (len(projet['maillots']), cible))

@@ -1851,7 +1851,8 @@ window.addEventListener('load', () => { if (!$('oj-exporter')) return;
 async function installer(mod) {
   majRapport('Installation…');
   try { const r = await api('/api/installer', { mod: mod || 'MesTechniques' });
-    majRapport(r.ok ? 'Installé dans ' + r.dossier + '\nSauvegarde : ' + r.sauvegarde + '\nLance le jeu, puis regarde le journal de VRFW (aucune ligne ERROR).' : 'Pas installé : ' + r.erreur);
+    majRapport(r.ok ? 'Installé dans ' + r.dossier + '\nSauvegarde : ' + r.sauvegarde + '\nLance le jeu, puis regarde le journal de VRFW (aucune ligne ERROR).'
+                      + (r.avertissement ? '\n⚠ ' + r.avertissement : '') : 'Pas installé : ' + r.erreur);
   } catch (e) { majRapport('Erreur : ' + e.message); }
 }
 

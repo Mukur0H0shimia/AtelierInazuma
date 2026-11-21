@@ -73,6 +73,12 @@ def cache_txt():
     return d
 
 
+def noms_lisibles(nom):
+    """codes que le jeu remplace par des noms (<FST:GARCILDO>, <MNT:KINUNS2>…) -> « Garcildo », « Kinuns »"""
+    import re as _re
+    return _re.sub(r'<[A-Z]+:([A-Za-z0-9_-]+?)\d*>', lambda m: m.group(1).replace('_', ' ').capitalize(), nom)
+
+
 def charger_catalogues():
     """techniques, Keshin, personnages, tout le jeu, séries : dans la langue choisie (FR / EN)"""
     global INDEX, PAR_CODE, PERSOS, PERSO_CODE, VIDEOS, JEU, JEU_CODE, SERIES
@@ -100,6 +106,12 @@ def charger_catalogues():
         _acc = _accessoires_3d()
         JEU['tenues'] = JEU['tenues'] + [dict(x, nom='Accessoire ' + x['code'], genre='Accessoire') for x in JEU['objets3d'] if x['code'] in _acc]
     JEU['objets'] = objets_jeu.construire(CFG['data_dir'], CT)
+    # (21/11) noms du jeu avec balises (« Maillot <FST:GARCILDO> Team ») : lisibles, comme dans l'Atelier Maillots
+    for _l in JEU.values():
+        if isinstance(_l, list):
+            for _x in _l:
+                if isinstance(_x, dict) and '<' in str(_x.get('nom') or ''):
+                    _x['nom'] = noms_lisibles(_x['nom'])
     JEU_CODE = {(c, x['code']): x for c, l in JEU.items() if isinstance(l, list) for x in l}
     # (17/11/2026) SÉRIE de chaque élément (filtres IE1 … Victory Road) : moteur/series.py (têtes : dossier _face ; techniques,
     # esprits, totems : séries des personnages dont une carte les a ; armure ka00XY01 : celle de son esprit k000XY0)

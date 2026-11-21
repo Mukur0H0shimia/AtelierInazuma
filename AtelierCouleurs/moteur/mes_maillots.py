@@ -33,6 +33,8 @@ def reglages(cfg):
     if os.path.exists(A.REGLAGES):
         r.update(json.load(open(A.REGLAGES, encoding='utf-8')))
     r['donnees'] = cfg['data_dir']
+    if cfg.get('jeu_dir'):                             # (21/11) le jeu de l'Atelier (avant : chemin écrit en dur)
+        r['mods'] = os.path.join(cfg['jeu_dir'], 'mods')
     return r
 
 

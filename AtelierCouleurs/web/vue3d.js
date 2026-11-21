@@ -811,6 +811,7 @@
     }
     // texture (canvas) partagée par les pièces : créée ou mise à jour
     texture(cle, canvas) {
+      Vue3D.activite = performance.now();
       const gl = this.gl; let t = this.textures[cle];
       if (!t) { t = this.textures[cle] = gl.createTexture(); }
       gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -1491,6 +1492,7 @@
     }
     // geo : {nv, ni, pos: Float32Array, col: Uint8Array, idx: Uint16Array}, cle : identifiant (objet/index)
     ajouter(cle, geo) {
+      Vue3D.activite = performance.now();
       const gl = this.gl, p = { cle, ni: geo.ni, visible: true, sel: false, teinte: [0.8, 0.8, 0.8, 1] };
       p.bp = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, p.bp); gl.bufferData(gl.ARRAY_BUFFER, geo.pos, gl.STATIC_DRAW);
       p.bc = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, p.bc); gl.bufferData(gl.ARRAY_BUFFER, geo.col, gl.STATIC_DRAW); p.col0 = geo.col;
@@ -1689,6 +1691,13 @@
     _boucle() {
       const gl = this.gl, cv = this.cv;
       const dessiner = (ms) => {
+        // au repos (aucune action depuis 1,5 s, rien qui joue) : 4 images par seconde au lieu de 60, l'image affichée reste
+        // la même -> le processeur ne recalcule plus sans arrêt une vue qui ne bouge pas (~50 % d'un cœur avant)
+        // et jamais plus de 60 images par seconde (écrans 144 Hz : l'animation du jeu est en 60 i/s)
+        const pause = !this.joue && performance.now() - Vue3D.activite > 1500 ? 250 : 12;
+        if (!this._unique && (ms || 0) - (this._dernier || 0) < pause
+            && cv.width === cv.clientWidth && cv.height === cv.clientHeight) { requestAnimationFrame(dessiner); return; }
+        this._dernier = ms || 0;
         const w = cv.clientWidth, h = cv.clientHeight;
         if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
         gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -1815,5 +1824,9 @@
       requestAnimationFrame(dessiner);
     }
   }
+  // dernière action (souris, clavier, réglage, texture ou modèle changé) : la vue redessine à pleine vitesse 1,5 s après
+  Vue3D.activite = performance.now();
+  for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'keyup', 'input', 'change', 'resize'])
+    addEventListener(ev, () => { Vue3D.activite = performance.now(); }, { capture: true, passive: true });
   window.Vue3D = Vue3D;
 })();

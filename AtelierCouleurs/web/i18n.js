@@ -36,6 +36,10 @@
         r = d[modele].replace(/\{n\}/g, function () { return nb[i++]; });
       }
     }
+    if (r === undefined) {                       // bannières : police absente de ce PC
+      var p0 = t.match(/^Police absente de ce PC : (\S+) \(Impact utilisée à la place\)\.$/);
+      if (p0) { r = 'Font not on this PC: ' + p0[1] + ' (Impact used instead).'; }
+    }
     if (r === undefined) {                       // « cinématique ev62_00010_1 » (titre d'une technique)
       var c0 = t.match(/^cinématique (\S+)$/);
       if (c0) { r = 'cutscene ' + c0[1]; }

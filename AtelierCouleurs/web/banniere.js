@@ -36,7 +36,12 @@
       if (this.charge[f]) return this.charge[f];
       const nom = 'pol_' + f.replace(/\W/g, '_');
       const ff = new FontFace(nom, `url(/police/${encodeURIComponent(f)})`);
-      await ff.load(); document.fonts.add(ff); this.charge[f] = nom; return nom;
+      try { await ff.load(); }
+      catch (e) {                                     // police absente de ce PC (polices d'Office…) : Impact à la place
+        if (f === 'impact.ttf') throw e;
+        this.manquante = f; return this.police('impact.ttf');
+      }
+      document.fonts.add(ff); this.charge[f] = nom; return nom;
     }
     // dessine les lettres (sans couleur) : renvoie [{ch, x, y, a}] et la taille utilisée
     _placer(cx, famille) {

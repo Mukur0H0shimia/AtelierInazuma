@@ -2013,7 +2013,12 @@ function activerAnimation(oui) {
 
 // ------------------------------------------------------------------ bannières
 const B = { ed: null, choix: null, liste: [] };
-async function dessinerBanniere() { try { await B.ed.dessiner(); } catch (e) { $('b-rapport').textContent = 'Police : ' + e.message; } }
+async function dessinerBanniere() {
+  try {
+    B.ed.manquante = null; await B.ed.dessiner();
+    if (B.ed.manquante) $('b-rapport').textContent = `Police absente de ce PC : ${B.ed.manquante} (Impact utilisée à la place).`;
+  } catch (e) { $('b-rapport').textContent = 'Police : ' + e.message; }
+}
 function reglagesBanniere() {
   const p = B.ed.p;
   for (const k of ['texte', 'haut', 'milieu', 'bas', 'c1', 'c2', 'ombre', 'lueur']) $('b-' + k).value = p[k];
@@ -2024,7 +2029,11 @@ function reglagesBanniere() {
 async function ouvrirBannieres() {
   if (!B.ed) {
     B.ed = new EditeurBanniere($('b-vue'));
-    for (const [f, n] of EditeurBanniere.polices()) { const o = document.createElement('option'); o.value = f; o.textContent = n; $('b-police').appendChild(o); }
+    let dispo = null;                                   // polices présentes sur ce PC : seules celles-là sont proposées
+    try { dispo = new Set(await api('/api/polices')); } catch (e) { }
+    for (const [f, n] of EditeurBanniere.polices()) {
+      if (dispo && !dispo.has(f.toLowerCase())) continue;
+      const o = document.createElement('option'); o.value = f; o.textContent = n; $('b-police').appendChild(o); }
     for (const [n, st] of Object.entries(EditeurBanniere.styles())) { const b = document.createElement('button'); b.textContent = n;
       b.onclick = () => { Object.assign(B.ed.p, st); reglagesBanniere(); dessinerBanniere(); }; $('b-styles').appendChild(b); }
     const num = { penche: v => v / 100, ombreA: v => v / 100 };

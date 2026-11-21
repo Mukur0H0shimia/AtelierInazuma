@@ -161,6 +161,21 @@ MODS = {'liste': [], 'quand': 0}
 MOD_CODE = {}                         # code -> entrée (tout ce qui vient des mods, tous onglets)
 
 
+def polices_du_pc():
+    """{nom du fichier en minuscules: chemin} des polices .ttf / .otf de Windows ET de celles installées pour l'utilisateur
+    seul (%LOCALAPPDATA%\\Microsoft\\Windows\\Fonts) ; les polices d'Office (Cooper Black, Jokerman…) ne sont pas partout"""
+    out = {}
+    for d in (os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'Fonts'),
+              os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Windows', 'Fonts')):
+        try:
+            for f in os.listdir(d):
+                if f.lower().endswith(('.ttf', '.otf')):
+                    out.setdefault(f.lower(), os.path.join(d, f))
+        except OSError:
+            pass
+    return out
+
+
 def _sig_mods():
     """signature du dossier mods : change quand un mod est installé, retiré, activé ou modifié (dates des dossiers)"""
     racine = os.path.join(CFG.get('jeu_dir') or '', 'mods')
@@ -1536,10 +1551,12 @@ class Gestion(BaseHTTPRequestHandler):
                 if obj.startswith('copies_persos__'):    # (15/11/2026) tête recolorée d'une copie (cache/copies_persos/<code>/)
                     return self._fichier(os.path.join(CACHE, 'copies_persos', os.path.basename(obj[15:]), os.path.basename(unquote(nom))))
                 return self._fichier(os.path.join(CACHE, os.path.basename(obj), os.path.basename(unquote(nom))))
+            if u.path == '/api/polices':                  # polices présentes sur CE PC (bannières : les autres sont cachées)
+                return self._envoyer(200, sorted(polices_du_pc()))
             if u.path.startswith('/police/'):
                 f = os.path.basename(unquote(u.path[len('/police/'):]))
-                p = os.path.join(r'C:\Windows\Fonts', f)
-                if not f.lower().endswith(('.ttf', '.otf')) or not os.path.isfile(p):
+                p = polices_du_pc().get(f.lower())
+                if not f.lower().endswith(('.ttf', '.otf')) or not p:
                     return self._envoyer(404, {'erreur': 'police introuvable'})
                 return self._envoyer(200, open(p, 'rb').read(), 'font/ttf')
             if u.path == '/api/planche_numero':         # (16/11/2026) aperçu du numéro : planche du jeu (R = remplissage, A = forme)

@@ -384,6 +384,56 @@ static class Lanceur
         catch (Exception) { return false; }
     }
 
+    // (21/11) le serveur qui répond sur ce port est-il celui de CET Atelier (même dossier, même version) ? Avant, tout
+    // serveur déjà ouvert était réutilisé : une ancienne version restée en arrière-plan, ou un autre Atelier sur le même port,
+    // s'affichait dans la fenêtre de la nouvelle (titre « 1.9 », code d'avant : « le bug est encore là »).
+    public static string Identite(int port)
+    {
+        try
+        {
+            var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://127.0.0.1:" + port + "/api/identite");
+            req.Timeout = 3000; req.ReadWriteTimeout = 3000; req.Proxy = null;
+            using (var rep = req.GetResponse())
+            using (var sr = new StreamReader(rep.GetResponseStream(), System.Text.Encoding.UTF8))
+                return sr.ReadToEnd();
+        }
+        catch (Exception) { return null; }
+    }
+
+    public static bool NotreServeur(int port)
+    {
+        string t = Identite(port);
+        if (t == null) return false;
+        try
+        {
+            var d = Regex.Match(t, "\"dossier\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+            var v = Regex.Match(t, "\"version\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+            if (!d.Success || !v.Success) return false;
+            string a = Path.GetFullPath(Regex.Unescape(d.Groups[1].Value)).TrimEnd('\\');
+            string b = Path.GetFullPath(Dossier).TrimEnd('\\');
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase) && Regex.Unescape(v.Groups[1].Value) == VersionDe(Dossier);
+        }
+        catch (Exception) { return false; }
+    }
+
+    public static void Appeler(int port, string chemin)
+    {
+        try
+        {
+            var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://127.0.0.1:" + port + chemin);
+            req.Timeout = 3000; req.Proxy = null;
+            using (req.GetResponse()) { }
+        }
+        catch (Exception) { }
+    }
+
+    public static int PortLibre(int depuis)
+    {
+        for (int p = depuis; p < depuis + 100; p++)
+            if (!PortOuvert(p)) return p;
+        return depuis;
+    }
+
     public static int LirePort()
     {
         try
@@ -427,6 +477,19 @@ class Fenetre : Form
         port = Lanceur.LirePort();
         string url = "http://127.0.0.1:" + port + "/";
         // 1. le serveur (s'il ne tourne pas déjà)
+        // (21/11) un serveur répond déjà : réutilisé seulement si c'est celui de CET Atelier (même dossier et version) ;
+        // sinon (ancienne version, autre Atelier, autre programme) l'Atelier prend un autre port libre
+        int pid = Process.GetCurrentProcess().Id;
+        int premier = port;
+        port = await System.Threading.Tasks.Task.Run(() =>
+        {
+            for (int p = premier; p < premier + 100; p++)        // 1er port libre, ou 1er port où répond NOTRE serveur
+                if (!Lanceur.PortOuvert(p) || Lanceur.NotreServeur(p)) return p;
+            return premier;
+        });
+        url = "http://127.0.0.1:" + port + "/";
+        if (Lanceur.PortOuvert(port))                             // notre serveur, déjà ouvert : cette fenêtre le garde aussi
+            await System.Threading.Tasks.Task.Run(() => Lanceur.Appeler(port, "/api/parent?pid=" + pid));
         if (!Lanceur.PortOuvert(port))
         {
             string py = Lanceur.TrouverPythonw();
@@ -440,7 +503,9 @@ class Fenetre : Form
             while (true)
             {
                 long debutLog = Lanceur.TailleFichier(log);
+                // --port : celui choisi ci-dessus ; --parent : le serveur s'arrête si cette fenêtre disparaît (tuée, plantée)
                 var info = new ProcessStartInfo(py, "\"" + Path.Combine(Lanceur.Dossier, "serveur.py") + "\" --sans-navigateur" +
+                                                    " --port " + port + " --parent " + pid +
                                                     (jeu != null ? " --jeu \"" + jeu.TrimEnd('\\') + "\"" : ""));
                 info.WorkingDirectory = Lanceur.Dossier;
                 info.UseShellExecute = false;
@@ -495,6 +560,7 @@ class Fenetre : Form
         {
             Lanceur.Erreur("L'affichage de l'atelier (WebView2) n'a pas pu démarrer :\n" + ex.Message +
                            "\n\nL'atelier s'ouvre dans le navigateur à la place.");
+            Lanceur.Appeler(port, "/api/detacher");  // (21/11) sinon il s'arrêterait avec cette fenêtre
             try { Process.Start(url); } catch (Exception) { }
             serveur = null;                          // le serveur reste ouvert pour le navigateur
             Close();

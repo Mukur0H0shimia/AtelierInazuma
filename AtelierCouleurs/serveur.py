@@ -1524,6 +1524,17 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, {'pret': PREPA['pret'], 'fait': _mj.PROGRES['fait'], 'total': _mj.PROGRES['total']})
             if u.path == '/api/langue':                    # FR / EN
                 return self._envoyer(200, {'langue': langue.code()})
+            if u.path == '/api/identite':                  # (21/11) le lanceur vérifie que ce serveur est le SIEN
+                return self._envoyer(200, {'dossier': os.path.normpath(ICI), 'version': version_atelier()})
+            if u.path == '/api/parent':                    # (21/11) une 2e fenêtre du même Atelier : surveillée aussi
+                try:
+                    PARENTS.add(int(q['pid'][0]))
+                except (KeyError, ValueError):
+                    pass
+                return self._envoyer(200, {'ok': True})
+            if u.path == '/api/detacher':                  # (21/11) affichage dans le navigateur : le serveur reste ouvert
+                PARENTS.clear()
+                return self._envoyer(200, {'ok': True})
             if u.path == '/api/techniques':                # (17/11/2026) + techniques des mods
                 return self._envoyer(200, INDEX + sans_chemins(mods_liste('techniques')))
             if u.path == '/api/prereglages':              # (15/11/2026) préréglages de couleurs (réutilisables)
@@ -1905,8 +1916,49 @@ def reprendre_mods_installes():
             print('reprise de %s impossible : %s' % (mod_id, ex))
 
 
+def version_atelier():
+    try:
+        return open(os.path.join(ICI, 'version.txt'), encoding='utf-8').read().strip()
+    except OSError:
+        return ''
+
+
+PARENTS = set()          # (21/11) fenêtres « Atelier Inazuma.exe » qui utilisent ce serveur (--parent PID, /api/parent)
+
+
+def surveiller_parents():
+    """(21/11) le lanceur tué, planté ou fermé par Windows sans arrêter le serveur : avant, pythonw restait ouvert en
+    arrière-plan (processeur, port 8765 pris) et le lancement suivant, même d'une NOUVELLE version, réutilisait ce vieux
+    serveur. Le serveur s'arrête maintenant quand plus aucune de ses fenêtres n'existe."""
+    import ctypes, time
+    k = ctypes.windll.kernel32
+    k.OpenProcess.restype = ctypes.c_void_p
+    def vivant(pid):
+        h = k.OpenProcess(0x00100000, False, pid)            # SYNCHRONIZE
+        if not h:
+            return False
+        try:
+            return k.WaitForSingleObject(ctypes.c_void_p(h), 0) == 0x102     # WAIT_TIMEOUT : toujours en vie
+        finally:
+            k.CloseHandle(ctypes.c_void_p(h))
+    while True:
+        time.sleep(2)
+        if PARENTS and not any(vivant(p) for p in list(PARENTS)):
+            print('fenêtre de l\'Atelier fermée : arrêt du serveur')
+            try:
+                arreter_natifs()
+            finally:
+                os._exit(0)
+
+
 def main():
     reprendre_mods_installes()
+    if '--parent' in sys.argv and os.name == 'nt':
+        try:
+            PARENTS.add(int(sys.argv[sys.argv.index('--parent') + 1]))
+            threading.Thread(target=surveiller_parents, daemon=True).start()
+        except (IndexError, ValueError):
+            pass
     port = int(sys.argv[sys.argv.index('--port') + 1]) if '--port' in sys.argv else CFG.get('port', 8765)   # --port N : autre port (essais)
     srv = ThreadingHTTPServer(('127.0.0.1', port), Gestion)
     threading.Thread(target=preparer_index, daemon=True).start()

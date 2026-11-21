@@ -69,7 +69,7 @@ def main():
     g = images.G4TX(open(os.path.join(data, 'dx11', 'chr', *rel.split('/'), anc + '.g4tx'), 'rb').read())
     rempl = {}
     textures = json.load(open(f_tex, encoding='utf-8'))
-    with multiprocessing.Pool(max(1, (os.cpu_count() or 2) - 1)) as pool:
+    with images.pool_encodage() as pool:
         for nom, png in textures.items():
             if nom not in g.noms:
                 print('texture inconnue', nom); continue

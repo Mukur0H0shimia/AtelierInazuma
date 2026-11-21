@@ -56,6 +56,9 @@ def encoder_bc7_bande(args):
 
 
 def encoder_bc7(w, h, rows):
+    rapide = images.encoder_rapide(w, h, rows, 1, 7)      # (paquets.dll : mêmes octets, bien plus vite)
+    if rapide is not None:
+        return rapide
     out = bytearray()
     for by in range(0, h, 4):
         for bx in range(0, w, 4):

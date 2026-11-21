@@ -161,6 +161,9 @@ def encoder(w, h, rows):
 def dds_bc7(w, h, rows, entete, mips):
     """comme lib.images.dds_bc7 (en-tête DX10 d'une texture du jeu de même taille, `mips` niveaux), encodage plus fin"""
     from lib import images
+    rapide = images.encoder_rapide(w, h, rows, mips, 17)   # (21/11) paquets.dll : même méthode en C (~25 fois plus vite)
+    if rapide is not None:
+        return bytes(entete) + rapide
     niveaux = [(w, h, rows)]
     while len(niveaux) < mips:
         niveaux.append(images.moitie(*niveaux[-1]))

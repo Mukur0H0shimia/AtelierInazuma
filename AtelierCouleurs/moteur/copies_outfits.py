@@ -91,7 +91,7 @@ def exporter(cfg, demande, entree):
     rempl, rapport, tmp = {}, [], tempfile.mkdtemp()
     premiere = None
     try:
-        with multiprocessing.Pool(max(1, (os.cpu_count() or 2) - 1)) as pool:
+        with images.pool_encodage() as pool:
             for n_, url in textures.items():
                 if n_ not in gt.noms:
                     return {'ok': False, 'erreur': '%s n’est pas dans %s' % (n_, chemin)}

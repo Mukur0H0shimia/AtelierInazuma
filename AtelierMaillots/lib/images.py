@@ -9,6 +9,55 @@ G4TX (relevé sur les maillots du jeu et du pack Orion Kits) :
 import struct, zlib, re, os
 from . import bc7
 
+# --------------------------------------------------------------------------------------------- encodage rapide
+# (21/11/2026) BC7 / BC1 encodés par AtelierCouleurs\moteur\natif\paquets.dll : MÊMES octets que le calcul Python
+# ci-dessous (vérifié sur 56 encodages), ~150 fois plus vite et sur un seul cœur. Sans la DLL : le Python, comme avant.
+_DLL_ENC = []
+
+
+def _dll():
+    if not _DLL_ENC:
+        import ctypes
+        ici = os.path.dirname(os.path.abspath(__file__))
+        d = None
+        for p in (os.path.join(ici, '..', '..', 'AtelierCouleurs', 'moteur', 'natif', 'paquets.dll'),   # AtelierMaillots\lib
+                  os.path.join(ici, '..', 'natif', 'paquets.dll')):                                      # AtelierCouleurs\moteur\maillots
+            try:
+                d = ctypes.CDLL(os.path.normpath(p))
+                d.encoder_dds.argtypes = (ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                          ctypes.c_char_p, ctypes.c_int64)
+                d.encoder_dds.restype = ctypes.c_int64
+                break
+            except (OSError, AttributeError):
+                d = None
+        _DLL_ENC.append(d)
+    return _DLL_ENC[0]
+
+
+def encoder_rapide(w, h, rows, mips, format_):
+    """blocs BC7 (format_ 7) ou BC1 (format_ 1) de tous les niveaux, ou None sans la DLL"""
+    d = _dll()
+    if d is None:
+        return None
+    import ctypes
+    rgba = b''.join(bytes(r[:w * 4]) for r in rows[:h])
+    n = d.encoder_dds(rgba, w, h, mips, format_, None, 0)
+    if n <= 0:
+        return None
+    buf = ctypes.create_string_buffer(n)
+    if d.encoder_dds(rgba, w, h, mips, format_, buf, n) != n:
+        return None
+    return buf.raw
+
+
+def pool_encodage():
+    """processus en parallèle pour l'encodage : seulement sans la DLL (avec elle, un cœur suffit et on évite de lancer
+    une dizaine de processus) ; à utiliser avec « with images.pool_encodage() as pool: »"""
+    import contextlib, multiprocessing
+    if _dll() is not None:
+        return contextlib.nullcontext(None)
+    return multiprocessing.Pool(max(1, (os.cpu_count() or 2) - 1))
+
 # --------------------------------------------------------------------------------------------- PNG
 def lire_png(chemin):
     """-> (largeur, hauteur, lignes RGBA en bytearray)"""
@@ -216,15 +265,26 @@ def moitie(w, h, rows):
 def dds_bc1(w, h, rows, pool=None, progression=None, mips=10):
     """image RGBA -> fichier DDS DXT1 avec `mips` niveaux (le jeu déclare le nombre de niveaux dans la table du G4TX :
     il faut les fournir tous, sinon l'image disparaît de loin et sur les portraits)"""
-    niveaux = [(w, h, rows)]
-    while len(niveaux) < mips and (niveaux[-1][0] > 1 or niveaux[-1][1] > 1):
-        niveaux.append(moitie(*niveaux[-1]))
+    n_, lw, lh = 1, w, h                             # même nombre de niveaux que la boucle ci-dessous
+    while n_ < mips and (lw > 1 or lh > 1):
+        lw, lh, n_ = max(1, lw // 2), max(1, lh // 2), n_ + 1
+    rapide = encoder_rapide(w, h, rows, n_, 1)
+    if rapide is not None:
+        if progression:
+            progression(1.0)
+        niveaux = [None] * n_
+    else:
+        niveaux = [(w, h, rows)]
+        while len(niveaux) < mips and (niveaux[-1][0] > 1 or niveaux[-1][1] > 1):
+            niveaux.append(moitie(*niveaux[-1]))
     mips = len(niveaux)
     hdr = bytearray(128)
     hdr[0:4] = b'DDS '
     struct.pack_into('<IIIIIII', hdr, 4, 124, 0x0A1007, h, w, max(1, (w + 3) // 4) * max(1, (h + 3) // 4) * 8, 0, mips)
     struct.pack_into('<II4s', hdr, 76, 32, 4, b'DXT1')
     struct.pack_into('<I', hdr, 108, 0x401008 if mips > 1 else 0x1000)
+    if rapide is not None:
+        return bytes(hdr) + rapide
     bandes = []
     for lw, lh, lr in niveaux:
         for by in range(0, lh, 4):
@@ -241,6 +301,9 @@ def dds_bc1(w, h, rows, pool=None, progression=None, mips=10):
 def dds_bc7(w, h, rows, entete, mips, pool=None):
     """image RGBA -> DDS BC7 (en-tête DX10 repris d'une texture du jeu de même taille), avec `mips` niveaux"""
     from . import bustes
+    rapide = encoder_rapide(w, h, rows, mips, 7)
+    if rapide is not None:
+        return bytes(entete) + rapide
     niveaux = [(w, h, rows)]
     while len(niveaux) < mips:
         niveaux.append(moitie(*niveaux[-1]))

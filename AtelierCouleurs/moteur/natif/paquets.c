@@ -5,6 +5,8 @@
  * Fast part of the pack reader (XOR + CRILAYLA), same results as the Python code. */
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
+#include <math.h>
 
 static uint32_t T[256];
 static int T_pret = 0;
@@ -220,6 +222,331 @@ __declspec(dllexport) int decoder_bc(const uint8_t *src, int64_t nsrc, int w, in
             }
         }
     return 0;
+}
+
+/* ------------------------------------------------------------------ ENCODAGE (même calcul que AtelierMaillots/lib) */
+/* BC7 mode 6 de bustes.bc7_mode6 : extrémités = pixels de luminance min / max (1re occurrence), 7 bits + bit 0 */
+static void enc_bc7_mode6(const uint8_t px[16][4], uint8_t *dst)
+{
+    int imin = 0, imax = 0, lmin = 0, lmax = 0;
+    for (int i = 0; i < 16; i++) {
+        int l = px[i][0] * 299 + px[i][1] * 587 + px[i][2] * 114 + px[i][3] * 50;
+        if (i == 0 || l < lmin) { lmin = l; imin = i; }
+        if (i == 0 || l > lmax) { lmax = l; imax = i; }
+    }
+    int q0[4], q1[4], pal[16][4], ind[16];
+    for (int k = 0; k < 4; k++) {
+        q0[k] = (px[imin][k] + 1) >> 1; if (q0[k] > 127) q0[k] = 127;
+        q1[k] = (px[imax][k] + 1) >> 1; if (q1[k] > 127) q1[k] = 127;
+    }
+    for (int j = 0; j < 16; j++)
+        for (int k = 0; k < 4; k++)
+            pal[j][k] = ((q0[k] << 1) * (64 - W4[j]) + (q1[k] << 1) * W4[j] + 32) >> 6;
+    for (int i = 0; i < 16; i++) {
+        int best = 1 << 30, bi = 0;
+        for (int j = 0; j < 16; j++) {
+            int d0 = px[i][0] - pal[j][0], d1 = px[i][1] - pal[j][1], d2 = px[i][2] - pal[j][2], d3 = px[i][3] - pal[j][3];
+            int d = d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
+            if (d < best) { best = d; bi = j; }
+        }
+        ind[i] = bi;
+    }
+    if (ind[0] >= 8) {
+        for (int k = 0; k < 4; k++) { int t = q0[k]; q0[k] = q1[k]; q1[k] = t; }
+        for (int i = 0; i < 16; i++) ind[i] = 15 - ind[i];
+    }
+    uint64_t b[2] = {0, 0};
+    int n = 0;
+#define METTRE(v, k) do { uint64_t _v = (uint64_t)(v) & ((1ull << (k)) - 1); int _k = (k); \
+        for (int _i = 0; _i < _k; _i++, n++) if ((_v >> _i) & 1) b[n >> 6] |= 1ull << (n & 63); } while (0)
+    METTRE(1 << 6, 7);
+    for (int k = 0; k < 4; k++) { METTRE(q0[k], 7); METTRE(q1[k], 7); }
+    METTRE(0, 1); METTRE(0, 1);
+    METTRE(ind[0], 3);
+    for (int i = 1; i < 16; i++) METTRE(ind[i], 4);
+#undef METTRE
+    memcpy(dst, b, 16);
+}
+
+static int vers565(int r, int g, int b)
+{
+    return ((r * 31 + 127) / 255) << 11 | ((g * 63 + 127) / 255) << 5 | ((b * 31 + 127) / 255);
+}
+
+/* BC1 de images.encoder_bc1_lignes : bloc uni, sinon extrémités = luminance max / min (1re occurrence) */
+static void enc_bc1(const uint8_t px[16][4], uint8_t *dst)
+{
+    int uni = 1;
+    for (int i = 1; i < 16; i++)
+        if (px[i][0] != px[0][0] || px[i][1] != px[0][1] || px[i][2] != px[0][2]) { uni = 0; break; }
+    uint16_t c0, c1; uint32_t idx = 0;
+    if (uni) {
+        c0 = c1 = (uint16_t)vers565(px[0][0], px[0][1], px[0][2]);
+    } else {
+        int imin = 0, imax = 0, lmin = 0, lmax = 0;
+        for (int i = 0; i < 16; i++) {
+            int l = px[i][0] * 299 + px[i][1] * 587 + px[i][2] * 114;
+            if (i == 0 || l > lmax) { lmax = l; imax = i; }
+            if (i == 0 || l < lmin) { lmin = l; imin = i; }
+        }
+        c0 = (uint16_t)vers565(px[imax][0], px[imax][1], px[imax][2]);
+        c1 = (uint16_t)vers565(px[imin][0], px[imin][1], px[imin][2]);
+        if (c0 != c1) {
+            if (c0 < c1) { uint16_t t = c0; c0 = c1; c1 = t; }
+            int a[3], bb[3], pal[4][3];
+            c565(c0, a); c565(c1, bb);
+            for (int k = 0; k < 3; k++) {
+                pal[0][k] = a[k]; pal[1][k] = bb[k];
+                pal[2][k] = (2 * a[k] + bb[k]) / 3; pal[3][k] = (a[k] + 2 * bb[k]) / 3;
+            }
+            for (int i = 0; i < 16; i++) {
+                int best = 1 << 30, bi = 0;
+                for (int j = 0; j < 4; j++) {
+                    int d0 = px[i][0] - pal[j][0], d1 = px[i][1] - pal[j][1], d2 = px[i][2] - pal[j][2];
+                    int d = d0 * d0 + d1 * d1 + d2 * d2;
+                    if (d < best) { best = d; bi = j; }
+                }
+                idx |= (uint32_t)bi << (2 * i);
+            }
+        }
+    }
+    memcpy(dst, &c0, 2); memcpy(dst + 2, &c1, 2); memcpy(dst + 4, &idx, 4);
+}
+
+/* images.moitie : moyenne 2x2 arrondie, bords répétés */
+static uint8_t *moitie(const uint8_t *src, int w, int h, int *nw_, int *nh_)
+{
+    int nw = w / 2 > 1 ? w / 2 : 1, nh = h / 2 > 1 ? h / 2 : 1;
+    uint8_t *o = (uint8_t *)malloc((size_t)nw * nh * 4);
+    if (!o) return NULL;
+    for (int y = 0; y < nh; y++) {
+        const uint8_t *r0 = src + (size_t)(2 * y < h - 1 ? 2 * y : h - 1) * w * 4;
+        const uint8_t *r1 = src + (size_t)(2 * y + 1 < h - 1 ? 2 * y + 1 : h - 1) * w * 4;
+        for (int x = 0; x < nw; x++) {
+            int a = (2 * x < w - 1 ? 2 * x : w - 1) * 4, b = (2 * x + 1 < w - 1 ? 2 * x + 1 : w - 1) * 4;
+            for (int k = 0; k < 4; k++)
+                o[((size_t)y * nw + x) * 4 + k] = (uint8_t)((r0[a + k] + r0[b + k] + r1[a + k] + r1[b + k] + 2) >> 2);
+        }
+    }
+    *nw_ = nw; *nh_ = nh;
+    return o;
+}
+
+/* ---- BC7 « fin » de moteur/bc7_fin.py (portraits) : modes 6, 7 et 1 (64 découpages), le moins faux par bloc ---- */
+typedef struct { int ns, cb, ab, pu, ib, mode; } ModeFin;          /* pu : bit P par extrémité (1) ou par groupe (0) */
+static const ModeFin MF6 = {1, 7, 7, 1, 4, 6}, MF7 = {2, 5, 5, 1, 2, 7}, MF1 = {2, 6, 0, 0, 3, 1};
+
+static void fin_axe(const double Y[16][4], int C, const int m[16], double e0[4], double e1[4])
+{
+    int n = 0;
+    for (int k = 0; k < 16; k++) n += m[k];
+    double nn = n > 0 ? n : 1, mu[4], D[16][4], cov[4][4], a[4], b[4];
+    for (int c = 0; c < C; c++) {
+        double s = 0;
+        for (int k = 0; k < 16; k++) s += Y[k][c] * m[k];
+        mu[c] = s / nn;
+    }
+    for (int k = 0; k < 16; k++)
+        for (int c = 0; c < C; c++) D[k][c] = (Y[k][c] - mu[c]) * m[k];
+    for (int i = 0; i < C; i++)
+        for (int j = 0; j < C; j++) {
+            double s = 0;
+            for (int k = 0; k < 16; k++) s += D[k][i] * D[k][j];
+            cov[i][j] = s;
+        }
+    for (int c = 0; c < C; c++) a[c] = 1.0 / sqrt((double)C);
+    for (int it = 0; it < 6; it++) {
+        double nr = 0;
+        for (int i = 0; i < C; i++) {
+            double s = 0;
+            for (int j = 0; j < C; j++) s += cov[i][j] * a[j];
+            b[i] = s;
+        }
+        for (int i = 0; i < C; i++) nr += b[i] * b[i];
+        nr = sqrt(nr);
+        if (nr < 1e-9) nr = 1e-9;
+        for (int i = 0; i < C; i++) a[i] = b[i] / nr;
+    }
+    double lo = INFINITY, hi = -INFINITY;
+    for (int k = 0; k < 16; k++) {
+        if (!m[k]) continue;
+        double s = 0;
+        for (int c = 0; c < C; c++) s += (Y[k][c] - mu[c]) * a[c];
+        if (s < lo) lo = s;
+        if (s > hi) hi = s;
+    }
+    if (!isfinite(lo)) lo = 0;
+    if (!isfinite(hi)) hi = 0;
+    for (int c = 0; c < C; c++) {
+        double v0 = mu[c] + a[c] * lo, v1 = mu[c] + a[c] * hi;
+        e0[c] = v0 < 0 ? 0 : v0 > 255 ? 255 : v0;
+        e1[c] = v1 < 0 ? 0 : v1 > 255 ? 255 : v1;
+    }
+}
+
+static void fin_quant(const double e0[4], const double e1[4], int C, int cb, int pu, int q[2][4], int p[2], int r[2][4])
+{
+    int B = cb + 1, qq[2][2][4], rr[2][2][4];
+    double err[2][2] = {{0, 0}, {0, 0}};
+    const double *E[2] = {e0, e1};
+    for (int pp = 0; pp < 2; pp++)
+        for (int e = 0; e < 2; e++)
+            for (int c = 0; c < C; c++) {
+                double x = (E[e][c] * ((1 << B) - 1) / 255 - pp) / 2;
+                double ro = nearbyint(x);                                     /* np.round : moitié vers le pair */
+                int v = ro < 0 ? 0 : ro > (1 << cb) - 1 ? (1 << cb) - 1 : (int)ro;
+                int z = ((v << 1) | pp) << (8 - B);
+                z |= z >> B;
+                qq[pp][e][c] = v; rr[pp][e][c] = z;
+                err[pp][e] += (z - E[e][c]) * (z - E[e][c]);
+            }
+    if (pu) {
+        for (int e = 0; e < 2; e++) {
+            int ch = err[1][e] < err[0][e];
+            p[e] = ch;
+            for (int c = 0; c < C; c++) { q[e][c] = qq[ch][e][c]; r[e][c] = rr[ch][e][c]; }
+        }
+    } else {
+        int ch = err[1][0] + err[1][1] < err[0][0] + err[0][1];
+        p[0] = p[1] = ch;
+        for (int e = 0; e < 2; e++)
+            for (int c = 0; c < C; c++) { q[e][c] = qq[ch][e][c]; r[e][c] = rr[ch][e][c]; }
+    }
+}
+
+typedef struct { double err; int pa; int Q[2][2][4]; int P[2][2]; int I[16]; } EssaiFin;
+
+static void fin_essai(const uint8_t X[16][4], const ModeFin *M, EssaiFin *best)
+{
+    int C = M->ab ? 4 : 3, nI = 1 << M->ib, premier = 1;
+    const uint8_t *w = poids(M->ib);
+    double Y[16][4], pds[16][4];
+    for (int k = 0; k < 16; k++)
+        for (int c = 0; c < 4; c++) {
+            Y[k][c] = X[k][c];
+            pds[k][c] = (C == 4 && c < 3) ? (X[k][3] > 0) : 1;
+        }
+    for (int pa = 0; pa < (M->ns == 2 ? 64 : 1); pa++) {
+        int sub[16];
+        for (int k = 0; k < 16; k++) sub[k] = M->ns == 2 ? (P2[pa] >> k) & 1 : 0;
+        EssaiFin cur;
+        cur.err = 0; cur.pa = pa;
+        for (int s = 0; s < M->ns; s++) {
+            int m[16];
+            double e0[4], e1[4];
+            int q[2][4], p[2], r[2][4], pal[16][4];
+            for (int k = 0; k < 16; k++) m[k] = sub[k] == s;
+            fin_axe(Y, C, m, e0, e1);
+            fin_quant(e0, e1, C, M->cb, M->pu, q, p, r);
+            for (int j = 0; j < nI; j++)
+                for (int c = 0; c < C; c++) pal[j][c] = ((64 - w[j]) * r[0][c] + w[j] * r[1][c] + 32) >> 6;
+            for (int k = 0; k < 16; k++) {
+                if (!m[k]) continue;
+                double dm = 0; int bi = 0;
+                for (int j = 0; j < nI; j++) {
+                    double d = 0;
+                    for (int c = 0; c < C; c++) { double t = Y[k][c] - pal[j][c]; d += t * t * pds[k][c]; }
+                    if (j == 0 || d < dm) { dm = d; bi = j; }
+                }
+                cur.err += dm; cur.I[k] = bi;
+            }
+            for (int e = 0; e < 2; e++) {
+                cur.P[s][e] = p[e];
+                for (int c = 0; c < 4; c++) cur.Q[s][e][c] = c < C ? q[e][c] : 0;
+            }
+        }
+        if (premier || cur.err < best->err) { *best = cur; premier = 0; }
+    }
+}
+
+static void fin_ecrire(const ModeFin *M, EssaiFin *R, uint8_t *dst)
+{
+    int sub[16], anc[2] = {0, -1}, nanc = M->ns == 2 ? 2 : 1, haut = 1 << (M->ib - 1);
+    for (int k = 0; k < 16; k++) sub[k] = M->ns == 2 ? (P2[R->pa] >> k) & 1 : 0;
+    if (M->ns == 2) anc[1] = A2[R->pa];
+    for (int s = 0; s < nanc; s++)
+        if (R->I[anc[s]] & haut) {                  /* l'index d'ancre doit avoir son bit fort à 0 : extrémités échangées */
+            for (int c = 0; c < 4; c++) { int t = R->Q[s][0][c]; R->Q[s][0][c] = R->Q[s][1][c]; R->Q[s][1][c] = t; }
+            { int t = R->P[s][0]; R->P[s][0] = R->P[s][1]; R->P[s][1] = t; }
+            for (int k = 0; k < 16; k++) if (sub[k] == s) R->I[k] = (1 << M->ib) - 1 - R->I[k];
+        }
+    uint64_t b[2] = {0, 0};
+    int n = 0;
+#define METTRE(v, k) do { uint64_t _v = (uint64_t)(v) & ((1ull << (k)) - 1); int _k = (k); \
+        for (int _i = 0; _i < _k; _i++, n++) if ((_v >> _i) & 1) b[n >> 6] |= 1ull << (n & 63); } while (0)
+    METTRE(1u << M->mode, M->mode + 1);
+    if (M->ns == 2) METTRE(R->pa, 6);
+    for (int c = 0; c < 3; c++)
+        for (int s = 0; s < M->ns; s++)
+            for (int e = 0; e < 2; e++) METTRE(R->Q[s][e][c], M->cb);
+    if (M->ab)
+        for (int s = 0; s < M->ns; s++)
+            for (int e = 0; e < 2; e++) METTRE(R->Q[s][e][3], M->ab);
+    if (M->pu) {
+        for (int s = 0; s < M->ns; s++)
+            for (int e = 0; e < 2; e++) METTRE(R->P[s][e], 1);
+    } else {
+        for (int s = 0; s < M->ns; s++) METTRE(R->P[s][0], 1);
+    }
+    for (int i = 0; i < 16; i++) {
+        int a = (i == anc[0]) || (nanc == 2 && i == anc[1]);
+        METTRE(R->I[i], a ? M->ib - 1 : M->ib);
+    }
+#undef METTRE
+    memcpy(dst, b, 16);
+}
+
+static void enc_bc7_fin(const uint8_t px[16][4], uint8_t *dst)
+{
+    int opaque = 1;
+    for (int k = 0; k < 16; k++) if (px[k][3] != 255) { opaque = 0; break; }
+    EssaiFin r6, r7, r1;
+    fin_essai(px, &MF6, &r6);
+    fin_essai(px, &MF7, &r7);
+    const ModeFin *M = &MF6; EssaiFin *R = &r6;
+    if (r7.err < R->err) { M = &MF7; R = &r7; }
+    if (opaque) { fin_essai(px, &MF1, &r1); if (r1.err < R->err) { M = &MF1; R = &r1; } }
+    fin_ecrire(M, R, dst);
+}
+
+/* image RGBA w x h -> blocs BC7 (format 7, mode 6 ; format 17 : BC7 « fin ») ou BC1 (format 1) de `mips` niveaux, comme images.dds_bc7 /
+ * images.dds_bc1 (BC1 : on s'arrête à 1 x 1). out == NULL : renvoie seulement la taille nécessaire ; < 0 : erreur. */
+__declspec(dllexport) int64_t encoder_dds(const uint8_t *rgba, int w, int h, int mips, int format, uint8_t *out, int64_t nout)
+{
+    int taille = format == 1 ? 8 : 16;
+    int64_t total = 0;
+    { int lw = w, lh = h, n = 0;
+      while (1) {
+          total += (int64_t)((lw + 3) / 4) * ((lh + 3) / 4) * taille; n++;
+          if (!(n < mips && (format != 1 || lw > 1 || lh > 1))) break;
+          lw = lw / 2 > 1 ? lw / 2 : 1; lh = lh / 2 > 1 ? lh / 2 : 1;
+      } }
+    if (!out) return total;
+    if (nout < total) return -1;
+    const uint8_t *niv = rgba; uint8_t *libre = NULL;
+    int lw = w, lh = h, n = 0; int64_t p = 0;
+    uint8_t px[16][4];
+    while (1) {
+        for (int by = 0; by < lh; by += 4)
+            for (int bx = 0; bx < lw; bx += 4) {
+                for (int i = 0; i < 16; i++) {
+                    int y = by + i / 4, x = bx + i % 4;
+                    if (y > lh - 1) y = lh - 1;
+                    if (x > lw - 1) x = lw - 1;
+                    memcpy(px[i], niv + ((size_t)y * lw + x) * 4, 4);
+                }
+                if (format == 7) enc_bc7_mode6(px, out + p); else if (format == 17) enc_bc7_fin(px, out + p); else enc_bc1(px, out + p);
+                p += taille;
+            }
+        n++;
+        if (!(n < mips && (format != 1 || lw > 1 || lh > 1))) break;
+        int nw, nh; uint8_t *s = moitie(niv, lw, lh, &nw, &nh);
+        if (libre) free(libre);
+        if (!s) return -2;
+        niv = libre = s; lw = nw; lh = nh;
+    }
+    if (libre) free(libre);
+    return p;
 }
 
 /* out doit faire au moins taille + 0x100 octets (taille = uint32 à src+8) ; renvoie 0 si tout va bien */

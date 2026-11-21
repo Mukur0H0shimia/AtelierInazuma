@@ -170,7 +170,7 @@ def exporter(cfg, demande, entree):
     gt = images.G4TX(open(src, 'rb').read())
     rempl, rapport, tmp = {}, [], tempfile.mkdtemp()
     try:
-        with multiprocessing.Pool(max(1, (os.cpu_count() or 2) - 1)) as pool:
+        with images.pool_encodage() as pool:
             for n_, url in textures.items():
                 if n_ not in gt.noms:
                     return {'ok': False, 'erreur': '%s n’est pas dans %s' % (n_, chemin)}
@@ -268,7 +268,7 @@ def exporter_objet(cfg, demande, entree):
     gt = images.G4TX(open(os.path.join(D, 'dx11', *rel.split('/')), 'rb').read())
     rempl, rapport, tmp = {}, [], tempfile.mkdtemp()
     try:
-        with multiprocessing.Pool(max(1, (os.cpu_count() or 2) - 1)) as pool:
+        with images.pool_encodage() as pool:
             for n_, url in textures.items():
                 if n_ not in gt.noms:
                     return {'ok': False, 'erreur': '%s n’est pas dans %s' % (n_, rel)}

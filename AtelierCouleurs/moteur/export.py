@@ -13,6 +13,7 @@ Méthode (vérifiée en jeu avec « Lumière de Michael », mod Mukuro, 13/11/20
 Pièges évités : UNE clé fausse et VRFW refuse tout un fichier -> chaque fichier est relu avec tomllib avant d'écrire ;
 `material` d'un [[recolor.tint]] = un seul nom (non utilisé ici) ; copies d'objets = même longueur de nom.
 """
+from moteur import outils_ext as _outils_ext  # noqa: E402  (ffmpeg fourni)
 import os, sys, re, json, glob, base64, shutil, subprocess, tomllib, datetime, zlib, struct
 
 MOD_ID = 'MesTechniques'
@@ -138,7 +139,7 @@ def banniere(texte, couleur, contour, sortie_png):
           "drawtext=%s:fontcolor=%s:borderw=12:bordercolor=%s,"
           "drawtext=%s:fontcolor=%s:borderw=2:bordercolor=white@0.6") % (base, base, contour, contour, base, couleur)
     env = dict(os.environ, MSYS2_ARG_CONV_EXCL='*')
-    r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=black@0.0:s=1728x352,format=rgba', '-vf', vf,
+    r = subprocess.run([_outils_ext.ffmpeg(), '-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=black@0.0:s=1728x352,format=rgba', '-vf', vf,
                         '-frames:v', '1', '-update', '1', os.path.basename(sortie_png)], cwd=os.path.dirname(sortie_png),
                        capture_output=True, text=True, env=env)
     os.remove(police)

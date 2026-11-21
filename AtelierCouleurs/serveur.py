@@ -1766,6 +1766,11 @@ def preparer_index():
     except Exception as ex:
         print('préparation :', ex)
     PREPA['pret'] = True
+    if CFG.get('lecture_directe') and not os.path.isdir(os.path.join(CACHE, 'data_jeu', 'common', 'sound_asset')):
+        try:                                       # 1er lancement : banques de sons sorties des paquets en arrière-plan
+            son.trouver_banque(CFG['data_dir'], 'aucun_son_atelier_inazuma')    # (sinon ~70 s au tout 1er son)
+        except Exception as ex:
+            print('sons :', ex)
 
 
 def main():

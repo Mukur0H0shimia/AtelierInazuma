@@ -7,6 +7,7 @@
   TrackEventTable (commandes 2000 = jouer (type, index)) -> WaveformTable (StreamAwbId / MemoryAwbId) ;
 - .awb = « AFS2 » : liste d'ids, liste de décalages, extraits HCA alignés.
 """
+from moteur import outils_ext as _outils_ext  # noqa: E402  (ffmpeg fourni)
 import os, struct, subprocess, glob
 
 
@@ -171,7 +172,7 @@ def en_ogg(data_dir, nom, cache_dir, perso=None):
         f = os.path.join(d, '_%s_%d.hca' % (nom, k))
         open(f, 'wb').write(b.extrait(i))
         hcas.append(f)
-    cmd = ['ffmpeg', '-v', 'error', '-y']
+    cmd = [_outils_ext.ffmpeg(), '-v', 'error', '-y']
     for f in hcas:
         cmd += ['-i', f]
     if len(hcas) > 1:

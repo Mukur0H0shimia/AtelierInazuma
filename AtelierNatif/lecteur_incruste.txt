@@ -1,5 +1,0 @@
-jeton 'Lkf5c6yzp' -> titre 'Atelier Inazuma' classe WindowsForms10.Window.8.app.0.34f5582_r6_ad1
-atelier 0000000000161472 fenetre -8,-8-1928,1040 ; page 0000000000701412 origine 0,23 taille 1920x1009
-zone 290,98 1270x819 -> image 290,173 1270x714 (origine page 0,23)
-zone 290,98 1270x819 -> image 290,150 1270x714 (origine page 0,0)
-zone 290,98 1270x819 -> image 290,173 1270x714 (origine page 0,23)

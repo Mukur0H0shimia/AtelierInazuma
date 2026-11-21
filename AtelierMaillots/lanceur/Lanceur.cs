@@ -12,6 +12,8 @@ static class Lanceur
 {
     static string TrouverPythonw()
     {
+        string fourni = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "python", "pythonw.exe"));
+        if (File.Exists(fourni)) { Environment.SetEnvironmentVariable("PYTHONNOUSERSITE", "1"); return fourni; }   // Python fourni
         string[] fixes = {
             @"C:\Python314\pythonw.exe",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Python314\pythonw.exe"),

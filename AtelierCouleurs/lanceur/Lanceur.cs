@@ -42,7 +42,34 @@ static class Lanceur
                    "\n\nGarde « Atelier Inazuma.exe » dans le dossier AtelierCouleurs (utilise un raccourci pour le bureau).");
             return;
         }
+        RaccourciBureau();
         Lancer();
+    }
+
+    // raccourci « Atelier Inazuma » sur le bureau, créé au 1er lancement seulement (s'il est supprimé, il ne revient pas)
+    static void RaccourciBureau()
+    {
+        try
+        {
+            string marque = Path.Combine(Dossier, "cache", "raccourci_bureau.txt");
+            if (File.Exists(marque)) return;
+            string lnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Atelier Inazuma.lnk");
+            if (!File.Exists(lnk))
+            {
+                Type t = Type.GetTypeFromProgID("WScript.Shell");
+                object sh = Activator.CreateInstance(t);
+                object s = t.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, sh, new object[] { lnk });
+                Type st = s.GetType();
+                st.InvokeMember("TargetPath", BindingFlags.SetProperty, null, s, new object[] { Application.ExecutablePath });
+                st.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, s, new object[] { Dossier });
+                st.InvokeMember("IconLocation", BindingFlags.SetProperty, null, s, new object[] { Application.ExecutablePath + ",0" });
+                st.InvokeMember("Description", BindingFlags.SetProperty, null, s, new object[] { "Atelier Inazuma" });
+                st.InvokeMember("Save", BindingFlags.InvokeMethod, null, s, null);
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(marque));
+            File.WriteAllText(marque, lnk);
+        }
+        catch (Exception) { }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]          // charge WebView2 seulement après AssemblyResolve
@@ -58,6 +85,8 @@ static class Lanceur
 
     public static string TrouverPythonw()
     {
+        string fourni = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "python", "pythonw.exe"));
+        if (File.Exists(fourni)) { Environment.SetEnvironmentVariable("PYTHONNOUSERSITE", "1"); return fourni; }   // Python fourni
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         string[] fixes = {
             @"C:\Python314\pythonw.exe",

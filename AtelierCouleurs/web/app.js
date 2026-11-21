@@ -495,7 +495,9 @@ async function ouvrir_(code) {
   if (perso) { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}`;
     $('p-nom').value = t.nom + ' (couleurs)'; $('p-desc').value = ''; if ($('rt-nom')) $('rt-nom').value = t.nom + ' (couleurs)'; if ($('cp-nom')) { $('cp-nom').value = ''; $('cp-nom').placeholder = t.nom + ' bis'; } }
   else { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}${t.element ? ' · ' + libElement(t.element) : ''}  ·  cinématique ${t.cinematique}`;
-    $('f-nom').value = t.nom + ' (couleurs)'; $('f-ban').value = E.banAuto = (t.nom + ' couleurs').toUpperCase(); }
+    $('f-nom').value = t.nom + ' (couleurs)'; $('f-ban').value = E.banAuto = (t.nom + ' couleurs').toUpperCase();
+    // (22/11, retour de muku) traînée du ballon : tirs seulement (dribble, défense, arrêt : rien à régler)
+    if ($('bloc-trainee')) { const tir = /^whs/.test(t.code); $('bloc-trainee').style.display = tir ? '' : 'none'; if (!tir) $('f-trainee').value = ''; } }
   // textures
   for (const o of E.objets) {
     if (o.erreur) continue;
@@ -518,7 +520,7 @@ async function ouvrir_(code) {
   const geantes = perso ? [] : E.vue.cacherGeantes(); E.vue.recadrer(true); teintesPieces(); dessinerPieces(); dessinerTextures(); dessinerAuras(); dessinerMateriaux(); dessinerTeintes(); majCompteurs();
   if (!perso) chargerAnimation(t).catch(e => majRapport('Animation non lue : ' + e.message));
   majRapport(geantes.length ? geantes.length + ' pièce(s) géante(s) cachée(s) au départ (fonds, flashs) : coche-les à gauche pour les voir.' : '');
-  dessinerRecette(); paletteTech(); E.sigProjet = signatureProjet(); E.chargement = false; verifierProjet();
+  dessinerRecette(); paletteTech(); E.sigProjet = signatureProjet(); E.chargement = false; verifierProjet(); proposerReprise();
   if (window.zonesPreparer) try { zonesPreparer(); } catch (e) { console.error('zones', e); }   // (15/11/2026) esprits / totems
   if (E.onglet === 'tenues' && window.ctPreparer) ctPreparer().catch(() => {});   // (15/11/2026) copies
   if (E.onglet === 'objets' && window.ojPreparer) ojPreparer();
@@ -1382,7 +1384,7 @@ function dessinerHub() {
     const st = c.jeuSeul ? ['Dans le jeu', 'oui'] : c.installe ? ['Installé', 'oui'] : ['Pas installé', 'non'];
     const d = carte({ onglet: c.onglet, vignette: vign, estTexture: !c.vignette && proj && proj.vignetteTexture, badge: st[0], badgeCl: st[1], titre: c.nom, couleurs: proj && proj.couleurs, lecture: true,
       sousImg: `${genre(c.genre)} · copie de ${echapper(c.nom_base || c.base)}`,
-      sous: `Code ${echapper(c.code)} · ${dateCourte(c.date)}${c.jeuSeul ? '<br>Plus dans la sortie de l’Atelier, mais toujours dans le jeu.' : ''}`,
+      sous: `<span class="avance">Code ${echapper(c.code)} · </span>${dateCourte(c.date)}${c.jeuSeul ? '<br>Plus dans la sortie de l’Atelier, mais toujours dans le jeu.' : ''}`,
       boutons: `<button class="primaire" data-a="modifier" title="${proj ? 'Reprendre le projet qui a servi à la créer' : 'Projet d’origine introuvable : rouvre la technique de départ'}">Modifier</button>`
         + (c.mod === 'MesPersonnages' && c.cle ? `<button data-a="coups" title="Choisir ses techniques et son esprit guerrier">Techniques${c.nb_coups ? ' (' + c.nb_coups + ')' : ''}</button>` : '')
         + (c.mod === 'MesEsprits' && c.genre === 'esprit' ? `<button data-a="liee" title="${c.liee ? 'Technique liée : ' + echapper(c.liee) : 'Choisir la technique de cet esprit guerrier'}">Technique liée${c.liee ? ' ✓' : ''}</button>` : '')
@@ -1425,7 +1427,139 @@ function dessinerAuras() {
 }
 
 // ------------------------------------------------------------------ export
-function majRapport(t) { $('rapport').textContent = t; }
+// (21/11, avis demandé par muku : « que ça ne prenne pas la tête ») RAPPORT EN LANGAGE NORMAL : en mode simple, une phrase claire
+// (sans chemins de fichiers ni codes), et le texte complet replié dans « Détails » ; en mode avancé, tout le texte comme avant.
+const CHEMIN_RE = /\s*:?\s*[A-Za-z]:\\[^\n]*/g;
+function phraseSimple(l) {
+  return l.replace(/^Mod créé \(pas encore installé\).*$/, 'C’est créé ! Il reste à le mettre dans le jeu.')
+    .replace(/^(Copie|Tenue|Armure) créée \(pas encore installée\).*$/, (_, q) => q + ' créée ! Il reste à la mettre dans le jeu.')
+    .replace(/^Objet créé \(pas encore installé\).*$/, 'Objet créé ! Il reste à le mettre dans le jeu.')
+    .replace(/^Erreur : /, 'Ça n’a pas marché : ').replace(/^Pas installé : /, 'Pas mis dans le jeu : ')
+    .replace(CHEMIN_RE, '').trim();
+}
+function majRapport(t) {
+  const el = $('rapport'); t = String(t == null ? '' : t);
+  if (!document.body.classList.contains('mode-simple')) { el.textContent = t; return; }
+  const lignes = t.split('\n'), tete = phraseSimple(lignes[0]), reste = t !== tete;
+  el.textContent = tete;
+  if (reste && t.trim()) { const d = document.createElement('details'); d.className = 'rapport-details';
+    const s = document.createElement('summary'); s.textContent = 'Détails'; const p = document.createElement('div'); p.textContent = t;
+    d.append(s, p); el.append('\n', d); }
+}
+function modeAvance() { try { return localStorage.getItem('atelier_avance') === '1'; } catch (e) { return false; } }
+function appliquerMode(avance) {
+  document.body.classList.toggle('mode-simple', !avance);
+  const b = $('bouton-avance'); if (b) { b.classList.toggle('actif', avance); b.title = avance ? 'Revenir au mode simple' : 'Montrer les réglages avancés (codes, matériaux, boutons séparés…)'; }
+  const t = $('titre-tech'); if (t && t.dataset.complet) { const v = avance ? t.dataset.complet : titreSimple(t.dataset.complet); t.dataset.affiche = v; t.textContent = v; }
+}
+// (22/11, retour de muku : parcours pas intuitifs) APRÈS UNE CRÉATION, LA SUITE LOGIQUE en boutons, sous le rapport (avant : cachée
+// dans « Mes créations ») : nouveau joueur -> ses techniques ; esprit -> sa technique liée, une armure
+async function proposerSuite(mod, code) {
+  if ($('suite-creation')) $('suite-creation').remove();
+  if (!code || !['MesPersonnages', 'MesEsprits'].includes(mod)) return;
+  let L = []; try { L = (await api('/api/projets')).creations || []; } catch (e) { return; }
+  const c = L.find(x => x.mod === mod && String(x.code) === String(code)); if (!c) return;
+  const d = document.createElement('div'); d.id = 'suite-creation'; d.className = 'ensuite';
+  const ajout = (txt, f) => { const b = document.createElement('button'); b.textContent = txt; b.onclick = f; d.appendChild(b); };
+  if (mod === 'MesPersonnages' && c.cle) ajout('Choisir ses techniques', () => ouvrirCoups(c));
+  if (mod === 'MesEsprits' && c.genre === 'esprit') { ajout('Choisir sa technique liée', () => ouvrirTechniqueLiee(c)); ajout('Lui faire une armure', () => window.changerOnglet('armures')); }
+  if (!d.children.length) return;
+  const t = document.createElement('span'); t.className = 'aide'; t.textContent = 'Et maintenant :'; d.prepend(t);
+  $('rapport').after(d);
+}
+// (22/11, « Les autres parcours ») rouvrir un élément déjà commencé créait un 2e projet sans rien dire (deux whk10060 à une heure d'écart
+// dans projets/) : on propose de continuer le dernier. « Nouveau » garde le comportement d'avant (un projet neuf).
+async function proposerReprise() {
+  if ($('reprise-proposee')) $('reprise-proposee').remove();
+  if (!E.tech || E.repriseCle) return;
+  const cle = E.projet, code = String(E.tech.code), onglet = E.tech.onglet || 'techniques';
+  let L = []; try { L = (await api('/api/projets')).projets || []; } catch (e) { return; }
+  if (!E.tech || E.projet !== cle) return;
+  const memes = L.filter(x => String(x.code) === code && (x.onglet || 'techniques') === onglet && x.cle !== cle); if (!memes.length) return;
+  const p = memes[0];                                  // liste du plus récent au plus ancien
+  const d = document.createElement('div'); d.id = 'reprise-proposee';
+  d.innerHTML = `<span>Tu as déjà commencé <b>${echapper(p.titre || p.base || code)}</b> (${echapper(dateCourte(p.date))})`
+    + (memes.length > 1 ? ` et ${memes.length - 1} autre${memes.length > 2 ? 's' : ''} (accueil)` : '') + '.</span>';
+  const b1 = document.createElement('button'); b1.className = 'primaire'; b1.textContent = 'Continuer ce projet';
+  b1.onclick = () => { d.remove(); reprendreDepuisHub(p); };
+  const b2 = document.createElement('button'); b2.textContent = 'Non, en commencer un nouveau'; b2.onclick = () => d.remove();
+  d.append(b1, b2); $('centre').appendChild(d);
+}
+// (22/11, « les interfaces ne sont pas assez graphiques ») HABILLAGE MENUS DU JEU (style.css, fin) : coin orange avec l'icône et le nom de
+// l'écran, bande d'aide du bas (ce qu'on fait ici + touches), images du jeu (fond, orange) pour toute la page ; suit l'onglet ouvert.
+const AIDE_ONGLET = {
+  techniques: 'Choisis une technique en haut, change ses couleurs, puis « Créer et mettre dans le jeu ».',
+  esprits: 'Choisis un esprit guerrier en haut, recolore-le, puis « Créer et mettre dans le jeu ».',
+  totems: 'Choisis un totem en haut, recolore-le, puis « Créer et mettre dans le jeu ».',
+  bannieres: 'Choisis un style, écris ton texte, puis utilise la bannière pour ta technique.',
+  maillots: 'Choisis un maillot du jeu comme coupe, dessine le haut et le short, puis « Créer et mettre dans le jeu ».',
+  tenues: 'Choisis une tenue en haut, recolore-la, puis « Créer et mettre dans le jeu ».',
+  armures: 'Choisis une armure en haut, recolore-la pour un de tes esprits, puis « Créer et mettre dans le jeu ».',
+  personnages: 'Choisis un personnage en haut, recolore sa tête, donne-lui un nom, puis « Créer et mettre dans le jeu ».',
+  objets: 'Choisis un objet en haut, donne-lui un nom et un prix, puis « Créer et mettre dans le jeu ».',
+};
+function habillageJeu() {
+  const h = document.querySelector('header'), nav = document.querySelector('header .onglets');
+  if (h && !$('jeu-coin')) { const c = document.createElement('div'); c.id = 'jeu-coin'; c.className = 'jeu-coin';
+    c.innerHTML = '<span class="jc-ico"></span><span class="jc-nom"></span>'; h.insertBefore(c, h.firstChild); }
+  const m = document.querySelector('main');
+  if (m && !$('aide-jeu')) { const f = document.createElement('footer'); f.id = 'aide-jeu';
+    f.innerHTML = '<span class="aj-texte"></span><span class="aj-touches"><span><i class="jm-touche">🖱</i>Choisir une pièce</span>'
+      + '<span><i class="jm-touche">Glisser</i>Tourner</span><span><i class="jm-touche">Molette</i>Zoom</span><span><i class="jm-touche">Clic droit</i>Déplacer</span></span>';
+    m.parentNode.insertBefore(f, m.nextSibling); }
+  const maj = () => {
+    const o = (document.body.className.match(/onglet-(\w+)/) || [])[1] || 'hub';
+    const b = nav && nav.querySelector(`button[data-onglet="${o}"]`), g = ONGLETS_HUB.find(x => x.o === o);
+    const c = $('jeu-coin'); if (c) { c.querySelector('.jc-nom').textContent = b ? b.textContent : 'Mes créations';
+      c.querySelector('.jc-ico').innerHTML = iconeJeu(g ? g.ic : 'm3', 34); }
+    const a = $('aide-jeu'); if (a) { a.querySelector('.aj-texte').textContent = AIDE_ONGLET[o] || '';
+      a.querySelector('.aj-touches').style.display = o === 'bannieres' ? 'none' : ''; }
+  };
+  new MutationObserver(maj).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  chargerMenusJeu().then(J => { const r = document.documentElement;
+    if (J && J.fond) r.style.setProperty('--jm-fond', `url("${J.fond.url}")`);
+    if (J && J.fond_orange) r.style.setProperty('--jm-fond-orange', `url("${J.fond_orange.url}")`); maj(); }).catch(() => {});
+  maj();
+}
+// titre de l'élément ouvert : en mode simple, sans les codes du jeu (whs00830, c01000300…) ni la cinématique
+function titreSimple(s) { return s.split('·').map(x => x.trim()).filter(x => x && !/^(cinématique|cutscene)\s|^[a-z]{1,4}\d{4,}[a-z0-9_]*$/i.test(x)).join('  ·  '); }
+window.addEventListener('load', () => {
+  // bouton « Avancé » dans l'en-tête (mode simple par défaut)
+  const h = document.querySelector('header');
+  if (h && !$('bouton-avance')) { const b = document.createElement('button'); b.id = 'bouton-avance'; b.textContent = 'Avancé';
+    b.onclick = () => { const a = !document.body.classList.contains('mode-simple'); try { localStorage.setItem('atelier_avance', a ? '0' : '1'); } catch (e) { }
+      appliquerMode(!a); };
+    h.appendChild(b); }
+  const t = $('titre-tech');
+  if (t) new MutationObserver(() => {
+    if (t.textContent === t.dataset.affiche) return;
+    t.dataset.complet = t.textContent;
+    const v = document.body.classList.contains('mode-simple') ? titreSimple(t.textContent) : t.textContent;
+    t.dataset.affiche = v; if (v !== t.textContent) t.textContent = v;
+  }).observe(t, { childList: true, characterData: true, subtree: true });
+  appliquerMode(modeAvance());
+  habillageJeu();
+  // UN SEUL GESTE : « Créer et mettre dans le jeu » = la création existante, puis l'installation de son mod ; les anciens boutons
+  // séparés (« Créer… », « Installer dans le jeu ») restent en mode avancé
+  const PAIRES = [['exporter', () => exporter(), 'MesTechniques', 'installer'], ['exporter-perso', () => exporterPerso(), 'MesEsprits', 'installer-perso'],
+    ['cp-exporter', () => cpExporter(), 'MesPersonnages', 'cp-installer'], ['ct-exporter', () => ctExporter(), 'MesPersonnages', 'ct-installer'],
+    ['co-exporter', () => coExporter(), 'MesPersonnages', 'co-installer'], ['cu-exporter', () => cuExporter(), 'MesTenues', 'cu-installer'],
+    ['oj-exporter', () => ojExporter(), 'MesObjets', 'oj-installer'], ['ca-exporter', () => caExporter(), 'MesEsprits', 'ca-installer'],
+    ['mm-construire', () => mmConstruire(), 'MesMaillots', null]];
+  for (const [id, creer, mod, idInst] of PAIRES) {
+    const orig = $(id); if (!orig || $(id + '-jeu')) continue;
+    const b = document.createElement('button'); b.id = id + '-jeu'; b.className = 'primaire creer-jeu'; b.textContent = 'Créer et mettre dans le jeu';
+    b.title = 'Crée ta copie puis la met dans le jeu (le jeu doit être fermé)';
+    b.onclick = async () => { b.disabled = true;
+      try { if ($('suite-creation')) $('suite-creation').remove();
+        const r = await creer(); if (r && r.ok) { const ri = await installer(mod); if ($('page-hub') && typeof chargerHub === 'function') chargerHub(); if (ri && ri.ok) await proposerSuite(mod, r.code); } }
+      catch (e) { majRapport('Erreur : ' + e.message); } finally { b.disabled = orig.disabled; } };
+    orig.parentNode.insertBefore(b, orig);
+    orig.classList.remove('primaire'); orig.classList.add('avance');
+    if (idInst && $(idInst)) $(idInst).classList.add('avance');
+    new MutationObserver(() => { b.disabled = orig.disabled; }).observe(orig, { attributes: true, attributeFilter: ['disabled'] }); b.disabled = orig.disabled;
+  }
+});
 async function exporter() {
   if (!E.tech) return majRapport('Ouvre d\'abord une technique.');
   const objets = {};
@@ -1454,6 +1588,7 @@ async function exporter() {
     majRapport(r.ok ? 'Mod créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') : 'Erreur : ' + r.erreur);
     if (r.ok) { const m = /code (\w+)/.exec(r.rapport[0] || ''), v = await faireVignette() || E.vignette;     // (15/11/2026) image pour le hub
       if (m && v) api('/api/vignette', { code: m[1], image: v }).catch(() => {}); }
+    return r;
   } catch (e) { majRapport('Erreur : ' + e.message); }
 }
 // (16/11/2026) PHOTO POUR LE PORTRAIT D'UNE COPIE (moteur/icones_copies.py) : le modèle recoloré de la vue, de face, fond
@@ -1497,6 +1632,7 @@ async function exporterPerso() {
   try { const r = await api('/api/exporter_personnage', { code: E.tech.code, textures, nom, description: $('p-desc').value.trim(),
       prix: $('p-prix').value ? +$('p-prix').value : null, icone: await photoIcone('buste') });
     majRapport(r.ok ? 'Mod créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') : 'Erreur : ' + r.erreur);
+    return r;
   } catch (e) { majRapport('Erreur : ' + e.message); }
 }
 // ------------------------------------------------------------------ (15/11/2026) ATELIER MAILLOTS (moteur/mes_maillots.py)
@@ -1683,11 +1819,13 @@ async function mmConstruire() {
     await mmEnregistrer(); if (!MM.id) return; }
   const r = await api('/api/maillot', { action: 'construire' }); if (!r.ok) return majRapport('Pas ajouté : ' + r.erreur);
   majRapport('Ajout au mod « Mes maillots »… (de quelques secondes à quelques minutes)');
-  const suivre = async () => { const e = await api('/api/maillot_etat');
-    majRapport((e.en_cours ? 'Construction…\n' : e.erreur ? 'Erreur : ' + e.erreur + '\n'
-      : 'Ajouté au mod « Mes maillots » (AtelierCouleurs/sortie/MesMaillots). Pour le mettre dans le jeu : « Installer » dans Mes créations.\n') + e.journal.join('\n'));
-    if (e.en_cours) setTimeout(suivre, 1000); };
-  suivre();
+  // (21/11) la promesse se termine avec la construction : « Créer et mettre dans le jeu » enchaîne alors l'installation
+  return await new Promise(fini => {
+    const suivre = async () => { let e; try { e = await api('/api/maillot_etat'); } catch (x) { return fini({ ok: false, erreur: x.message }); }
+      majRapport((e.en_cours ? 'Construction…\n' : e.erreur ? 'Erreur : ' + e.erreur + '\n'
+        : 'Ajouté au mod « Mes maillots » (AtelierCouleurs/sortie/MesMaillots). Pour le mettre dans le jeu : « Installer » dans Mes créations.\n') + e.journal.join('\n'));
+      if (e.en_cours) setTimeout(suivre, 1000); else fini({ ok: !e.erreur, erreur: e.erreur }); };
+    suivre(); });
 }
 function mmFichier(input, cle, img) { input.onchange = () => { const f = input.files[0]; if (!f) return; const lr = new FileReader();
   lr.onload = () => { MM[cle] = lr.result; $(img).src = lr.result; }; lr.readAsDataURL(f); }; }
@@ -1728,6 +1866,7 @@ async function cpExporter() {
   majRapport('Création de la copie « ' + nom + ' » (réencodage de ' + Object.keys(textures).length + ' texture(s))…');
   const r = await api('/api/copie_personnage', { code: E.tech.code, nom, description: $('cp-desc').value.trim(), textures, portrait: await photoIcone('visage') });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
+  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('cp-exporter')) return;
   $('cp-exporter').onclick = () => cpExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cp-installer').onclick = () => installer('MesPersonnages'); });
@@ -1737,7 +1876,10 @@ async function caListe() {
   let r = { copies: [] }; try { r = await api('/api/copies_esprits'); } catch (e) { /* serveur absent */ }
   sel.innerHTML = r.copies.length ? r.copies.map(c => `<option value="${echapper(c.code)}">${echapper(c.nom)} (copie de ${echapper(c.nom_base || c.base)})</option>`).join('')
     : '<option value="">Aucune copie d’esprit : crée-en une dans l’onglet Esprits guerriers</option>';
+  if ($('ca-aucune')) { $('ca-aucune').style.display = r.copies.length ? 'none' : ''; $('ca-formulaire').style.display = r.copies.length ? '' : 'none'; }
 }
+window.addEventListener('load', () => { if ($('ca-vers-esprits')) $('ca-vers-esprits').onclick = () => {
+  window.changerOnglet('esprits'); majRapport('Choisis un esprit guerrier en haut, recolore-le et crée-le : tu pourras ensuite lui faire une armure.'); }; });
 async function caExporter() {
   if (!E.tech || E.tech.onglet !== 'armures') return majRapport('Ouvre d’abord une armure (onglet Armures).');
   if (!$('ca-esprit').value) return majRapport('Aucune copie d’esprit : crée-en d’abord une (onglet Esprits guerriers, « Créer le mod »).');
@@ -1747,6 +1889,7 @@ async function caExporter() {
   majRapport('Création de l’armure (réencodage de ' + Object.keys(textures).length + ' texture(s))…');
   const r = await api('/api/copie_armure', { code: E.tech.code, esprit: $('ca-esprit').value, nom: $('ca-nom').value.trim(), textures });
   majRapport(r.ok ? 'Armure créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesEsprits).' : 'Erreur : ' + r.erreur);
+  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('ca-exporter')) return;
   $('ca-exporter').onclick = () => caExporter().catch(e => majRapport('Erreur : ' + e.message)); $('ca-installer').onclick = () => installer('MesEsprits');
@@ -1785,6 +1928,7 @@ async function ctExporter() {
   majRapport('Création du nouveau joueur…');
   const r = await api('/api/copie_tenue', { code: E.tech.code, porteur: $('ct-porteur').value, nom: $('ct-nom').value.trim(), description: $('ct-desc').value.trim(), textures });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
+  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
 }
 async function coExporter() {
   if (!E.tech || E.tech.genre !== 'Accessoire') return majRapport('Ouvre d’abord un accessoire (onglet Tenues, tri « Accessoire »).');
@@ -1793,6 +1937,7 @@ async function coExporter() {
   majRapport('Création du nouveau joueur…');
   const r = await api('/api/copie_objet', { code: E.tech.code, tete, nom: $('co-nom').value.trim(), description: $('co-desc').value.trim(), textures });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
+  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('ct-exporter')) return;
   $('ct-exporter').onclick = () => ctExporter().catch(e => majRapport('Erreur : ' + e.message)); $('ct-installer').onclick = () => installer('MesPersonnages');
@@ -1812,6 +1957,7 @@ async function cuExporter() {
   if (!corps.length) return majRapport('Coche au moins une corpulence (« Qui peut la mettre ? »).');
   const r = await api('/api/copie_outfit', { code: E.tech.code, nom: $('cu-nom').value.trim(), description: $('cu-desc').value.trim(), prix: +$('cu-prix').value || 28, textures, icone: E.cuIcone || null, corps });
   majRapport(r.ok ? 'Tenue créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesTenues).' : 'Erreur : ' + r.erreur);
+  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('cu-exporter')) return;
   $('cu-exporter').onclick = () => cuExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cu-installer').onclick = () => installer('MesTenues');
@@ -1847,6 +1993,7 @@ async function ojExporter() {
   majRapport('Création de la copie…');
   const r = await api('/api/copie_objet_jeu', { code: E.tech.code, nom: $('oj-nom-copie').value.trim(), description: $('oj-desc-copie').value, prix: +$('oj-prix').value || 10, icone: x && x.cur ? x.cur.toDataURL('image/png') : null });
   majRapport(r.ok ? 'Objet créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesObjets).' : 'Erreur : ' + r.erreur);
+  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('oj-exporter')) return;
   $('oj-exporter').onclick = () => ojExporter().catch(e => majRapport('Erreur : ' + e.message)); $('oj-installer').onclick = () => installer('MesObjets'); });
@@ -1858,10 +2005,25 @@ async function installer(mod) {
       if (!confirm(`Installer remplace le mod ${mod} du jeu. Ces créations n'existent pas dans cet Atelier et seront retirées du jeu :\n`
         + r.perdus.map(n => '- ' + n).join('\n') + '\n\n(une sauvegarde est faite avant ; « Annuler » pour ne rien changer)\nContinuer ?')) return majRapport('Installation annulée : rien n’a changé.');
       r = await api('/api/installer', { mod: mod || 'MesTechniques', forcer: true }); }
-    majRapport(r.ok ? 'Installé dans ' + r.dossier + '\nSauvegarde : ' + r.sauvegarde + '\nLance le jeu, puis regarde le journal de VRFW (aucune ligne ERROR).'
-                      + (r.avertissement ? '\n⚠ ' + r.avertissement : '') : 'Pas installé : ' + r.erreur);
+    // (21/11) 1re ligne : où la trouver en jeu (textes de l'Atelier : OU_EN_JEU) ; le reste = détails (repliés en mode simple)
+    majRapport(r.ok ? 'C’est dans le jeu ! ' + (OU_EN_JEU[mod || 'MesTechniques'] || '') + ' (Relance le jeu s’il était ouvert.)'
+                      + (r.avertissement ? '\n⚠ ' + r.avertissement : '')
+                      + '\nInstallé dans ' + r.dossier + '\nSauvegarde : ' + r.sauvegarde + '\nLance le jeu, puis regarde le journal de VRFW (aucune ligne ERROR).'
+                    : 'Pas installé : ' + r.erreur);
+    return r;
   } catch (e) { majRapport('Erreur : ' + e.message); }
 }
+// (21/11) où trouver chaque création en jeu : repris des textes de l'Atelier et de ses mods (export.py : boutique des supertechniques
+// d'Inazuma Fantasy ; esprits.py : boutique d'entraînement ; copies_persos.py : tirage Kizuna de ChronicleDeluxe ; objets_jeu.py et
+// atelier_mod.py : boutique générale ; copies_outfits.py : tenue en boutique, à équiper ; armures_copies.py : forme en armure de l'esprit)
+const OU_EN_JEU = {
+  MesTechniques: 'Ta technique est en vente à la boutique des supertechniques d’Inazuma Fantasy.',
+  MesEsprits: 'Ton esprit guerrier / totem est en vente à la boutique d’entraînement d’Inazuma Fantasy (une armure devient la forme en armure de son esprit).',
+  MesPersonnages: 'Ton nouveau joueur t’attend au tirage Kizuna (ChronicleDeluxe).',
+  MesTenues: 'Ta tenue est en vente en boutique : équipe-la à un joueur comme les tenues du jeu.',
+  MesObjets: 'Ton objet est en vente à la boutique générale d’Inazuma Fantasy.',
+  MesMaillots: 'Ton maillot est en vente à la boutique générale d’Inazuma Fantasy.',
+};
 
 // ------------------------------------------------------------------ animation de la cinématique
 async function chargerAnimation(t) {
@@ -2094,8 +2256,12 @@ async function ouvrirBannieres() {
     $('b-utiliser').onclick = () => {
       if (!E.tech || E.tech.perso) return $('b-rapport').textContent = "Ouvre d'abord une technique dans l'onglet Techniques.";
       E.banniereImage = { code: E.tech.code, projet: E.projet, image: B.ed.image() };
-      api('/api/banniere_apercu', { code: E.tech.code, projet: E.projet, image: E.banniereImage.image }).then(() => { E.telopV = Date.now(); }).catch(() => {});   // aussi pour le lecteur natif
-      $('b-rapport').textContent = `Bannière prête pour « ${E.tech.nom} » : elle partira avec « Créer le mod » (onglet Techniques).`; };
+      // (22/11) appliquée tout de suite (aperçu web ET lecteur natif ouvert, sans recharger), puis retour à la technique
+      $('b-rapport').textContent = 'Application…';
+      api('/api/banniere_apercu', { code: E.tech.code, projet: E.projet, image: E.banniereImage.image })
+        .then(() => { E.telopV = Date.now(); window.changerOnglet('techniques');
+          majRapport('Bannière appliquée : tu la vois dans l’aperçu de la technique. Elle partira avec « Créer et mettre dans le jeu ».'); })
+        .catch(e => { $('b-rapport').textContent = 'Erreur : ' + e.message; }); };
     $('b-enregistrer').onclick = async () => {
       if (!B.choix || B.choix.ouverte) return $('b-rapport').textContent = 'Choisis à gauche une copie déjà créée.';
       $('b-rapport').textContent = 'Enregistrement…';
@@ -2118,11 +2284,19 @@ function choisirBanniere(c, el) {
   B.choix = c; document.querySelectorAll('#b-choix div').forEach(x => x.classList.toggle('sel', x === el));
   B.ed.p.texte = c.texte; $('b-texte').value = c.texte;
   $('b-modele').src = '/api/telop_png?code=' + encodeURIComponent(c.base);
+  // (22/11, retour de muku : « pas intuitif ») UN seul bouton, selon ce qui est choisi à gauche, avec le nom écrit dessus
+  // (avant : « Utiliser pour la technique ouverte » et « Enregistrer dans la copie choisie » côte à côte, faciles à confondre)
+  const u = $('b-utiliser'), en = $('b-enregistrer');
+  u.style.display = c.ouverte ? '' : 'none'; en.style.display = c.ouverte ? 'none' : '';
+  en.classList.add('primaire');
+  if (c.ouverte && E.tech) u.textContent = 'Utiliser pour « ' + E.tech.nom + ' » et revenir à la technique';
+  else en.textContent = 'Enregistrer dans ma copie « ' + c.titre + ' »';
   dessinerBanniere();
 }
 
 // (21/11) le texte de la bannière suit le nom de la technique tant qu'on ne l'a pas changé soi-même (avant : on renommait
 // « Tornade Éloïse » et la bannière restait « TORNADE DE FEU COULEURS »)
+window.addEventListener('load', () => { if ($('f-ban-perso')) $('f-ban-perso').onclick = () => window.changerOnglet('bannieres'); });   // (22/11) bannière depuis la technique
 window.addEventListener('load', () => { const n = $('f-nom'), b = $('f-ban'); if (!n || !b) return; let prec = n.value;
   n.addEventListener('focus', () => { prec = n.value; });
   n.addEventListener('input', () => { const v = b.value.trim();
@@ -2144,7 +2318,7 @@ window.addEventListener('load', async () => {
   }).observe(res, { attributes: true, attributeFilter: ['style'] });
   const changerOnglet = o => {
     if (E.onglet !== o) { E.filtreSource = null; E.filtreSerie = null; }   // (17/11/2026) filtres Jeu / Mods et série : par onglet
-    E.onglet = o; document.body.className = 'onglet-' + o;
+    E.onglet = o; const simple_ = document.body.classList.contains('mode-simple'); document.body.className = 'onglet-' + o + (simple_ ? ' mode-simple' : '');   // (21/11) garde le mode simple
     document.querySelectorAll('.onglets button').forEach(b => b.classList.toggle('actif', b.dataset.onglet === o));
     const c = ONGLETS[o]; cherche.placeholder = c.cherche; cherche.value = ''; res.style.display = 'none';
     $('titre-pieces').textContent = c.pieces; $('titre-tout').textContent = c.tout; $('note-vue').textContent = c.note;
@@ -2377,7 +2551,7 @@ async function ouvrirCoups(c) {
       <div class="tc-boutons"><button data-f="origine" title="Les techniques de la carte d'origine (fichiers du jeu)">Celles du jeu</button>
         ${r.mods.length ? `<button data-f="mods" title="Ce que ${echapper(r.mod)} donne à l'original (ce que tu vois en jeu)">Celles de ${echapper(r.mod)}</button>` : ''}
         <button data-f="aucun" title="Ne rien écrire : la copie garde la liste de la carte d'origine">Ne rien changer</button></div>
-      <button class="tc-enregistrer" data-f="garder">Enregistrer</button><div class="tc-etat"></div>
+      <button class="tc-enregistrer" data-f="garder">Enregistrer et mettre dans le jeu</button><div class="tc-etat"></div>
       ${r.plateau ? '<div class="tc-note">La carte d’origine a son propre plateau de compétences : une technique ajoutée n’y apparaît que si le plateau la contient (VRFW).</div>' : ''}`;
     G.querySelectorAll('.tc-barre').forEach(b => { if (+b.dataset.i === sel) b.classList.add('sel'); b.onclick = () => { sel = +b.dataset.i; filtreG = ''; dessiner(); }; });
     G.querySelector('[data-f="origine"]').onclick = () => { poser(r.origine); dessiner(); };
@@ -2420,8 +2594,9 @@ async function ouvrirCoups(c) {
     const e = G.querySelector('.tc-etat'); e.textContent = 'Écriture…';
     try { const q = await api('/api/coups', { cle: c.cle, coups: L });
       if (!q.ok) { e.textContent = q.erreur; return; }
-      $('rapport').textContent = q.rapport.join('\n') + '\n(dans AtelierCouleurs/sortie/MesPersonnages : « Installer » pour le mettre dans le jeu)';
-      f.close(); $('hub-etat').textContent = q.rapport[0]; chargerHub();
+      f.close();
+      // (22/11, parcours plus simple) enregistré ET remis dans le jeu tout de suite (avant : penser à « Installer » ensuite)
+      e.textContent = ''; await installer('MesPersonnages'); $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub();
     } catch (x) { e.textContent = x.message; } };
   dessiner();
   // (15/11/2026) maillot porté dans l'aperçu : un maillot du jeu (Raimon par défaut), gardé pour la prochaine fois
@@ -2494,14 +2669,15 @@ async function ouvrirTechniqueLiee(c) {
     <p class="fc-note">✦ = ${echapper(c.nom)} apparaît dans la cinématique de la technique (en haut de la liste).</p>
     <div class="fc-ligne"><span class="fc-case">Technique</span><input class="fc-nom" list="fc-liees" placeholder="Tape pour chercher" value="${echapper(act ? lib(act) : '')}"></div>
     <div class="fc-repris fc-scene">${echapper(etat(act))}</div>
-    <div class="fc-boutons"><button data-f="origine">Remettre celle d’origine</button><button class="primaire" data-f="garder">Enregistrer</button></div><div class="fc-etat"></div></div>`;
+    <div class="fc-boutons"><button data-f="origine">Remettre celle d’origine</button><button class="primaire" data-f="garder">Enregistrer et mettre dans le jeu</button></div><div class="fc-etat"></div></div>`;
   f.querySelector('.fc-nom').oninput = e => { f.querySelector('.fc-scene').textContent = etat(parLib.get(e.target.value.trim())); };
   const envoyer = async t => {
     const e = f.querySelector('.fc-etat'); e.textContent = 'Écriture…';
     try { const q = await api('/api/technique_liee', { code: c.code, technique: t });
       if (!q.ok) { e.textContent = q.erreur; return; }
-      $('rapport').textContent = q.rapport.join('\n') + '\n(dans AtelierCouleurs/sortie/MesEsprits : « Installer » pour le mettre dans le jeu)';
-      f.close(); $('hub-etat').textContent = q.rapport[0]; chargerHub();
+      f.close();
+      // (22/11, parcours plus simple) enregistrée ET remise dans le jeu tout de suite (avant : penser à « Installer » ensuite)
+      await installer('MesEsprits'); $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub();
     } catch (x) { e.textContent = x.message; } };
   f.querySelector('[data-f="origine"]').onclick = () => envoyer(null);
   f.querySelector('[data-f="garder"]').onclick = () => {

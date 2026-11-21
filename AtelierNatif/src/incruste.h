@@ -97,6 +97,7 @@ static POINT origine_page() {
 }
 static void redimensionner(int w, int h);       // (lecteur.cpp)
 static void charger_modifs_rel();               // (lecteur.cpp)
+static void charger_telop_rel();                // (lecteur.cpp) (22/11) bannière relue
 static void options_rel();                      // (lecteur.cpp) pièces cachées / couleurs relues
 static void surligner(const char* liste);       // (lecteur.cpp) pièces localisées plus lumineuses
 static void incruste_commandes(int n, int image, bool& pause_, double& temps_, int& pas_) {
@@ -119,6 +120,7 @@ static void incruste_commandes(int n, int image, bool& pause_, double& temps_, i
         else if (!strcmp(b, "montrer")) INC.cache = false;
         else if (!strcmp(b, "quitter")) PostQuitMessage(0);
         else if (!strcmp(b, "textures")) charger_modifs_rel();         // retouche de couleur dans l'Atelier : modifs.bin relu
+        else if (!strcmp(b, "telop")) charger_telop_rel();             // (22/11) bannière changée dans l'Atelier : telop.bin relu
         else if (!strcmp(b, "options")) options_rel();                 // (15/11/2026) pièces cachées / couleurs : options.json relu
         else if (!strncmp(b, "surligner ", 10)) surligner(b + 10);       // (15/11/2026) « Localiser la texture » : éclat
         else if (!strcmp(b, "etat")) { char r[400]; const int m = sprintf_s(r, "image %d %d pause %d ips %.0f ecran %d choix %d %s", image, n, pause_ ? 1 : 0, INC.ips,

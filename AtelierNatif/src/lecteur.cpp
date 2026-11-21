@@ -1740,7 +1740,9 @@ static void passe_couleur(const Image& im, const Lum* lum) {
 }
 
 // BANNIÈRE (14/11/2026) : telop.bin (u32 largeur, hauteur + RVBA), dessinée par-dessus l'image finale (couche du menu)
+static std::wstring F_TELOP;                   // (22/11) relu sur la commande « telop » (bannière changée dans l'Atelier, sans relancer)
 static void charger_telop(const std::wstring& f) {
+    F_TELOP = f;
     if (A.telSrv) { A.telSrv->Release(); A.telSrv = nullptr; } A.telW = A.telH = 0;
     FILE* x = _wfopen(f.c_str(), L"rb"); if (!x) return;
     uint32_t wh[2] = {0, 0}; if (fread(wh, 4, 2, x) != 2 || !wh[0] || !wh[1] || wh[0] > 8192 || wh[1] > 8192) { fclose(x); return; }
@@ -1926,6 +1928,11 @@ static void options_rel() {
     std::string apres; for (auto& e : T.ems) { char t[64]; sprintf_s(t, "%d %.4f %.4f;", e.aTeinte ? 1 : 0, e.tH, e.tC); apres += t; }
     if (avant != apres) for (int i = 0; i < calcules && i < (int)A.images.size(); i++) particules_gpu(A.images[i]);   // (15/11/2026) aussi en pause
     FILE* x = fopen("lecteur_incruste.txt", "a"); if (x) { fprintf(x, "options relues\n"); fclose(x); }
+}
+static void charger_telop_rel() {
+    if (F_TELOP.empty()) return;
+    charger_telop(F_TELOP);
+    FILE* x = fopen("lecteur_incruste.txt", "a"); if (x) { fprintf(x, "banniere relue : %dx%d\n", A.telW, A.telH); fclose(x); }
 }
 static void charger_modifs_rel() {
     if (F_MODIFS.empty()) return;

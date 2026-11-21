@@ -21,6 +21,49 @@
   var D = {};
   function dico() { return D; }
 
+  // (21/11) textes du mode simple, du bouton unique et des rapports en langage normal
+  var SUP = {
+    'Créer et mettre dans le jeu': 'Create and put in the game',
+    'Crée ta copie puis la met dans le jeu (le jeu doit être fermé)': 'Creates your copy then puts it in the game (the game must be closed)',
+    'Avancé': 'Advanced', 'Revenir au mode simple': 'Back to simple mode',
+    'Enregistrer sans construire': 'Save without building',
+    'Tu as déjà commencé': 'You already started', 'Continuer ce projet': 'Continue this project', 'Non, en commencer un nouveau': 'No, start a new one',
+    'Garde le maillot sans refaire le mod (pour le finir plus tard)': 'Keeps the kit without rebuilding the mod (to finish it later)',
+    "« Créer et mettre dans le jeu » enregistre le maillot, refait le mod avec tous tes maillots et le met dans le jeu (le jeu doit être fermé). Il sera à la boutique générale d'Inazuma Fantasy.": "“Create and put in the game” saves the kit, rebuilds the mod with all your kits and puts it in the game (the game must be closed). It will be in the Inazuma Fantasy general shop.",
+    'Montrer les réglages avancés (codes, matériaux, boutons séparés…)': 'Show the advanced settings (codes, materials, separate buttons…)',
+    'Détails': 'Details',
+    'C’est créé ! Il reste à le mettre dans le jeu.': 'Created! It still has to be put in the game.',
+    'Copie créée ! Il reste à la mettre dans le jeu.': 'Copy created! It still has to be put in the game.',
+    'Tenue créée ! Il reste à la mettre dans le jeu.': 'Outfit created! It still has to be put in the game.',
+    'Armure créée ! Il reste à la mettre dans le jeu.': 'Armour created! It still has to be put in the game.',
+    'Objet créé ! Il reste à le mettre dans le jeu.': 'Item created! It still has to be put in the game.',
+    'Ta technique est en vente à la boutique des supertechniques d’Inazuma Fantasy.': 'Your technique is on sale at the Inazuma Fantasy technique shop.',
+    'Ton esprit guerrier / totem est en vente à la boutique d’entraînement d’Inazuma Fantasy (une armure devient la forme en armure de son esprit).': 'Your Keshin / totem is on sale at the Inazuma Fantasy training shop (an armour becomes the armoured form of its Keshin).',
+    'Ton nouveau joueur t’attend au tirage Kizuna (ChronicleDeluxe).': 'Your new player is waiting in the Kizuna draw (ChronicleDeluxe).',
+    'Ta tenue est en vente en boutique : équipe-la à un joueur comme les tenues du jeu.': 'Your outfit is on sale in the shop: equip it on a player like the game outfits.',
+    'Ton objet est en vente à la boutique générale d’Inazuma Fantasy.': 'Your item is on sale at the Inazuma Fantasy general store.',
+    'Ton maillot est en vente à la boutique générale d’Inazuma Fantasy.': 'Your kit is on sale at the Inazuma Fantasy general store.',
+    'faites avec « Créer et mettre dans le jeu » (ou « Créer » en mode avancé)': 'made with “Create and put in the game” (or “Create” in advanced mode)',
+    'Choisis une technique en haut, change ses couleurs, puis « Créer et mettre dans le jeu ».': 'Pick a technique at the top, change its colours, then “Create and put in the game”.',
+    'Choisis un esprit guerrier en haut, recolore-le, puis « Créer et mettre dans le jeu ».': 'Pick a Keshin at the top, recolour it, then “Create and put in the game”.',
+    'Choisis un totem en haut, recolore-le, puis « Créer et mettre dans le jeu ».': 'Pick a totem at the top, recolour it, then “Create and put in the game”.',
+    'Choisis un style, écris ton texte, puis utilise la bannière pour ta technique.': 'Pick a style, write your text, then use the banner for your technique.',
+    'Choisis un maillot du jeu comme coupe, dessine le haut et le short, puis « Créer et mettre dans le jeu ».': 'Pick a game kit as a cut, draw the top and the shorts, then “Create and put in the game”.',
+    'Choisis une tenue en haut, recolore-la, puis « Créer et mettre dans le jeu ».': 'Pick an outfit at the top, recolour it, then “Create and put in the game”.',
+    'Choisis une armure en haut, recolore-la pour un de tes esprits, puis « Créer et mettre dans le jeu ».': 'Pick an armour at the top, recolour it for one of your Keshin, then “Create and put in the game”.',
+    'Choisis un personnage en haut, recolore sa tête, donne-lui un nom, puis « Créer et mettre dans le jeu ».': 'Pick a character at the top, recolour their head, give them a name, then “Create and put in the game”.',
+    'Choisis un objet en haut, donne-lui un nom et un prix, puis « Créer et mettre dans le jeu ».': 'Pick an item at the top, give it a name and a price, then “Create and put in the game”.',
+    'Choisir une pièce': 'Pick a part', 'Glisser': 'Drag', 'Tourner': 'Rotate', 'Molette': 'Wheel', 'Zoom': 'Zoom', 'Clic droit': 'Right click', 'Déplacer': 'Pan',
+    'Appris au': 'Learnt at',
+    'Enregistrer et mettre dans le jeu': 'Save and put in the game', 'Et maintenant :': 'What next:', 'Choisir ses techniques': 'Choose their techniques',
+    'Choisir sa technique liée': 'Choose its linked technique', 'Lui faire une armure': 'Make it an armour', "Créer d'abord une copie d'esprit guerrier": 'First create a Keshin copy',
+    'Choisis un esprit guerrier en haut, recolore-le et crée-le : tu pourras ensuite lui faire une armure.': 'Pick a Keshin at the top, recolour it and create it: you can then make it an armour.',
+    '✎ Personnaliser la bannière': '✎ Customise the banner', 'Application…': 'Applying…',
+    "Ouvre l'éditeur de bannière pour cette technique ; « Utiliser » te ramène ici avec l'aperçu à jour": 'Opens the banner editor for this technique; “Use” brings you back here with the preview up to date',
+    'Bannière appliquée : tu la vois dans l’aperçu de la technique. Elle partira avec « Créer et mettre dans le jeu ».': 'Banner applied: you can see it in the technique preview. It will go with “Create and put in the game”.', 'Choisir une technique': 'Choose a technique', 'Choisir un esprit': 'Choose a Keshin', 'Autre': 'Other',
+    'CharacterReforged : 6 techniques + 1 esprit (case 9) ; les niveaux peuvent être recalculés': 'CharacterReforged: 6 techniques + 1 Keshin (slot 9); levels may be recomputed'
+  };
+
   // (21/11) textes avec des données : [modèle sur le texte aux espaces réduits, remplacement]
   var MOTIFS = [
     [/^(\S+) \((\d+) pièces?\)$/, '$1  ($2 parts)'],
@@ -67,6 +110,13 @@
     [/^Création (de la tenue|de l’armure|du nouveau joueur|de la copie)…$/, function (_, q) {
       return 'Creating ' + { 'de la tenue': 'the outfit', 'de l’armure': 'the armour', 'du nouveau joueur': 'the new player', 'de la copie': 'the copy' }[q] + '…'; }],
     [/^Installation…$/, 'Installing…'],
+    [/^Utiliser pour « (.+) » et revenir à la technique$/, 'Use for “$1” and go back to the technique'],
+    [/^Enregistrer dans ma copie « (.+) »$/, 'Save into my copy “$1”'],
+    [/^Copie de (.+) · code (\S+)$/, 'Copy of $1 · code $2'],
+    [/^Celles de (\S+)$/, '$1’s'],
+    [/^C’est dans le jeu ! (.+?) \(Relance le jeu s’il était ouvert\.\)$/, function (_, ou) { return 'It’s in the game! ' + trad(ou) + ' (Restart the game if it was open.)'; }],
+    [/^Ça n’a pas marché : (.+)$/, function (_, e) { return 'It did not work: ' + trad(e); }],
+    [/^Pas mis dans le jeu : (.+)$/, function (_, e) { return 'Not put in the game: ' + trad(e); }],
     [/^Installer remplace le mod (\S+) du jeu\. Ces créations n'existent pas dans cet Atelier et seront retirées du jeu :$/,
      '“Install” replaces the $1 mod of the game. These creations are not in this Atelier and will be removed from the game:'],
     [/^\(une sauvegarde est faite avant ; « Annuler » pour ne rien changer\)$/, '(a backup is made first; “Cancel” to change nothing)'],
@@ -83,7 +133,7 @@
     if (!brut) { return s; }
     var t = brut.replace(/\s+/g, ' ');           // le dictionnaire a les espaces réduits
     var d = window.I18N_EN || {};
-    var r = d[t];
+    var r = d[t] !== undefined ? d[t] : SUP[t];
     if (r === undefined) {                       // avec des nombres : « {n} »
       var nb = [];
       var modele = t.replace(/\d+(?:[.,]\d+)?/g, function (m) { nb.push(m); return '{n}'; });

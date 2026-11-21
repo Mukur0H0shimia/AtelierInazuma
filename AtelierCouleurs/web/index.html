@@ -1,7 +1,8 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" translate="no">
 <head>
 <meta charset="utf-8">
+<meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atelier Inazuma</title>
 <link rel="stylesheet" href="/web/style.css">
@@ -53,7 +54,7 @@
 
     <div class="hub-section" id="jm-s-continuer"><h2>À continuer</h2><span>sauvegardé tout seul, pas encore transformé en mod</span></div>
     <div id="hub-projets" class="hub-grille"></div>
-    <div class="hub-section" id="jm-s-terminees"><h2>Terminées</h2><span>mods faits avec « Créer le mod »</span></div>
+    <div class="hub-section" id="jm-s-terminees"><h2>Terminées</h2><span>faites avec « Créer et mettre dans le jeu » (ou « Créer » en mode avancé)</span></div>
     <div id="hub-creations" class="hub-grille"></div>
     <div class="hub-section" id="jm-s-prereglages"><h2>Préréglages <b id="hub-n-prereglages"></b></h2><span>à appliquer sur n'importe quelle technique (bloc « Remplacer une couleur partout »)</span></div>
     <div id="hub-prereglages" class="hub-puces"></div>
@@ -66,7 +67,7 @@
   <aside class="panneau">
     <h2>Pour quelle technique ?</h2>
     <div id="b-choix" class="liste"></div>
-    <p class="aide">« Technique ouverte » = celle de l'onglet Techniques (la bannière partira avec « Créer le mod »).
+    <p class="aide">« Technique ouverte » = celle de l'onglet Techniques (la bannière partira avec « Créer et mettre dans le jeu »).
       Les autres = tes copies déjà créées (MesTechniques).</p>
     <h2>Styles tout prêts</h2>
     <div id="b-styles" class="ligne"></div>
@@ -140,8 +141,8 @@
     <canvas id="vue-d3d" title="Image dessinée par Direct3D avec les shaders du jeu (prototype)"></canvas>
     <img id="l-telop" alt="">
     <div class="barre-vue">
-      <label><input type="checkbox" id="additif" checked> Lumière (additif)</label>
-      <label><input type="checkbox" id="fil"> Fil de fer sélection</label>
+      <label class="avance"><input type="checkbox" id="additif" checked> Lumière (additif)</label>
+      <label class="avance"><input type="checkbox" id="fil"> Fil de fer sélection</label>
       <button id="recadrer">Recadrer</button>
       <button id="avant-apres" title="Voir la technique d'origine du jeu, puis tes couleurs (touche A). Tes changements sont gardés.">◐ Avant / après</button>
       <span class="aide">Glisser : tourner · Molette : zoom · Clic droit : déplacer</span>
@@ -151,17 +152,17 @@
       <input type="range" id="l-image" min="0" max="100" value="0">
       <span id="l-info" class="aide">—</span>
       <select id="l-vitesse"><option value="1">× 1</option><option value="0.5">× 0,5</option><option value="0.25">× 0,25</option></select>
-      <label><input type="checkbox" id="l-camera" checked> Caméra du jeu</label>
-      <label><input type="checkbox" id="l-boucle" checked> En boucle</label>
+      <label class="avance"><input type="checkbox" id="l-camera" checked> Caméra du jeu</label>
+      <label class="avance"><input type="checkbox" id="l-boucle" checked> En boucle</label>
       <select id="l-perso" title="Personnage qui fait la technique"></select>
-      <label><input type="checkbox" id="l-terrain" checked> Terrain</label>
+      <label class="avance"><input type="checkbox" id="l-terrain" checked> Terrain</label>
       <label><input type="checkbox" id="l-banniere" checked> Bannière</label>
       <label><input type="checkbox" id="l-son" checked> Son</label>
-      <label><input type="checkbox" id="l-anim" checked> Animation</label>
-      <label title="Vraies particules du jeu (.ptlb) : étincelles, poussières… simulées comme dans le jeu (code lu dans nie.exe). Le hasard change à chaque partie, même dans le jeu."><input type="checkbox" id="l-particules" checked> Particules</label>
-      <label title="Lumières ponctuelles des techniques (CCustomPointLight) : position, rayon et couleur pris sur des os de l'effet, comme dans le jeu (code lu dans nie.exe). Elles éclairent le stade avec la formule de son shader."><input type="checkbox" id="l-lumieres" checked> Lumières</label>
-      <label title="Stade dessiné avec le vrai shader du jeu (map_pbrt1… traduit de nie.exe / dx11) : soleil, reflets de la cubemap, relief, lumières. Sans ombres portées ni brouillard (pas encore)."><input type="checkbox" id="l-vraistade" checked> Shader du stade</label>
-      <button id="l-natif-bouton" title="Lecteur natif (C++ / Direct3D 11) : calcule l'animation et dessine EN DIRECT, comme le jeu, avec les vrais shaders. S'affiche dans la vue 3D (comme ▶ et Espace) ; tes couleurs et les pièces décochées sont reprises. Espace ou clic = pause, flèches = image par image, Début = recommencer, E = effets d'écran, Échap = revenir à l'aperçu.">Lecteur natif</button>
+      <label class="avance"><input type="checkbox" id="l-anim" checked> Animation</label>
+      <label class="avance" title="Vraies particules du jeu (.ptlb) : étincelles, poussières… simulées comme dans le jeu (code lu dans nie.exe). Le hasard change à chaque partie, même dans le jeu."><input type="checkbox" id="l-particules" checked> Particules</label>
+      <label class="avance" title="Lumières ponctuelles des techniques (CCustomPointLight) : position, rayon et couleur pris sur des os de l'effet, comme dans le jeu (code lu dans nie.exe). Elles éclairent le stade avec la formule de son shader."><input type="checkbox" id="l-lumieres" checked> Lumières</label>
+      <label class="avance" title="Stade dessiné avec le vrai shader du jeu (map_pbrt1… traduit de nie.exe / dx11) : soleil, reflets de la cubemap, relief, lumières. Sans ombres portées ni brouillard (pas encore)."><input type="checkbox" id="l-vraistade" checked> Shader du stade</label>
+      <button id="l-natif-bouton" class="avance" title="Lecteur natif (C++ / Direct3D 11) : calcule l'animation et dessine EN DIRECT, comme le jeu, avec les vrais shaders. S'affiche dans la vue 3D (comme ▶ et Espace) ; tes couleurs et les pièces décochées sont reprises. Espace ou clic = pause, flèches = image par image, Début = recommencer, E = effets d'écran, Échap = revenir à l'aperçu.">Lecteur natif</button>
       <span id="l-film-info" class="aide"></span>
       <button id="l-video" title="Vidéo officielle de la technique (site zukan.inazuma.jp), pour comparer">Vidéo du jeu</button>
     </div>
@@ -244,25 +245,25 @@
     </details>
 
     <div class="seul-tech">
-    <details class="bloc" id="bloc-mat"><summary>Couleurs des matériaux <span class="compte" id="cpt-mat"></span></summary>
+    <details class="bloc avance" id="bloc-mat"><summary>Couleurs des matériaux <span class="compte" id="cpt-mat"></span></summary>
     <p class="aide">Quand une pièce garde sa couleur alors que sa texture est blanche ou grise (ex. anneaux jaunes).</p>
     <div id="materiaux"></div>
     </details>
 
-    <details class="bloc" id="bloc-teintes"><summary>Sommets et particules <span class="compte" id="cpt-teintes"></span></summary>
+    <details class="bloc avance" id="bloc-teintes"><summary>Sommets et particules <span class="compte" id="cpt-teintes"></span></summary>
     <p class="aide">Fumées, traînées, étincelles : ce qui ne vient ni d'une texture ni d'un matériau. Teinte et saturation remplacées,
     luminosité gardée. Particules : une couleur pour tout l'objet.</p>
     <div id="teintes"></div>
     </details>
 
-    <details class="bloc"><summary>Lueurs (tout l'effet d'un coup)</summary>
+    <details class="bloc avance"><summary>Lueurs (tout l'effet d'un coup)</summary>
     <p class="aide">Couleur des sommets, des matériaux et des particules (ce qui n'est pas dans les textures).</p>
     <div class="ligne"><label><input type="checkbox" id="lueurs-on"> Recolorer les lueurs</label></div>
     <div class="ligne"><label>Teinte <input type="range" id="lueurs-h" min="0" max="359" value="262"></label><span id="v-lh" class="pastille"></span></div>
 
     </details>
 
-    <details class="bloc"><summary>Aura du ballon</summary>
+    <details class="bloc avance"><summary>Aura du ballon</summary>
     <div id="auras"></div>
     </details>
 
@@ -278,7 +279,8 @@
           <option value="3">Forêt</option><option value="4">Néant</option><option value="6">Esprit (jaune)</option>
         </select>
       </label>
-      <label>Traînée du ballon (tirs)
+      <!-- (22/11, retour de muku) montrée pour les TIRS seulement : [[shot_aura]] de VRFW suit le déclencheur « shoot » et le vol du ballon (VRFW/content/defaults/effect.toml) ; export.py ne l'écrit que pour les whs -->
+      <label id="bloc-trainee">Traînée du ballon (tirs)
         <select id="f-trainee">
           <option value="">Celle du jeu</option>
           <option value="ega0075">Tir spécial</option>
@@ -292,6 +294,7 @@
       </label>
       <label>Prix en boutique (jetons, vide = pas de vente) <input id="f-prix" type="number" min="0" value="18"></label>
       <label>Bannière (texte) <input id="f-ban" placeholder="FRAPPE GALACTIQUE"></label>
+      <button id="f-ban-perso" type="button" title="Ouvre l'éditeur de bannière pour cette technique ; « Utiliser » te ramène ici avec l'aperçu à jour">✎ Personnaliser la bannière</button>
       <div class="ligne"><label>Lettres <input type="color" id="f-ban-c" value="#f5c842"></label><label>Contour <input type="color" id="f-ban-o" value="#0d1a4a"></label></div>
       <div class="ligne">
         <button id="exporter" class="primaire">Créer le mod</button>
@@ -336,11 +339,13 @@
           <div class="ligne"><img id="mm-embleme-img" class="mm-vign" alt=""><label>Emblème d'équipe (512 × 512, fond transparent ; vendu avec le maillot) <input type="file" id="mm-embleme" accept="image/png"></label></div>
         </details>
         <div class="ligne">
-          <button id="mm-enregistrer" class="primaire">Enregistrer le maillot</button>
+          <button id="mm-enregistrer" class="avance" title="Garde le maillot sans refaire le mod (pour le finir plus tard)">Enregistrer sans construire</button>
           <button id="mm-nouveau" title="Le prochain enregistrement crée un nouveau maillot">Nouveau</button>
         </div>
         <div class="ligne"><button id="mm-construire" class="primaire">Ajouter au mod « Mes maillots »</button></div>
-        <p class="aide">Comme les autres créations : le maillot est enregistré et le mod <code>MesMaillots</code> est refait dans
+        <p class="aide etape-simple">« Créer et mettre dans le jeu » enregistre le maillot, refait le mod avec tous tes maillots et le met dans le jeu
+          (le jeu doit être fermé). Il sera à la boutique générale d'Inazuma Fantasy.</p>
+        <p class="aide avance">Comme les autres créations : le maillot est enregistré et le mod <code>MesMaillots</code> est refait dans
           <code>AtelierCouleurs/sortie</code> avec tous tes maillots, <b>sans toucher au jeu</b>. Pour le mettre dans le jeu :
           « Installer » dans <b>Mes créations</b> (sauvegarde avant). Ils seront à la boutique générale d'Inazuma Fantasy.
           Sans retouche extérieure, l'extérieur reprend le domicile.</p>
@@ -412,7 +417,12 @@
       <h2>Créer une copie (armure d'un de mes esprits)</h2>
       <p class="aide avertissement">Cette armure recolorée devient la <b>forme en armure</b> d'une de tes copies d'esprit guerrier.
         L'armure du jeu ne change pas. Comme l'armure de Michael : technique d'armure copiée, porteurs donnés par CharacterReforged.</p>
-      <div class="formulaire">
+      <!-- (22/11) sans copie d'esprit : dit tout de suite quoi faire (avant : seulement au moment de créer) -->
+      <div id="ca-aucune" class="etape-avant" style="display:none">
+        <p>Une armure devient la forme en armure d'<b>un de tes esprits guerriers</b>. Il t'en faut donc d'abord une copie.</p>
+        <button id="ca-vers-esprits" class="primaire">Créer d'abord une copie d'esprit guerrier</button>
+      </div>
+      <div class="formulaire" id="ca-formulaire">
         <label>Pour quelle copie d'esprit ? <select id="ca-esprit"></select></label>
         <label>Nom de l'armure <input id="ca-nom" placeholder="Armure de Pégase galactique"></label>
         <div class="ligne">
@@ -434,7 +444,7 @@
           <button id="cp-exporter" class="primaire">Créer la copie</button>
           <button id="cp-installer">Installer dans le jeu</button>
         </div>
-        <p class="aide">Le portrait des cartes reste celui de l'original (couleurs d'origine). Un même nom garde son code d'une fois à l'autre.</p>
+        <p class="aide">Le portrait des cartes est le dessin de l'original, recoloré comme ta tête. Un même nom garde son code d'une fois à l'autre.</p>
       </div>
     </div>
     <div class="seul-perso seul-esprit">

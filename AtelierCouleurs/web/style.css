@@ -602,3 +602,149 @@ body.onglet-objets .seul-jeu-autre { display: none !important; }
 .tc-maillot-choix select { font-family: inherit; font-size: 15px; background: #2c363c; color: #fff; border: 1px solid #4b5961; padding: 4px; max-width: 260px; }
 .tc-maillot-choix button { font-family: inherit; background: #2c363c; color: #d8e0e4; border: 1px solid #4b5961; border-radius: 0; padding: 4px 10px; cursor: pointer; }
 .tc-maillot-choix button.sel { background: linear-gradient(#2f86ff, #1b5ed8); color: #fff; border-color: #2f86ff; }
+
+/* (21/11, avis de muku « que ça ne prenne pas la tête ») mode simple / avancé, bouton unique, rapports en langage normal,
+   fenêtres moyennes (avant : barre de recherche écrasée à ~15 px et panneau de droite qui débordait vers 800-1000 px de large) */
+body.mode-simple .avance { display: none !important; }
+#bouton-avance { margin-left: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid #fff6; background: #0003; color: inherit; font-weight: 700; cursor: pointer; flex: none; }
+#bouton-avance.actif { border-color: var(--accent); color: var(--accent); }
+.creer-jeu { font-size: 14px; padding: 9px 14px; }
+.rapport-details { margin-top: 6px; white-space: normal; }
+.rapport-details summary { cursor: pointer; color: var(--doux); }
+.rapport-details div { white-space: pre-wrap; color: var(--doux); font-size: 11px; margin-top: 4px; word-break: break-word; }
+header { flex-wrap: wrap; row-gap: 6px; }
+.onglets { flex-wrap: wrap; }
+.recherche { min-width: 220px; }
+.titre-tech { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.panneau { overflow-x: hidden; }
+@media (max-width: 1250px) { main { grid-template-columns: 240px minmax(0, 1fr) 320px; } }
+@media (max-width: 980px) { main { grid-template-columns: 200px minmax(0, 1fr) 270px; } header { gap: 8px; padding: 6px 8px; } .onglets button { padding: 5px 8px; } }
+@media (max-width: 1350px) { body.dessin main { grid-template-columns: minmax(180px, 1fr) minmax(0, 70vw); } }
+
+/* ===================================================================================================================================
+   (22/11, demande de muku : « les interfaces ne sont pas assez graphiques ; le Tableau des compétences est mieux, inspiré de Victory
+   Road ») HABILLAGE « MENUS DU JEU » de l'écran d'édition, d'après les captures references_menus/equipement.webp et
+   composition_equipe.webp : bandeau orange en haut à gauche (icône + nom de l'écran), barre sombre, fond ardoise texturé, listes en
+   lignes sombres (choisie = cadre turquoise + flèche verte), panneaux sombres à motif, bandeaux de couleur, actions en barres dorées,
+   bande d'aide avec les touches en bas. Mêmes couleurs que #page-hub / #tableau-coups. Couche ajoutée : rien n'est retiré au-dessus.
+   =================================================================================================================================== */
+:root { --jm-ardoise: #3a464d; --jm-sombre: #1c2226; --jm-or1: #9c7a34; --jm-or2: #e2c27a; --jm-turq: #3fe3c6; --jm-vert: #36f27a;
+  --jm-panneau: rgba(24,30,34,.88); }
+body { font-family: "Bahnschrift", "Segoe UI", system-ui, sans-serif;
+  background: radial-gradient(ellipse at 55% 35%, #4a5860 0%, #36434a 55%, #283238 100%); }
+body::before { content: ""; position: fixed; inset: 0; background: var(--jm-fond, none) center / cover no-repeat; opacity: .08;
+  filter: grayscale(1) contrast(1.4); pointer-events: none; z-index: 0; }
+header, main, #aide-jeu, #page-bannieres, #page-maillots, #page-hub { position: relative; z-index: 1; }
+/* (22/11, retour de muku : « le menu de recherche passe derrière ») la barre du haut et sa liste de résultats AU-DESSUS des panneaux */
+header { z-index: 30; } .liste-flottante { z-index: 40; }
+
+/* --- barre du haut : coin orange (icône + écran), onglets en bande dorée penchée, recherche soulignée turquoise --- */
+header { min-height: 56px; padding: 0 12px 0 0; gap: 14px; background: linear-gradient(#262d32, #1c2125); border-bottom: 1px solid #0d1013; flex-wrap: nowrap; }
+header .marque { display: none; }
+.jeu-coin { align-self: stretch; display: flex; align-items: center; gap: 10px; padding: 0 44px 0 14px; min-width: 210px; color: #fff; font-size: 21px; font-weight: 600;
+  background: var(--jm-fond-orange, none) 0 40% / 900px auto, linear-gradient(100deg, #ff8a24, #f26a17); clip-path: polygon(0 0, 100% 0, calc(100% - 30px) 100%, 0 100%);
+  text-shadow: 0 2px 0 rgba(120,40,0,.55); white-space: nowrap; }
+.onglets { flex-wrap: wrap; gap: 0; background: linear-gradient(#3b3428, #2b261e); border: 1px solid #4b412f; transform: skewX(-14deg); padding: 0 6px; }
+.onglets button { transform: skewX(14deg); color: #c9b892; border: 0; border-radius: 0; padding: 7px 11px; font-family: inherit; font-weight: 500; font-size: 14px; }
+.onglets button:hover { color: #fff; border-color: transparent; }
+.onglets button.actif { background: linear-gradient(#2f86ff, #1b5ed8); color: #fff; border-color: transparent; transform: skewX(0); }
+#cherche { background: rgba(0,0,0,.25); border: 0; border-bottom: 2px solid var(--jm-turq); border-radius: 0; color: #7ff0d8; font: inherit; font-size: 16px; padding: 6px 8px; }
+#cherche::placeholder { color: #5fc9b4; }
+.liste-flottante { background: rgba(20,26,30,.97); border: 1px solid #3a4a52; border-radius: 0; top: 38px; }
+.liste-flottante div:hover { background: rgba(63,227,198,.15); }
+.titre-tech { color: #fff; font-size: 15px; font-weight: 500; padding: 6px 18px 6px 22px; max-width: 34vw; white-space: nowrap;
+  background: linear-gradient(100deg, rgba(60,120,200,.55), rgba(40,60,90,.35)); clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%); }
+#bouton-langue, #bouton-avance { font-family: inherit; border-radius: 0 !important; border: 1px solid #4b5961 !important; background: #2c363c !important; color: #e9eef0; padding: 5px 12px; }
+#bouton-avance.actif { background: linear-gradient(#2f86ff, #1b5ed8) !important; border-color: #2f86ff !important; color: #fff; }
+
+/* --- panneaux : sombres translucides, comme la colonne gauche des menus --- */
+main { background: none; }
+.panneau { background: var(--jm-panneau); border: 0; padding: 14px; }
+#panneau-pieces { background: linear-gradient(90deg, rgba(20,26,30,.92), rgba(20,26,30,.78)); }
+#panneau-couleurs { background: linear-gradient(270deg, rgba(20,26,30,.92), rgba(20,26,30,.8)); }
+.panneau h2, #titre-pieces { color: #fff; font-size: 17px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; margin: 14px 0 8px;
+  padding-left: 10px; border-left: 4px solid #d9dde0; }
+.panneau .aide, .panneau p.aide { color: #9fb0b8; }
+.panneau .aide.avertissement { background: rgba(240,180,41,.08); border-left: 3px solid var(--jm-or2); color: #e8dcc0; }
+/* boutons ordinaires : carrés sombres (menus du jeu) ; principal : barre dorée ; « Créer et mettre dans le jeu » : grande barre dorée */
+.panneau button, .barre-vue button, .lecteur button { font-family: inherit; border-radius: 0; border: 1px solid #4b5961; background: #2c363c; color: #e9eef0; }
+.panneau button:hover, .barre-vue button:hover, .lecteur button:hover { background: #3f6fae; border-color: #5a8ad0; }
+.panneau button.primaire, #at-entrer { border: 0; color: #fff; font-size: 15px; text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  background: linear-gradient(90deg, #3a3426, #6b5221 25%, #b8903f 70%, #8a6a2c); }
+.panneau button.primaire:hover, #at-entrer:hover { filter: brightness(1.15); background: linear-gradient(90deg, #3a3426, #6b5221 25%, #b8903f 70%, #8a6a2c); }
+.panneau button.creer-jeu { display: block; width: 100%; font-size: 19px; padding: 11px 18px; text-align: left; border-radius: 0 28px 28px 0;
+  background: linear-gradient(90deg, #5a4520, #b08840 55%, #d8b25e); box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+/* blocs repliables : panneau sombre à motif, en-tête en bandeau de couleur (comme le nom de l'objet choisi) */
+.panneau details.bloc { background: rgba(28,34,38,.92); border: 0; border-radius: 6px; padding: 0 10px 10px; margin: 10px 0;
+  background-image: linear-gradient(30deg, rgba(255,255,255,.025) 12%, transparent 12.5%, transparent 87%, rgba(255,255,255,.025) 87.5%); background-size: 40px 70px; }
+.panneau details.bloc > summary { margin: 0 -10px 8px; padding: 8px 14px; font-size: 15px; font-weight: 500; letter-spacing: .5px; text-transform: none; color: #fff;
+  background: linear-gradient(90deg, #1f9a4a, #2cc35c 70%, #24a84f); border-radius: 6px 6px 0 0; cursor: pointer; }
+.panneau details.bloc:not([open]) > summary { margin-bottom: 0; border-radius: 6px; background: linear-gradient(90deg, #2a3a40, #34474e); color: #d8e4e8; }
+.panneau details.bloc > summary .compte { background: rgba(0,0,0,.3); color: #fff; }
+/* champs */
+.panneau input:not([type=checkbox]):not([type=range]):not([type=color]):not([type=file]), .panneau textarea, .panneau select, .lecteur select {
+  background: rgba(0,0,0,.28); border: 0; border-bottom: 2px solid #4d6a72; border-radius: 0; color: #e9f4f2; font-family: inherit; }
+.panneau input:focus, .panneau textarea:focus, .panneau select:focus { outline: 0; border-bottom-color: var(--jm-turq); }
+.panneau input[type=range] { accent-color: var(--jm-turq); }
+#rapport { font-family: inherit; font-size: 13px; background: rgba(15,19,22,.85); border: 0; border-left: 3px solid var(--jm-turq); border-radius: 0; color: #e9eef0; }
+/* liste des pièces : lignes sombres, choisie = cadre turquoise lumineux + flèche verte */
+.piece { position: relative; background: rgba(12,16,19,.55); border: 2px solid transparent; border-radius: 2px; padding: 4px 6px; margin: 3px 0 3px 10px; }
+.piece:hover { background: rgba(63,227,198,.08); }
+.piece.sel { border-color: #49e8d2; box-shadow: 0 0 10px rgba(73,232,210,.45); background: rgba(20,40,44,.8); }
+.piece.sel::before { content: ""; position: absolute; left: -14px; top: 50%; width: 12px; height: 16px; transform: translateY(-50%); background: var(--jm-vert);
+  clip-path: polygon(0 0, 100% 50%, 0 100%); filter: drop-shadow(0 0 3px #0b3); }
+.objet-titre { color: var(--jm-or2); font-weight: 500; letter-spacing: .5px; }
+/* centre : barres de la vue en bandes sombres translucides */
+#centre { background: none; }
+.barre-vue, .lecteur { background: rgba(20,26,30,.82); border-radius: 0; }
+.note-vue { background: rgba(15,19,22,.75); }
+
+/* vue 3D : fond ardoise des menus du jeu (avant : bleu nuit presque noir) ; la vue « ciel » (terrain) garde le sien */
+#vue { background: radial-gradient(ellipse at 50% 42%, #58676f 0%, #3c4951 55%, #29333a 100%); }
+#vue.ciel { background: linear-gradient(#5d8fd0 0%, #a9c9ee 55%, #d9e8f6 100%); }
+/* onglets sur une seule ligne aux largeurs courantes */
+.onglets button { padding: 6px 8px; font-size: 13px; }
+header .recherche { max-width: 300px; }
+.titre-tech { max-width: 24vw; overflow: hidden; text-overflow: ellipsis; }
+.onglets { flex-wrap: nowrap; flex: none; }
+header .recherche { min-width: 150px; }
+@media (max-width: 1300px) { .onglets { flex-wrap: wrap; flex: 0 1 auto; } }
+.piece { font-size: 14px; padding: 6px 8px; }
+.piece .n { color: #f0f4f5; }
+#panneau-pieces .ligne button { font-size: 13px; padding: 5px 9px; }
+@media (min-width: 1700px) { .onglets button { padding: 7px 11px; font-size: 14px; } header .recherche { max-width: 420px; } }
+
+/* Bannières, mode dessin, Maillots : mêmes boutons que les panneaux (carrés sombres, principal en barre dorée) */
+#page-bannieres button, #page-maillots button, #atelier-dessin button { font-family: inherit; border-radius: 0; border: 1px solid #4b5961; background: #2c363c; color: #e9eef0; }
+#page-bannieres button:hover, #page-maillots button:hover, #atelier-dessin button:hover { background: #3f6fae; border-color: #5a8ad0; }
+#page-bannieres button.primaire, #page-maillots button.primaire, #atelier-dessin button.primaire { border: 0; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  background: linear-gradient(90deg, #3a3426, #6b5221 25%, #b8903f 70%, #8a6a2c); }
+#atelier-dessin { background: rgba(20,26,30,.9) !important; }
+#atelier-dessin .ad-entete { background: linear-gradient(#262d32, #1c2125); }
+#atelier-dessin input:not([type=checkbox]):not([type=range]):not([type=color]), #atelier-dessin select, #page-bannieres input:not([type=checkbox]):not([type=range]):not([type=color]), #page-bannieres select {
+  background: rgba(0,0,0,.28); border: 0; border-bottom: 2px solid #4d6a72; border-radius: 0; color: #e9f4f2; font-family: inherit; }
+#atelier-dessin input[type=range], #page-bannieres input[type=range] { accent-color: var(--jm-turq); }
+
+/* accueil : le coin orange est déjà dans la barre du haut (pas de doublon) ; pas de titre d'élément ouvert */
+body.onglet-hub #page-hub .jm-entete .jm-coin { display: none; }
+body.onglet-hub .titre-tech { display: none; }
+
+/* --- bande d'aide du bas (texte du moment + touches), comme les menus du jeu --- */
+#aide-jeu { flex: none; display: flex; align-items: center; gap: 26px; padding: 8px 24px; background: rgba(15,19,22,.9); color: #e9eef0; font-size: 15px;
+  border-top: 1px solid #0d1013; }
+#aide-jeu .aj-texte { color: #cfd8dc; }
+#aide-jeu .aj-touches { margin-left: auto; display: flex; gap: 22px; align-items: center; }
+#aide-jeu .jm-touche { margin-right: 6px; }
+body.onglet-hub #aide-jeu { display: none; }
+@media (max-width: 1250px) { .jeu-coin { min-width: 0; font-size: 18px; padding-right: 36px; } .titre-tech { max-width: 26vw; } #aide-jeu .aj-texte { display: none; } }
+@media (max-width: 980px) { header { flex-wrap: wrap; } .jeu-coin { min-height: 44px; } }
+.etape-avant { background: rgba(240,180,41,.08); border-left: 3px solid #e2c27a; padding: 10px 12px; margin: 8px 0; color: #e8dcc0; }
+.etape-avant p { margin: 0 0 8px; }
+.ensuite { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+body:not(.mode-simple) .etape-simple { display: none; }
+/* (22/11) « Tu as déjà commencé … » à l'ouverture d'un élément qui a déjà un projet */
+#reprise-proposee { position: absolute; top: 56px; left: 12px; right: 12px; margin: 0 auto; width: fit-content; z-index: 6; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  max-width: calc(100% - 24px); padding: 8px 12px; background: rgba(15,19,22,.94); border-left: 3px solid var(--jm-turq, #3fe3c6); color: #e9eef0; font-size: 14px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.5); }
+#reprise-proposee button { font-family: inherit; border-radius: 0; border: 1px solid #4b5961; background: #2c363c; color: #e9eef0; padding: 5px 10px; cursor: pointer; }
+#reprise-proposee button.primaire { border: 0; background: linear-gradient(90deg, #6b5221, #b8903f 70%, #8a6a2c); color: #fff; }

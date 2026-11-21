@@ -1770,6 +1770,18 @@ class Gestion(BaseHTTPRequestHandler):
                 if not c:
                     return self._envoyer(200, {'ok': False, 'erreur': 'projet inconnu'})
                 export.ecrire_png_banniere(demande['image'], os.path.join(CACHE, 'bannieres_apercu', c + '.png'))
+                # (22/11, retour de muku : « faire sa bannière, puis recharger la technique : pas intuitif ») le lecteur natif ouvert
+                # reçoit la nouvelle bannière TOUT DE SUITE : telop.bin de la scène réécrit, puis commande « telop » (relue sans relancer)
+                X = _natif()
+                tech = os.path.basename(str(demande.get('code') or ''))
+                dos = os.path.join(os.path.dirname(X.__file__), 'scenes', 'tech_' + tech) if X is not None and tech else None
+                if dos and os.path.isfile(os.path.join(dos, 'tech.json')):
+                    try:
+                        APERCU['projet'] = c
+                        X._ecrire_telop(dos, tech, json.load(open(os.path.join(dos, 'tech.json'), encoding='utf-8')).get('telop'), sys.modules[__name__])
+                        natif_commande('telop')
+                    except Exception as ex:
+                        print('bannière du lecteur natif :', ex)
                 return self._envoyer(200, {'ok': True})
             if u.path == '/api/banniere':
                 t = PAR_CODE.get(demande.get('base', ''))

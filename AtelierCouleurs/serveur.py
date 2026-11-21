@@ -1146,7 +1146,11 @@ def liste_projets():
             vign = next(iter((e.get('textures') or {}).values()), None)
         out.append({'vignette': vign, 'vignetteTexture': not e.get('vignette'),
                     'cle': os.path.basename(f)[:-5], 'code': e.get('code'), 'onglet': e.get('onglet') or 'techniques',
-                    'base': e.get('nom'), 'titre': ch.get('p-nom' if perso else 'f-nom') or e.get('nom'), 'date': e.get('date'),
+                    # (21/11) le champ de nom de SON onglet (avant : celui des techniques pour tout -> objets, tenues,
+                    # armures… prenaient le nom de la dernière technique) ; sinon le nom de l'élément
+                    'base': e.get('nom'), 'titre': ch.get({'techniques': 'f-nom', 'esprits': 'p-nom', 'totems': 'p-nom', 'personnages': 'cp-nom',
+                                                          'tenues': 'ct-nom', 'armures': 'ca-nom', 'objets': 'oj-nom-copie'}.get(e.get('onglet') or 'techniques', ''))
+                                                   or e.get('nom'), 'date': e.get('date'),
                     'textures': len(e.get('textures') or {}), 'materiaux': len(e.get('coulMat') or {}),
                     'teintes': len(e.get('teinteSom') or {}) + len(e.get('teintePtl') or {}), 'remplacements': len(e.get('recette') or []),
                     'couleurs': vus[:4]})
@@ -1227,7 +1231,8 @@ def liste_creations():
     for e in copies_persos.contenu(CFG):         # (15/11/2026) copies de personnages
         f_j = os.path.join(jeu, 'MesPersonnages', 'content', 'characters', 'mes_personnages.toml')
         f_s = os.path.join(ICI, 'sortie', 'MesPersonnages', 'content', 'characters', 'mes_personnages.toml')
-        out.append({'genre': 'personnages', 'mod': 'MesPersonnages', 'nom': e['nom'], 'code': e['code'], 'base': e['tete_origine'], 'nom_base': e.get('nom_origine'),
+        # (21/11) copies de TENUE aussi rangées ici : pas de « tete_origine », leur « base » (avant : accueil planté)
+        out.append({'genre': 'personnages', 'mod': 'MesPersonnages', 'nom': e['nom'], 'code': e['code'], 'base': e.get('tete_origine') or e.get('base'), 'nom_base': e.get('nom_origine'),
                     'cle': e['cle'], 'nb_coups': len(e.get('coups') or []),
                     'onglet': 'personnages', 'installe': os.path.isfile(f_j) and os.path.isfile(f_s) and open(f_j, 'rb').read() == open(f_s, 'rb').read() and a_jour('MesPersonnages'),
                     'date': datetime.datetime.fromisoformat(e['date']).timestamp() if e.get('date') else 0})

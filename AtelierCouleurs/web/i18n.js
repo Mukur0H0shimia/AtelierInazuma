@@ -21,6 +21,30 @@
   var D = {};
   function dico() { return D; }
 
+  // (21/11) textes avec des données : [modèle sur le texte aux espaces réduits, remplacement]
+  var MOTIFS = [
+    [/^(\S+) \((\d+) pièces?\)$/, '$1  ($2 parts)'],
+    [/^(\S+) \(modèle de personnage : textures seulement\)$/, '$1  (character model: textures only)'],
+    [/^(#[0-9a-f]{6}) · (\d+) % · ([a-zé, ]+) \(clic : remplacer cette couleur\)$/i, function (_, c, p, src) {
+      return c + ' · ' + p + ' % · ' + src.replace(/matériaux/g, 'materials').replace(/sommets/g, 'vertices') + '\n(click: replace this colour)'; }],
+    [/^(\S+) \((\d+)×(\d+)\) : carte de données, non modifiable$/, '$1 ($2×$3): data map, not editable'],
+    [/^matériau (\S+) \((\S+)\) pièces : (.+?) couleur du jeu : (\S+ \/ \S+ \/ \S+) \(cliquer : choisir ces pièces\) \(clic droit : localiser\)$/,
+     'material $1 ($2)\nparts: $3\ngame colour: $4\n(click: select these parts)\n(right-click: locate)'],
+    [/^(\S+) \/ pièce (\d+) : (\d+) % de sommets colorés \(cliquer : choisir ces pièces\) \(clic droit : localiser\)$/,
+     '$1 / part $2: $3 % coloured vertices\n(click: select these parts)\n(right-click: locate)'],
+    [/^(.+?) · d'après (.+)$/, function (_, tete, base) { return trad(tete) + ' · based on ' + base; }],
+    [/^(.+?) · copie de (.+)$/, function (_, tete, base) { return trad(tete) + ' · copy of ' + base; }],
+    [/^Modifié le (\S+) · (\S+)$/, 'Modified on $1 · $2'],
+    [/^Créé le (\S+) · (\S+)$/, 'Created on $1 · $2'],
+    [/^(\S+) : (\d+) émetteurs?$/, function (_, o, n) { return o + ': ' + n + (n === '1' ? ' emitter' : ' emitters'); }],
+    [/^Toutes les particules de cet objet \(VRFW ne sépare pas les émetteurs\)$/, 'All the particles of this object (VRFW does not separate emitters)'],
+    // toute infobulle de pièce qui finit par l'aide « cliquer / clic droit » : le début traduit à part, puis l'aide
+    [/^(.+) \(cliquer : choisir ces pièces\) \(clic droit : localiser\)$/, function (_, tete) {
+      return trad(tete) + '\n(click: select these parts)\n(right-click: locate)'; }],
+    [/^Texture déjà colorée \((.+?)\) : la couleur du matériau la MULTIPLIE \(orange × bleu = presque noir\)\. Pour changer la teinte, recolore plutôt la texture \(bloc Textures\) et laisse le matériau blanc\.$/,
+     'Already coloured texture ($1): the material colour MULTIPLIES it (orange × blue = almost black). To change the hue, recolour the texture instead (Textures block) and leave the material white.']
+  ];
+
   function trad(s) {
     if (langue !== 'en' || !s) { return s; }
     var brut = s.trim();
@@ -34,6 +58,11 @@
       if (nb.length && d[modele] !== undefined) {
         var i = 0;
         r = d[modele].replace(/\{n\}/g, function () { return nb[i++]; });
+      }
+    }
+    if (r === undefined) {                       // textes fabriqués avec des données (noms, nombres, couleurs)
+      for (var m = 0; m < MOTIFS.length && r === undefined; m++) {
+        if (MOTIFS[m][0].test(t)) { r = t.replace(MOTIFS[m][0], MOTIFS[m][1]); }
       }
     }
     if (r === undefined) {                       // bannières : police absente de ce PC

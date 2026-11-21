@@ -772,5 +772,14 @@ window.I18N_EN = {
 "portent": "wear",
 "Tir": "Shot",
 "Défense": "Block",
-"Gardien": "Keeper"
+"Gardien": "Keeper",
+"Ouvre une technique et change ses couleurs : ton travail apparaîtra ici tout seul.": "Open a technique and change its colours: your work will show up here by itself.",
+"Aucun mod créé pour l’instant": "No mod created yet",
+"Quand une technique te plaît : « Créer le mod » dans le panneau de droite.": "When you like a technique: “Create the mod” in the right-hand panel.",
+"Prix en boutique (jetons, vide = pas de vente)": "Shop price (tokens, empty = not for sale)",
+"{n} pièce(s) géante(s) cachée(s) au départ (fonds, flashs) : coche-les à gauche pour les voir.": "{n} huge part(s) hidden at first (backgrounds, flashes): tick them on the left to see them.",
+"pas de version (autre squelette)": "no version (other skeleton)",
+"Animation : {n} plan(s), {n} images ({n} s). ▶ pour lancer.": "Animation: {n} shot(s), {n} frames ({n} s). ▶ to play.",
+"Technique liée": "Linked technique",
+"Plus dans la sortie de l’Atelier, mais toujours dans le jeu.": "No longer in the Atelier output, but still in the game."
 };

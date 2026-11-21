@@ -154,9 +154,14 @@ def _listdir(p='.'):
         if reel is None:
             return _o['listdir'](p)                     # erreur normale
         return reel
-    noms = set(reel or [])
-    noms.update(_J.dossiers[r.lower()].keys())
-    return sorted(noms)
+    # (21/11) sans doublon de casse : les fichiers sortis sont rangés en minuscules (« 20_edit ») et le jeu les écrit
+    # « 20_EDIT » ; pour Windows c'est le même dossier (avant : jonction en double -> technique de mod impossible à ouvrir)
+    noms = {}
+    for n in _J.dossiers[r.lower()].keys():
+        noms.setdefault(n.lower(), n)
+    for n in reel or []:
+        noms.setdefault(n.lower(), n)
+    return sorted(noms.values())
 
 
 def _walk(top, topdown=True, onerror=None, followlinks=False):

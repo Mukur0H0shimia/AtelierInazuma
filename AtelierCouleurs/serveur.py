@@ -156,6 +156,9 @@ def marquer_series():
 if __name__ != '__mp_main__':                    # (pas dans les processus de travail du décodage des textures)
     charger_catalogues()
     marquer_series()
+else:                                            # processus de travail (copies, encodage) : catalogues VIDES mais définis,
+    INDEX, PAR_CODE, PERSOS, PERSO_CODE, VIDEOS = [], {}, [], {}, {}    # sinon la suite du module plante et la
+    JEU, JEU_CODE, SERIES = {}, {}, {}                                   # création de copie attend sans fin
 _verrou_mods = threading.Lock()
 MODS = {'liste': [], 'quand': 0}
 MOD_CODE = {}                         # code -> entrée (tout ce qui vient des mods, tous onglets)

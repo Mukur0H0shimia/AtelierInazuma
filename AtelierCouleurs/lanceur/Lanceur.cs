@@ -69,28 +69,70 @@ static class Lanceur
         catch (Exception) { }
     }
 
-    // raccourci « Atelier Inazuma » sur le bureau, créé au 1er lancement seulement (s'il est supprimé, il ne revient pas)
+    // numéro de version (version.txt à côté de l'exe) : dans le titre de la fenêtre et en haut du journal
+    public static string VersionDe(string dossier)
+    {
+        try { return File.ReadAllText(Path.Combine(dossier, "version.txt")).Trim(); } catch (Exception) { return ""; }
+    }
+
+    public static string TitreComplet()
+    {
+        string v = VersionDe(Dossier);
+        return v.Length > 0 ? TITRE + " " + v : TITRE;
+    }
+
+    static Version NumeroDe(string dossier)
+    {
+        try { return new Version(VersionDe(dossier)); } catch (Exception) { return new Version(0, 0); }
+    }
+
+    static bool EstPaquet(string dossierAtelier)      // dossier téléchargé (zip) : il a son python\ à côté
+    {
+        try { return Directory.Exists(Path.Combine(Path.GetFullPath(Path.Combine(dossierAtelier, "..")), "python")); }
+        catch (Exception) { return false; }
+    }
+
+    // raccourci « Atelier Inazuma » sur le bureau : créé au 1er lancement (s'il est supprimé, il ne revient pas). S'il mène
+    // à une version téléchargée PLUS ANCIENNE (ou disparue), il est remis sur celle-ci : sinon, après avoir décompressé une
+    // nouvelle version ailleurs, le raccourci ouvrait toujours l'ancienne.
     static void RaccourciBureau()
     {
         try
         {
             string marque = Path.Combine(Dossier, "cache", "raccourci_bureau.txt");
-            if (File.Exists(marque)) return;
             string lnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Atelier Inazuma.lnk");
+            Type t = Type.GetTypeFromProgID("WScript.Shell");
+            object sh = Activator.CreateInstance(t);
+            bool ecrire = false;
             if (!File.Exists(lnk))
+                ecrire = !File.Exists(marque);
+            else if (EstPaquet(Dossier))
             {
-                Type t = Type.GetTypeFromProgID("WScript.Shell");
-                object sh = Activator.CreateInstance(t);
+                object l = t.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, sh, new object[] { lnk });
+                string cible = (string)l.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, null, l, null);
+                string ici = Path.GetFullPath(Application.ExecutablePath);
+                if (!string.Equals(Path.GetFullPath(cible), ici, StringComparison.OrdinalIgnoreCase)
+                    && Path.GetFileName(cible).Equals("Atelier Inazuma.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    string dCible = Path.GetDirectoryName(cible);
+                    ecrire = !File.Exists(cible) || (EstPaquet(dCible) && NumeroDe(dCible) < NumeroDe(Dossier));
+                }
+            }
+            if (ecrire)
+            {
                 object s = t.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, sh, new object[] { lnk });
                 Type st = s.GetType();
                 st.InvokeMember("TargetPath", BindingFlags.SetProperty, null, s, new object[] { Application.ExecutablePath });
                 st.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, s, new object[] { Dossier });
                 st.InvokeMember("IconLocation", BindingFlags.SetProperty, null, s, new object[] { Application.ExecutablePath + ",0" });
-                st.InvokeMember("Description", BindingFlags.SetProperty, null, s, new object[] { "Atelier Inazuma" });
+                st.InvokeMember("Description", BindingFlags.SetProperty, null, s, new object[] { TitreComplet() });
                 st.InvokeMember("Save", BindingFlags.InvokeMethod, null, s, null);
             }
-            Directory.CreateDirectory(Path.GetDirectoryName(marque));
-            File.WriteAllText(marque, lnk);
+            if (!File.Exists(marque))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(marque));
+                File.WriteAllText(marque, lnk);
+            }
         }
         catch (Exception) { }
     }
@@ -226,7 +268,7 @@ class Fenetre : Form
 
     public Fenetre()
     {
-        Text = Lanceur.TITRE;
+        Text = Lanceur.TitreComplet();
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
         ClientSize = new Size(1500, 900);
         MinimumSize = new Size(1000, 640);
@@ -306,7 +348,7 @@ class Fenetre : Form
             r.IsStatusBarEnabled = false;            // pas d'adresse en bas de la fenêtre
             r.AreDevToolsEnabled = false;
             r.IsZoomControlEnabled = false;
-            vue.CoreWebView2.DocumentTitleChanged += (s, e) => Text = Lanceur.TITRE;
+            vue.CoreWebView2.DocumentTitleChanged += (s, e) => Text = Lanceur.TitreComplet();
             vue.CoreWebView2.NewWindowRequested += (s, e) => e.Handled = true;   // pas de fenêtre de navigateur
             vue.CoreWebView2.Navigate(url);
             vue.BringToFront();

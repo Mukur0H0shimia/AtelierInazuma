@@ -15,6 +15,13 @@ sys.path.insert(0, ICI)
 if sys.stdout is None or sys.stderr is None:
     os.makedirs(os.path.join(ICI, 'cache'), exist_ok=True)
     sys.stdout = sys.stderr = open(os.path.join(ICI, 'cache', 'serveur.log'), 'a', encoding='utf-8', buffering=1)
+if __name__ != '__mp_main__':                    # version et date en tête de chaque lancement (journal à envoyer en cas de souci)
+    try:
+        import datetime as _dt
+        print('===== Atelier Inazuma %s · %s =====' % (open(os.path.join(ICI, 'version.txt'), encoding='utf-8').read().strip(),
+                                                    _dt.datetime.now().strftime('%d/%m/%Y %H:%M')))
+    except OSError:
+        pass
 from moteur import g4, techniques, export, personnages, esprits, anim, modele, carte, son, jeu, mes_maillots, retouches, copies_persos, armures_copies, copies_tenues, copies_outfits, objets_jeu, coups, menus_jeu  # noqa: E402
 
 from moteur import config_auto, langue  # noqa: E402

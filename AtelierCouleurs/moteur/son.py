@@ -167,18 +167,39 @@ def en_ogg(data_dir, nom, cache_dir, perso=None):
     ids = ids or b.ondes(nom)
     if not ids:
         return None
+    # (21/11) fichiers temporaires PROPRES à cette demande : deux demandes du même son en même temps (la page en charge
+    # plusieurs) s'effaçaient leurs fichiers -> erreur 500 ; le .ogg est écrit à part puis mis en place d'un coup
+    import threading, uuid
+    marque = '%d_%s' % (threading.get_ident(), uuid.uuid4().hex[:6])
     hcas = []
     for k, i in enumerate(ids[:8]):
-        f = os.path.join(d, '_%s_%d.hca' % (nom, k))
+        f = os.path.join(d, '_%s_%d_%s.hca' % (nom, k, marque))
         open(f, 'wb').write(b.extrait(i))
         hcas.append(f)
+    tmp = out[:-4] + '.%s.tmp.ogg' % marque
     cmd = [_outils_ext.ffmpeg(), '-v', 'error', '-y']
     for f in hcas:
         cmd += ['-i', f]
     if len(hcas) > 1:
         cmd += ['-filter_complex', 'amix=inputs=%d:normalize=0' % len(hcas)]
-    cmd += ['-c:a', 'libvorbis', '-q:a', '4', out]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    cmd += ['-c:a', 'libvorbis', '-q:a', '4', tmp]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        ok = r.returncode == 0 and os.path.exists(tmp)
+    except OSError as ex:                              # ffmpeg introuvable : pas de son, mais pas d'erreur
+        print('son :', ex)
+        ok = False
     for f in hcas:
-        os.remove(f)
-    return out if r.returncode == 0 and os.path.exists(out) else None
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    if ok:
+        try:
+            os.replace(tmp, out)
+        except OSError:                                # une autre demande l'a mis en place juste avant
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    return out if os.path.exists(out) else None

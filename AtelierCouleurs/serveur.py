@@ -87,10 +87,15 @@ def charger_catalogues():
     PAR_CODE = {t['code']: t for t in INDEX}
     PERSOS = personnages.construire(CFG['data_dir'], CT)
     # vidéos officielles des techniques (site zukan.inazuma.jp, relevé le 13/11/2026) : code -> adresse ; lues sur le site, rien n'est copié
-    try:
-        VIDEOS = json.load(open(os.path.join(CACHE, 'videos_officielles.json'), encoding='utf-8'))
-    except (OSError, ValueError):
-        VIDEOS = {}
+    # (21/11) fourni avec l'Atelier (AtelierCouleurs/videos_officielles.json : des adresses seulement) ; avant : seulement dans
+    # le cache de muku -> « Vidéo du jeu » sans vidéo chez tous les autres
+    VIDEOS = {}
+    for _f in (os.path.join(ICI, 'videos_officielles.json'), os.path.join(CACHE, 'videos_officielles.json')):
+        try:
+            VIDEOS = json.load(open(_f, encoding='utf-8'))
+            break
+        except (OSError, ValueError):
+            pass
     PERSO_CODE = {p['code']: p for p in PERSOS}
     # (15/11/2026) tout le jeu : maillots, tenues, armures, personnages (têtes), objets — ouverts comme les esprits
     JEU = jeu.construire(CFG['data_dir'], CT, mes_maillots.catalogue(CFG))
@@ -1854,7 +1859,27 @@ def preparer_index():
             print('sons :', ex)
 
 
+def reprendre_mods_installes():
+    """(21/11) Atelier neuf (nouvelle version décompressée ailleurs, autre PC, sortie effacée) mais créations déjà dans le
+    jeu : « Installer » remplaçait mods/<mod> par la sortie VIDE de cet Atelier -> toutes les créations d'avant disparaissaient
+    du jeu. Au démarrage, un mod de l'Atelier présent dans le jeu (avec son registre outil_*.json) et absent de la sortie est
+    recopié dans la sortie : les nouvelles créations s'y ajoutent, rien n'est perdu."""
+    import shutil
+    mods = os.path.join(CFG.get('jeu_dir') or '', 'mods')
+    for mod_id in ('MesPersonnages', 'MesEsprits', 'MesObjets', 'MesTenues', 'MesTechniques'):
+        src, dst = os.path.join(mods, mod_id), os.path.join(ICI, 'sortie', mod_id)
+        try:
+            if os.path.isfile(os.path.join(dst, 'mod.toml')) or not os.path.isfile(os.path.join(src, 'mod.toml')) \
+                    or not glob.glob(os.path.join(src, 'outil_*.json')):
+                continue
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+            print('créations reprises du jeu / creations taken back from the game :', mod_id)
+        except Exception as ex:
+            print('reprise de %s impossible : %s' % (mod_id, ex))
+
+
 def main():
+    reprendre_mods_installes()
     port = int(sys.argv[sys.argv.index('--port') + 1]) if '--port' in sys.argv else CFG.get('port', 8765)   # --port N : autre port (essais)
     srv = ThreadingHTTPServer(('127.0.0.1', port), Gestion)
     threading.Thread(target=preparer_index, daemon=True).start()

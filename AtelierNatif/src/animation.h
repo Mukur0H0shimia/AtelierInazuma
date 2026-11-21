@@ -252,7 +252,9 @@ struct Res {
     bool aCamera = false; double oeil[3], cible[3], roulis = 0, champ = 0; bool decorFaux = false;
     bool aCamM = false; M4 camM{};      // (14/11/2026) caméra -> monde (pièces panneaux par matériau)
 };
-struct EtatO { const std::string* jouer = nullptr; double depuis = 0; bool visible = false; std::string acc0 = "point_eff", acc1 = "evp_eff01"; bool boucle = false; };
+// (21/11) sans commande d'accroche 0xA2D1F942 : AUCUNE accroche (repère de la cinématique), LU nie.exe 0x140f3afd0 -> 0x1418161a0 ;
+// avant : point_eff/evp_eff01 d'office (déduit), 38 cinématiques décalées (Bouclier royal). Comme anim3d.js _etat.
+struct EtatO { const std::string* jouer = nullptr; double depuis = 0; bool visible = false; std::string acc0, acc1; bool boucle = false; };
 static EtatO etat_ordres(const std::vector<Ordre>& ordres, double f) {
     EtatO e;
     for (auto& x : ordres) { if (x.image > f) break;

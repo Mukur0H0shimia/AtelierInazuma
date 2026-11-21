@@ -145,7 +145,11 @@
     plan(f) { const ps = this.d.plans; for (const p of ps) if (f >= p.debut && f < p.fin) return p; return ps[ps.length - 1] || null; }
     // l'ordre en cours d'un objet à l'image f : clip joué (et depuis quand), visible, accroche
     _etat(o, f) {
-      let jouer = null, depuis = 0, visible = false, acc = ['point_eff', 'evp_eff01'], boucle = false;
+      // (21/11) SANS commande d'accroche (0xA2D1F942) : PAS d'accroche, l'objet reste dans le repère de la cinématique. LU nie.exe :
+      // seul le gestionnaire de cette commande (0x140f3afd0) rattache un objet à un parent (0x1418161a0), aucun code ne nomme
+      // point_eff. Avant : accroché d'office à point_eff/evp_eff01 (déduit le 13/11) -> 38 cinématiques décalées (Bouclier royal :
+      // cercle 5 m devant le gardien, os point_eff_Ex = +5 au plan c0400). 4 650 effets du jeu ont, eux, la commande explicite.
+      let jouer = null, depuis = 0, visible = false, acc = ['', ''], boucle = false;
       for (const x of o.d.ordres) { if (x.image > f) break;
         if (x.jouer) { jouer = x.jouer; depuis = x.image; boucle = !!x.boucle; } if ('visible' in x) visible = x.visible; if (x.accroche) acc = x.accroche; }
       return { jouer, depuis, visible, acc, boucle };

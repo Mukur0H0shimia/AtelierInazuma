@@ -495,7 +495,7 @@ async function ouvrir_(code) {
   if (perso) { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}`;
     $('p-nom').value = t.nom + ' (couleurs)'; $('p-desc').value = ''; if ($('rt-nom')) $('rt-nom').value = t.nom + ' (couleurs)'; if ($('cp-nom')) { $('cp-nom').value = ''; $('cp-nom').placeholder = t.nom + ' bis'; } }
   else { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}${t.element ? ' · ' + libElement(t.element) : ''}  ·  cinématique ${t.cinematique}`;
-    $('f-nom').value = t.nom + ' (couleurs)'; $('f-ban').value = (t.nom + ' couleurs').toUpperCase(); }
+    $('f-nom').value = t.nom + ' (couleurs)'; $('f-ban').value = E.banAuto = (t.nom + ' couleurs').toUpperCase(); }
   // textures
   for (const o of E.objets) {
     if (o.erreur) continue;
@@ -2081,6 +2081,13 @@ function choisirBanniere(c, el) {
   dessinerBanniere();
 }
 
+// (21/11) le texte de la bannière suit le nom de la technique tant qu'on ne l'a pas changé soi-même (avant : on renommait
+// « Tornade Éloïse » et la bannière restait « TORNADE DE FEU COULEURS »)
+window.addEventListener('load', () => { const n = $('f-nom'), b = $('f-ban'); if (!n || !b) return; let prec = n.value;
+  n.addEventListener('focus', () => { prec = n.value; });
+  n.addEventListener('input', () => { const v = b.value.trim();
+    if (!v || v === E.banAuto || v === prec.trim().toUpperCase()) { b.value = E.banAuto = n.value.trim().toUpperCase(); b.dispatchEvent(new Event('input')); }
+    prec = n.value; }); });
 // ------------------------------------------------------------------ démarrage
 window.addEventListener('load', async () => {
   E.vue = new Vue3D($('vue')); E.vue.surChoix = (cle, ajout) => choisirDepuisVue(cle, ajout);   // (15/11/2026) clic sur l'aperçu

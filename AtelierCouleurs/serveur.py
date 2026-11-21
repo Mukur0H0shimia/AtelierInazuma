@@ -1253,8 +1253,35 @@ def liste_creations():
                     'cle': e['cle'], 'nb_coups': len(e.get('coups') or []),
                     'onglet': 'personnages', 'installe': os.path.isfile(f_j) and os.path.isfile(f_s) and open(f_j, 'rb').read() == open(f_s, 'rb').read() and a_jour('MesPersonnages'),
                     'date': datetime.datetime.fromisoformat(e['date']).timestamp() if e.get('date') else 0})
+    # (21/11) tenues à équiper, objets et armures : créés et installables, mais absents de « Mes créations » (avant : une
+    # tenue ou un objet fait n'apparaissait nulle part, ni bouton « Installer » dans l'accueil). Installé = registre identique.
+    def _reg(mod, nom_json):
+        f_s, f_j = os.path.join(ICI, 'sortie', mod, nom_json), os.path.join(jeu, mod, nom_json)
+        try:
+            reg = json.load(open(f_s, encoding='utf-8')) if os.path.isfile(f_s) else {}
+        except (OSError, ValueError):
+            reg = {}
+        inst = bool(reg) and os.path.isfile(f_j) and open(f_j, 'rb').read() == open(f_s, 'rb').read() and a_jour(mod)
+        return reg, inst
+    def _date(e):
+        try:
+            return datetime.datetime.fromisoformat(e['date']).timestamp()
+        except (KeyError, TypeError, ValueError):
+            return 0
+    reg, inst = _reg('MesTenues', 'outil_tenues.json')
+    for cle, e in reg.items():
+        out.append({'genre': 'tenues', 'mod': 'MesTenues', 'nom': e.get('nom') or cle, 'code': e.get('modele'), 'base': e.get('source'),
+                    'nom_base': e.get('nom_origine'), 'onglet': 'tenues', 'installe': inst, 'date': _date(e)})
+    reg, inst = _reg('MesObjets', 'outil_objets.json')
+    for cle, e in reg.items():
+        out.append({'genre': 'objets', 'mod': 'MesObjets', 'nom': e.get('nom') or cle, 'code': cle, 'base': e.get('base'),
+                    'nom_base': e.get('nom_origine'), 'onglet': 'objets', 'installe': inst, 'date': _date(e)})
+    reg, inst = _reg('MesEsprits', 'outil_armures.json')
+    for cle, e in reg.items():
+        out.append({'genre': 'armures', 'mod': 'MesEsprits', 'nom': e.get('nom') or cle, 'code': e.get('modele'), 'base': e.get('armure'),
+                    'nom_base': e.get('armure'), 'onglet': 'armures', 'installe': inst, 'date': _date(e)})
     # (15/11/2026) maillots ajoutés au mod (sortie/MesMaillots, « Ajouter au mod » de l'onglet Maillots)
-    s_mm = os.path.join(CFG['outil_dir'], 'sortie', 'MesMaillots')
+    s_mm =os.path.join(CFG['outil_dir'], 'sortie', 'MesMaillots')
     if os.path.isfile(os.path.join(s_mm, 'mod.toml')):
         def _txt(d):
             f = os.path.join(d, 'content', 'items', 'mes_maillots.toml')

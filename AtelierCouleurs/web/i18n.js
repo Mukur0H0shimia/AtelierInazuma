@@ -41,6 +41,32 @@
     // toute infobulle de pièce qui finit par l'aide « cliquer / clic droit » : le début traduit à part, puis l'aide
     [/^(.+) \(cliquer : choisir ces pièces\) \(clic droit : localiser\)$/, function (_, tete) {
       return trad(tete) + '\n(click: select these parts)\n(right-click: locate)'; }],
+    // (21/11) compte de la liste de recherche, rapports de création et d'installation (bloc sous le panneau de droite)
+    [/^(\d+) résultats?$/, function (_, n) { return n + (n === '1' ? ' result' : ' results'); }],
+    [/^(Copie|Tenue|Armure) créée \(pas encore installée\) : (.+)$/, function (_, q, d) {
+      return { Copie: 'Copy', Tenue: 'Outfit', Armure: 'Armour' }[q] + ' created (not installed yet): ' + d; }],
+    [/^(Mod|Objet) créé \(pas encore installé\) : (.+)$/, function (_, q, d) { return (q === 'Mod' ? 'Mod' : 'Item') + ' created (not installed yet): ' + d; }],
+    [/^Installé dans (.+)$/, 'Installed in $1'],
+    [/^Sauvegarde : (.+)$/, 'Backup: $1'],
+    [/^Pas installé : (.+)$/, function (_, e) { return 'Not installed: ' + trad(e); }],
+    [/^Erreur : (.+)$/, function (_, e) { return 'Error: ' + trad(e); }],
+    [/^Lance le jeu, puis regarde le journal de VRFW \(aucune ligne ERROR\)\.$/, 'Start the game, then check the VRFW log (no ERROR line).'],
+    [/^« Installer dans le jeu », puis tirage Kizuna \(ChronicleDeluxe\)\.$/, '“Install in the game”, then the Kizuna draw (ChronicleDeluxe).'],
+    [/^« Installer dans le jeu » \(mod (\S+)\)\.$/, '“Install in the game” (mod $1).'],
+    [/^(.+?) : copie de (.+?) \((\S+)\), code (\S+), carte (\S+) copiée de (\S+)$/, '$1: copy of $2 ($3), code $4, card $5 copied from $6'],
+    [/^portrait : dessin d’origine recoloré comme la tête$/, 'portrait: original drawing recoloured like the head'],
+    [/^portrait : photo de la tête recolorée$/, 'portrait: photo of the recoloured head'],
+    [/^portrait : celui de (.+) \(couleurs d’origine\)$/, 'portrait: the one of $1 (original colours)'],
+    [/^copie (\S+) → code neuf (\S+) \(l'original ne change pas\)$/, 'copy $1 → new code $2 (the original does not change)'],
+    [/^texture (\S+) \((\d+x\d+)\)$/, 'texture $1 ($2)'],
+    [/^scènes copiées : (.+)$/, 'copied scenes: $1'],
+    [/^icône : dessin d'origine recoloré comme la copie$/, 'icon: original drawing recoloured like the copy'],
+    [/^boutique d'entraînement : (\d+) points$/, 'training shop: $1 points'],
+    [/^Création de la copie « (.+) » \(réencodage de (\d+) texture\(s\)\)…$/, 'Creating the copy “$1” (re-encoding $2 texture(s))…'],
+    [/^Création de la copie \(réencodage des textures, environ 45 s\)…$/, 'Creating the copy (re-encoding the textures, about 45 s)…'],
+    [/^Création (de la tenue|de l’armure|du nouveau joueur|de la copie)…$/, function (_, q) {
+      return 'Creating ' + { 'de la tenue': 'the outfit', 'de l’armure': 'the armour', 'du nouveau joueur': 'the new player', 'de la copie': 'the copy' }[q] + '…'; }],
+    [/^Installation…$/, 'Installing…'],
     [/^Texture déjà colorée \((.+?)\) : la couleur du matériau la MULTIPLIE \(orange × bleu = presque noir\)\. Pour changer la teinte, recolore plutôt la texture \(bloc Textures\) et laisse le matériau blanc\.$/,
      'Already coloured texture ($1): the material colour MULTIPLIES it (orange × blue = almost black). To change the hue, recolour the texture instead (Textures block) and leave the material white.']
   ];
@@ -59,6 +85,16 @@
         var i = 0;
         r = d[modele].replace(/\{n\}/g, function () { return nb[i++]; });
       }
+    }
+    if (r === undefined && /\n/.test(brut)) {    // (21/11) bloc de plusieurs lignes (rapports) : ligne par ligne, « - » gardé
+      var lignes = brut.split('\n'), chg = false;
+      for (var j = 0; j < lignes.length; j++) {
+        var lg = lignes[j], tiret = (lg.match(/^\s*-\s+/) || [''])[0], corps = lg.slice(tiret.length);
+        if (!corps.trim()) { continue; }
+        var tl = trad(corps);
+        if (tl !== corps) { lignes[j] = tiret + tl; chg = true; }
+      }
+      if (chg) { return s.replace(brut, lignes.join('\n')); }
     }
     if (r === undefined) {                       // textes fabriqués avec des données (noms, nombres, couleurs)
       for (var m = 0; m < MOTIFS.length && r === undefined; m++) {

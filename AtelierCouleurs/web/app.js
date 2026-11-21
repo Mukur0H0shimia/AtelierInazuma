@@ -1748,7 +1748,7 @@ async function caExporter() {
 }
 window.addEventListener('load', () => { if (!$('ca-exporter')) return;
   $('ca-exporter').onclick = () => caExporter().catch(e => majRapport('Erreur : ' + e.message)); $('ca-installer').onclick = () => installer('MesEsprits');
-  document.querySelectorAll('.onglets button').forEach(b => b.addEventListener('click', () => { if (b.dataset.onglet === 'armures') caListe(); })); });
+  });
 // ------------------------------------------------------------------ (15/11/2026) COPIES DE TENUES ET D'OBJETS (moteur/copies_tenues.py)
 function texturesModifiees() { const t = {};
   for (const x of Object.values(E.textures)) if (x.modif && x.cur && x.obj && x.obj.nom === E.objets[0].nom) t[x.nom] = x.cur.toDataURL('image/png'); return t; }
@@ -2099,6 +2099,9 @@ window.addEventListener('load', async () => {
     if (o === 'hub') chargerHub();                 // (15/11/2026) hub « Mes créations »
     if (ONGLETS_JEU.includes(o) && !E.jeu[o]) api('/api/jeu?cat=' + o).then(l => { E.jeu[o] = l; if (E.onglet === o && document.activeElement === cherche) cherche.dispatchEvent(new Event('input')); });
     if (o === 'maillots') mmListe();
+    // (21/11) liste des copies d'esprit de l'onglet Armures : remplie à CHAQUE arrivée sur l'onglet (avant : seulement au clic
+    // sur l'onglet ; par l'accueil, « Continuer » / « Modifier », elle restait vide -> « Aucune copie d'esprit »)
+    if (o === 'armures') caListe();
     if (o !== 'bannieres' && o !== 'hub' && E.tech && E.tech.onglet !== o) { E.tech = null; E.objets = []; E.textures = {}; E.vue.vider(); E.vue.lecteur = null; E.lecteur = null;
       dessinerPieces(); dessinerTextures(); $('titre-tech').textContent = "Rien d'ouvert"; majRapport(''); }
   };

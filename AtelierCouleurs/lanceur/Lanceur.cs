@@ -42,6 +42,7 @@ static class Lanceur
                    "\n\nGarde « Atelier Inazuma.exe » dans le dossier AtelierCouleurs (utilise un raccourci pour le bureau).");
             return;
         }
+        ReprendreAncienneVersion();
         Debloquer();
         RaccourciBureau();
         Lancer();
@@ -90,6 +91,142 @@ static class Lanceur
     {
         try { return Directory.Exists(Path.Combine(Path.GetFullPath(Path.Combine(dossierAtelier, "..")), "python")); }
         catch (Exception) { return false; }
+    }
+
+    // ---------------------------------------------------------------- reprise des données d'une version précédente
+    // Une nouvelle version décompressée dans un AUTRE dossier repartait de zéro : long 1er démarrage refait, créations
+    // restées dans l'ancien dossier. Au 1er lancement d'un téléchargement, on retrouve la version précédente (raccourci
+    // du bureau, dossiers voisins) et on reprend ses données (une seule fois ; détail dans cache\reprise.txt).
+    static readonly string[] DOSSIERS_REPRIS = { @"AtelierCouleurs\cache", @"AtelierCouleurs\projets", @"AtelierCouleurs\sortie",
+        @"AtelierCouleurs\maillots", @"AtelierMaillots\travail", @"AtelierMaillots\cache_textures", "Sauvegardes Atelier" };
+    static readonly string[] FICHIERS_REPRIS = { @"AtelierCouleurs\config.json", @"AtelierCouleurs\prereglages.json",
+        @"AtelierMaillots\reglages.json", @"AtelierMaillots\catalogue.json", @"AtelierMaillots\mes_maillots.json" };
+
+    static bool EstRacinePaquet(string r)
+    {
+        return r != null && File.Exists(Path.Combine(r, "AtelierCouleurs", "Atelier Inazuma.exe")) && Directory.Exists(Path.Combine(r, "python"));
+    }
+
+    static bool AUnContenu(string d)
+    {
+        try { return Directory.Exists(d) && Directory.EnumerateFileSystemEntries(d).GetEnumerator().MoveNext(); } catch (Exception) { return false; }
+    }
+
+    static System.Collections.Generic.List<string> TrouverAnciennes(string racine)
+    {
+        var cand = new System.Collections.Generic.List<string>();
+        try                                                       // 1. la cible du raccourci du bureau
+        {
+            string lnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Atelier Inazuma.lnk");
+            if (File.Exists(lnk))
+            {
+                Type t = Type.GetTypeFromProgID("WScript.Shell");
+                object sh = Activator.CreateInstance(t);
+                object l = t.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, sh, new object[] { lnk });
+                string cible = (string)l.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, null, l, null);
+                cand.Add(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(cible), "..")));
+            }
+        }
+        catch (Exception) { }
+        // 2. les dossiers voisins (et un niveau dedans), depuis le dossier parent ET le grand-parent : Windows décompresse
+        //    « AtelierInazuma (1).zip » dans Téléchargements\AtelierInazuma (1)\AtelierInazuma, l'ancienne étant dans
+        //    Téléchargements\AtelierInazuma\AtelierInazuma
+        string bas = Path.GetDirectoryName(racine);
+        for (int niveau = 0; niveau < 2 && bas != null; niveau++, bas = Path.GetDirectoryName(bas))
+        {
+            try
+            {
+                foreach (string d in Directory.GetDirectories(bas))
+                {
+                    cand.Add(d);
+                    try { foreach (string s in Directory.GetDirectories(d)) cand.Add(s); } catch (Exception) { }
+                }
+            }
+            catch (Exception) { }
+        }
+        // toutes les versions précédentes trouvées, la préférée d'abord (version la plus haute, puis la plus récemment
+        // utilisée) : chaque élément est repris de la PREMIÈRE qui l'a (créations d'un dossier, cache d'un autre…)
+        var res = new System.Collections.Generic.List<Tuple<string, Version, DateTime>>();
+        var vus = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Version vIci = NumeroDe(Dossier);
+        foreach (string c0 in cand)
+        {
+            string c = Path.GetFullPath(c0).TrimEnd('\\');
+            if (!vus.Add(c) || !EstRacinePaquet(c) || string.Equals(c, racine.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) continue;
+            string ac = Path.Combine(c, "AtelierCouleurs");
+            if (!AUnContenu(Path.Combine(ac, "cache")) && !AUnContenu(Path.Combine(ac, "projets")) && !AUnContenu(Path.Combine(ac, "sortie"))) continue;
+            Version v = NumeroDe(ac);
+            if (v > vIci) continue;                                  // jamais les données d'une version plus récente
+            DateTime t = DateTime.MinValue;
+            try { t = Directory.GetLastWriteTime(Path.Combine(ac, "cache")); } catch (Exception) { }
+            res.Add(Tuple.Create(c, v, t));
+        }
+        res.Sort((x, y) => x.Item2 != y.Item2 ? y.Item2.CompareTo(x.Item2) : y.Item3.CompareTo(x.Item3));
+        return res.ConvertAll(x => x.Item1);
+    }
+
+    static void CopierDossier(string src, string dst)
+    {
+        Directory.CreateDirectory(dst);
+        foreach (string f in Directory.GetFiles(src))
+            try { File.Copy(f, Path.Combine(dst, Path.GetFileName(f)), true); } catch (Exception) { }
+        foreach (string d in Directory.GetDirectories(src))
+            CopierDossier(d, Path.Combine(dst, Path.GetFileName(d)));
+    }
+
+    static void ReprendreAncienneVersion()
+    {
+        try
+        {
+            string racine = Path.GetFullPath(Path.Combine(Dossier, ".."));
+            string marque = Path.Combine(Dossier, "cache", "reprise.txt");
+            if (!EstRacinePaquet(racine) || File.Exists(marque)) return;
+            var anciennes = TrouverAnciennes(racine);
+            var rapport = new System.Text.StringBuilder();
+            if (anciennes.Count > 0)
+            {
+                foreach (string a in anciennes)
+                    rapport.AppendLine("version précédente : " + a + " (" + VersionDe(Path.Combine(a, "AtelierCouleurs")) + ")");
+                foreach (string rel in DOSSIERS_REPRIS)
+                {
+                    string ancienne = anciennes.Find(a => AUnContenu(Path.Combine(a, rel)));
+                    if (ancienne == null) continue;
+                    string src = Path.Combine(ancienne, rel), dst = Path.Combine(racine, rel);
+                    // le cache neuf n'est gardé que s'il est complet (index des textures fini) ; les créations ne sont
+                    // jamais écrasées : si la nouvelle version en a déjà, on ne touche à rien
+                    if (AUnContenu(dst) && !(rel.EndsWith("cache") && !File.Exists(Path.Combine(dst, "index_tx_chr.json")))) continue;
+                    try
+                    {
+                        if (Directory.Exists(dst)) Directory.Delete(dst, true);
+                        try { Directory.Move(src, dst); rapport.AppendLine("déplacé : " + rel + " (de " + ancienne + ")"); }
+                        catch (Exception) { CopierDossier(src, dst); rapport.AppendLine("copié : " + rel + " (de " + ancienne + ")"); }
+                    }
+                    catch (Exception ex) { rapport.AppendLine("pas repris : " + rel + " (" + ex.Message + ")"); }
+                }
+                foreach (string rel in FICHIERS_REPRIS)
+                {
+                    string ancienne = anciennes.Find(a => File.Exists(Path.Combine(a, rel)));
+                    if (ancienne == null) continue;
+                    string src = Path.Combine(ancienne, rel), dst = Path.Combine(racine, rel);
+                    try
+                    {
+                        string txt = File.ReadAllText(src);
+                        // chemins de l'ancien dossier (ex. sauvegardes_dir) -> le nouveau ; dans le JSON, « \ » est écrit « \\ »
+                        txt = Regex.Replace(txt, Regex.Escape(ancienne.TrimEnd('\\').Replace("\\", "\\\\")),
+                                            racine.TrimEnd('\\').Replace("\\", "\\\\").Replace("$", "$$"), RegexOptions.IgnoreCase);
+                        File.WriteAllText(dst, txt);
+                        rapport.AppendLine("repris : " + rel);
+                    }
+                    catch (Exception ex) { rapport.AppendLine("pas repris : " + rel + " (" + ex.Message + ")"); }
+                }
+            }
+            else rapport.AppendLine("aucune version précédente trouvée");
+            // le cache repris porte les marques de l'ANCIEN dossier : celui-ci doit encore être débloqué (zip téléchargé)
+            try { File.Delete(Path.Combine(Dossier, "cache", "debloque.txt")); } catch (Exception) { }
+            Directory.CreateDirectory(Path.GetDirectoryName(marque));
+            File.WriteAllText(marque, rapport.ToString());
+        }
+        catch (Exception) { }
     }
 
     // raccourci « Atelier Inazuma » sur le bureau : créé au 1er lancement (s'il est supprimé, il ne revient pas). S'il mène

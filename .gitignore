@@ -1,0 +1,29 @@
+# réglages et données de chaque utilisateur / per-user settings and data
+AtelierCouleurs/config.json
+AtelierCouleurs/cache/
+AtelierCouleurs/projets/
+AtelierCouleurs/sortie/
+AtelierCouleurs/maillots/
+AtelierMaillots/reglages.json
+AtelierMaillots/catalogue.json
+AtelierMaillots/mes_maillots*.json
+AtelierMaillots/cache_textures/
+AtelierMaillots/travail/
+AtelierNatif/scenes/
+AtelierNatif/*.bin
+AtelierNatif/lecteur_erreur.txt
+data/
+Sauvegardes Atelier/
+# fichiers du jeu : jamais dans le dépôt / game files: never in the repository
+*.cpk
+*.g4tx
+*.g4pkm
+*.g4mg
+*.g4mt
+*.objbin
+*.cfg.bin
+# Python, compilation
+__pycache__/
+*.pyc
+*.obj
+*.log

@@ -1,0 +1,93 @@
+ATELIER MAILLOTS — créer ses maillots pour Inazuma Eleven Victory Road (avec VRFW / Inazuma Fantasy)
+
+Lancer : double-clic sur « Atelier Maillots.exe » (ou le raccourci « Atelier Maillots » du bureau).
+
+Faire un maillot
+  1. « Nouveau maillot », puis donne-lui un nom et un prix (en jetons de la boutique générale).
+  2. Choisis la COUPE : un maillot du jeu (tape une partie de son nom pour le trouver). Ton maillot aura sa forme.
+     Les 170 maillots du jeu sont proposés (Zeus, Genesis, Protocole, Epsilon…). Certaines tenues sont d'une seule
+     pièce (combinaison) : tout est alors sur l'image du haut. Les pièces en plus (gants, cape…) gardent leur image du jeu.
+  3. « Exporter les images du maillot de base » : un dossier s'ouvre avec
+       haut_domicile.png, short_domicile.png, haut_exterieur.png, short_exterieur.png, icone.png
+     Ce sont les vraies images du maillot du jeu, « dépliées » (comme un patron de couture).
+     Où est quoi ? Ouvre « Guide du patron.png » (dans ce dossier) :
+       - HAUT : en haut les deux MANCHES, au milieu le col et le dessus des épaules ;
+                en bas à gauche le DEVANT (l'écusson va à droite du devant, sur la poitrine gauche du joueur),
+                en bas à droite le DOS (là où va le numéro) ; les bords et le milieu = les côtés, sous les bras.
+       - SHORT (image short_…png) : le short ET les chaussettes sont sur la même image.
+                en haut à gauche le DEVANT du short, en haut à droite le DOS du short,
+                en bas à gauche les genoux, en bas à droite les deux CHAUSSETTES (la bande en haut = le haut
+                de la chaussette). Bouton « Studio… » de la ligne « Short + chaussettes ».
+       Dans le studio, ces zones sont nommées quand tu passes la souris dessus.
+  4. Modifie-les dans Paint, Paint.NET, GIMP, Photoshop… et enregistre en PNG. Garde la même taille (2048 x 2048)
+     et ne déplace pas les zones : la forme du patron doit rester la même.
+  5. Dans « Mes images », choisis tes PNG. Seul le haut domicile est obligatoire :
+       - sans short : le short du maillot de base est gardé ;
+       - sans images extérieur : l'extérieur reprend celles du domicile ;
+       - sans icône : l'icône du maillot de base est gardée (une icône doit faire 256 x 256, fond transparent).
+  LE STUDIO (le plus simple) : bouton « Studio… » à côté de chaque image, ou « Ouvrir le studio (3D) ».
+       Il s'ouvre dans ton navigateur : le patron au milieu, le maillot en 3D à droite (il bouge en direct
+       pendant que tu dessines), les outils à gauche. Garde l'atelier ouvert pendant ce temps.
+       - En haut : les onglets Haut domicile / Short + chaussettes / Haut extérieur / … / Icône.
+       - Survole le patron : en bas à droite, le studio te dit où tu es (Devant, Dos, Manche gauche, Chaussette…).
+         Bouton « Zones » (ou touche G) : affiche / cache les parties en couleur sur le patron.
+       - Outils : Pinceau (B), Gomme (E), Pipette (I), Remplir (F), Trait droit (L), Formes (R), Motifs (M),
+         Texte (T), Image (P), Déplacer (H). Clic droit sur le maillot = prendre une couleur.
+       - « Limiter à une partie du maillot » : le dessin ne déborde pas (ex. pinceau seulement sur la manche).
+       - Remplir : clique sur une partie (une manche, le devant, une chaussette…) et elle prend la couleur.
+       - Formes : carré, rond, étoile, éclair, cœur, triangle, losange, chevron, flèche, blason, croix
+         (glisse pour la dessiner ; Maj = proportions gardées ; plein, contour, ou les deux).
+       - Motifs : rayures, cerceaux, diagonales, damier, pois, chevrons, bande, écharpe, moitié, dégradé, zigzag,
+         carreaux, éclairs, étoiles… : clique sur une partie du maillot pour y poser le motif.
+       - Texte (sponsor, nom) et Image (logo, écusson PNG) : règle la taille et la rotation, clique pour poser.
+       - Couleurs : clic sur la palette = couleur principale, clic droit = 2e couleur (contours, dégradés). X = échanger.
+       - Ctrl+Z / Ctrl+Y : annuler / rétablir. Molette : zoom. Espace + glisser : déplacer la vue. 0 : ajuster.
+       - « Enregistrer » (Ctrl+S) : l'image (travail\<maillot>\<image>_modifie.png) est choisie pour le maillot.
+       - Le short de certains maillots du jeu est tout petit (128 x 128) : le studio l'agrandit à 1024 x 1024
+         pour pouvoir dessiner des détails, et l'atelier le met à cette taille dans le jeu.
+       RELIEF DU TISSU (panneau à droite du studio) : le jeu ajoute des ombres (plis) par-dessus ton dessin. Sur
+       beaucoup de maillots, elles contiennent aussi les coutures et décorations du maillot d'origine (col en V,
+       lignes, demi-lunes…), qui se voient « en relief » sur ton dessin.
+         - Plis simples (conseillé, par défaut) : les plis du tissu sont gardés, les dessins du maillot d'origine enlevés ;
+         - Comme le maillot d'origine : rien n'est changé ;
+         - Tout plat : aucune ombre (ton image telle quelle).
+       L'aperçu 3D montre ce relief (case « Voir le relief sur l'aperçu 3D »). Il faut reconstruire le mod.
+       EMBLÈME D'ÉQUIPE : onglet « Emblème » du studio (image 512 x 512, fond transparent) ou ligne « Emblème
+       d'équipe » de l'atelier. Il est vendu à la boutique générale avec le maillot (« Emblème <nom> »).
+       NOM DU JOUEUR : dans le panneau du numéro, coche « Nom du joueur au-dessus du numéro ». Le jeu écrit alors le
+       nom de chaque joueur. « Style des lettres » : les lettres du jeu, ou une police (Georgia, Times, Impact…) :
+       le studio fabrique les lettres et les chiffres dans cette police, aux couleurs du numéro. (Nouveau : à vérifier en jeu.)
+       NUMÉRO DANS LE DOS (panneau à droite du studio) : coche « Personnaliser le numéro », puis choisis le style
+       (6 polices du jeu), la couleur de remplissage, la couleur du contour, la taille et la hauteur. L'aperçu 3D le
+       montre (« Aperçu du n° » = le numéro affiché). Couleurs et police : réglages officiels de VRFW. Taille et
+       hauteur : l'atelier fait un numéro modifié (nouveau : vérifie en jeu ; si le numéro disparaît, remets
+       100 % et 0 cm).
+  Aperçu (à droite de l'atelier) : l'icône de la boutique, le portrait des cartes de joueurs (domicile et extérieur)
+       tel que le jeu le dessinera, et les deux hauts.
+  6. « Construire et installer le mod ». Le mod « Mes maillots » est créé dans le dossier mods du jeu et activé.
+     Relance le jeu : tes maillots sont à la boutique générale d'Inazuma Fantasy.
+
+Bon à savoir
+  - Tous tes maillots sont dans un seul mod, « Mes maillots ». Chaque construction le refait en entier.
+  - La première construction d'un maillot prend quelques secondes à une minute ; ensuite, seuls les maillots dont
+    les images ont changé sont réencodés.
+  - Le gardien porte le même maillot que les joueurs (sinon le jeu le rend invisible).
+  - Les textures sont faites avec tous leurs niveaux de réduction (mipmaps) : pas de joueur invisible de loin ni
+    sur les portraits.
+  - Les portraits des joueurs (cartes) utilisent des « bustes » déjà dessinés : l'atelier reprend ceux du maillot de
+    base et les colore avec la couleur principale de ton haut (domicile et extérieur). Les motifs du maillot n'y sont
+    pas : le buste est d'une seule couleur, avec le col.
+  - Si le jeu est ouvert, le mod n'est pris en compte qu'au prochain lancement.
+  - Si tu changes la coupe d'un maillot, les images exportées de l'ancienne coupe sont rangées dans
+    travail\<maillot>\ancienne_coupe_<code> (rien n'est effacé).
+  - En cas de problème, l'atelier affiche l'erreur et la note dans erreurs.log (dossier de l'atelier) :
+    envoie ce fichier pour qu'on puisse corriger.
+
+Fichiers
+  mes_maillots.json   la liste de tes maillots (noms, prix, images choisies)
+  travail\            les images exportées, un dossier par maillot
+  cache_textures\     textures déjà encodées (peut être supprimé sans risque)
+  ancien_mod\         la version précédente du mod « Mes maillots » (copie faite à chaque construction)
+  reglages.json       dossiers utilisés : « donnees » = les fichiers du jeu extraits, « mods » = dossier mods du jeu,
+                      « auteur » = nom affiché dans l'écran Mods
+  catalogue.json      la liste des maillots du jeu (supprime-le pour la refaire après une mise à jour du jeu)

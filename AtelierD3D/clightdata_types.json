@@ -1,0 +1,1322 @@
+{
+"mapGradationTexNameCRC": [
+7316,
+"0x140057dc0"
+],
+"mapCloudTexNameCRC": [
+7320,
+"0x140057dc0"
+],
+"mapCloudShadowSpeed": [
+7356,
+"0x140057f10"
+],
+"mapWindTexNameCRC": [
+7324,
+"0x140057dc0"
+],
+"mapWindSpeed": [
+7360,
+"0x140057f10"
+],
+"mapLampNoiseSpeed": [
+7368,
+"0x140057f10"
+],
+"mapRiverWaterSpeed": [
+7372,
+"0x140057f10"
+],
+"mapLightTexNameCRC": [
+7328,
+"0x140057dc0"
+],
+"mapCubemapTexNameCRC": [
+7332,
+"0x140057dc0"
+],
+"mapVignetteTexNameCRC": [
+7336,
+"0x140057dc0"
+],
+"isInfluenceCurrentMapLightParam": [
+7745,
+"0x140057390"
+],
+"isInfluenceCurrentMapLightParamAll": [
+7746,
+"0x140057390"
+],
+"mapAmbient": [
+320,
+"0x140080c40"
+],
+"shadowColor": [
+336,
+"0x140080ce0"
+],
+"lightDir": [
+352,
+"0x140080ce0"
+],
+"lightHalfDir": [
+368,
+"0x140080ce0"
+],
+"lightColor": [
+384,
+"0x140080ce0"
+],
+"lightAmbient": [
+960,
+"0x140080ce0"
+],
+"mapShadowBias": [
+976,
+"0x140080ce0"
+],
+"mapLightDir1": [
+752,
+"0x140080ce0"
+],
+"mapLightDir2": [
+768,
+"0x140080ce0"
+],
+"mapLightDir3": [
+784,
+"0x140080ce0"
+],
+"mapLightColor1": [
+800,
+"0x140080ce0"
+],
+"mapLightColor2": [
+816,
+"0x140080c40"
+],
+"mapLightColor3": [
+832,
+"0x140080c40"
+],
+"mapLightIntensity": [
+848,
+"0x140080ce0"
+],
+"mapLightTexParam": [
+864,
+"0x140080c40"
+],
+"mapLightTexRate": [
+864,
+"0x140053b40"
+],
+"mapLightTexAO": [
+864,
+"0x140053b40"
+],
+"mapIBLRate": [
+864,
+"0x140053b40"
+],
+"mapGrdTexRate": [
+864,
+"0x140053b40"
+],
+"mapCloudParam": [
+880,
+"0x140080c40"
+],
+"mapPbrLightInfo": [
+1104,
+"0x140080c40"
+],
+"mapPbrIBLInfo": [
+1120,
+"0x140080c40"
+],
+"cloudColor": [
+1136,
+"0x140080ce0"
+],
+"mapPbrParamScaleInfo": [
+1152,
+"0x140080c40"
+],
+"mapProjParam": [
+1168,
+"0x140080c40"
+],
+"mapPbrModelBasicDrawLightColor": [
+1184,
+"0x140080ce0"
+],
+"mapPbrModelBasicDrawLightAmbient": [
+1200,
+"0x140080ce0"
+],
+"mapPbrModelBasicDrawLightParam": [
+1216,
+"0x140080c40"
+],
+"mapPbrSSR_rayNum_Min": [
+1232,
+"0x140057f10"
+],
+"mapPbrSSR_rayNum_Max": [
+1236,
+"0x140057f10"
+],
+"mapPbrSSR_subRayNum_Max": [
+1240,
+"0x140057f10"
+],
+"mapPbrSSR_ssrRimMaskWidth": [
+1248,
+"0x140057f10"
+],
+"mapPbrSSR_ssrRimMaskOffset": [
+1252,
+"0x140057f10"
+],
+"mapPbrSSR_rayLength_Min": [
+1256,
+"0x140057f10"
+],
+"mapPbrSSR_rayLength_Max": [
+1260,
+"0x140057f10"
+],
+"mapPbrSSR_maxThicknessScale": [
+1264,
+"0x140057f10"
+],
+"mapPbrSSR_ssrColorMul": [
+1268,
+"0x140057f10"
+],
+"mapPbrSSR_ssrAlpha": [
+1272,
+"0x140057f10"
+],
+"mapPbrSSR_noiseScale": [
+1276,
+"0x140057f10"
+],
+"mapPbrSSR_waterRef_IblRate": [
+1280,
+"0x140057f10"
+],
+"mapPbrSSR_shadowDistortion": [
+1284,
+"0x140057f10"
+],
+"mapPbrSSR_rayNum_Min_LowPF": [
+1296,
+"0x140057f10"
+],
+"mapPbrSSR_rayNum_Max_LowPF": [
+1300,
+"0x140057f10"
+],
+"moonColor": [
+1312,
+"0x140080ce0"
+],
+"shadowDir": [
+1328,
+"0x140080ce0"
+],
+"useShadowDir": [
+7747,
+"0x140057390"
+],
+"drawMoon": [
+7748,
+"0x140057390"
+],
+"useFogSky": [
+7749,
+"0x140057390"
+],
+"fogSkyRadius": [
+7752,
+"0x140057f10"
+],
+"mapWindParam": [
+896,
+"0x1400574e0"
+],
+"mapCloudTime": [
+912,
+"0x140057f10"
+],
+"mapPointLightPow": [
+916,
+"0x140057f10"
+],
+"mapLampBright": [
+920,
+"0x140057f10"
+],
+"mapRiverWaterSoftParticle": [
+928,
+"0x140053b40"
+],
+"mapRiverWaterDistortion": [
+928,
+"0x140053b40"
+],
+"mapRiverWaterEnable": [
+928,
+"0x140053b40"
+],
+"mapRiverWaterHeight": [
+944,
+"0x140053b40"
+],
+"mapWorldAlphaFadeLen": [
+944,
+"0x140053b40"
+],
+"mapSoftParticleFadeLen": [
+944,
+"0x140053b40"
+],
+"softParticleDistance": [
+1008,
+"0x140057f10"
+],
+"effectPLightRate": [
+1024,
+"0x140053b40"
+],
+"effectAmbientRate": [
+1024,
+"0x140053b40"
+],
+"effectShadowRate": [
+1040,
+"0x140053b40"
+],
+"effectShadowContrast": [
+1040,
+"0x140053b40"
+],
+"effectShadowGrayScale": [
+1040,
+"0x140053b40"
+],
+"windInfo1": [
+1616,
+"0x1402c4e20"
+],
+"windInfo2": [
+1664,
+"0x1402c4e20"
+],
+"windInfo1_baseDir": [
+1616,
+"0x140080ce0"
+],
+"windInfo1_scrollSpeed": [
+1632,
+"0x140057f10"
+],
+"windInfo1_speedMin": [
+1636,
+"0x140057f10"
+],
+"windInfo1_speedMax": [
+1640,
+"0x140057f10"
+],
+"windInfo1_speedAtten": [
+1644,
+"0x140057f10"
+],
+"windInfo1_repeateWidth": [
+1648,
+"0x140057f10"
+],
+"windInfo1_time": [
+1652,
+"0x140057f10"
+],
+"windInfo2_baseDir": [
+1664,
+"0x140080ce0"
+],
+"windInfo2_scrollSpeed": [
+1680,
+"0x140057f10"
+],
+"windInfo2_speedMin": [
+1684,
+"0x140057f10"
+],
+"windInfo2_speedMax": [
+1688,
+"0x140057f10"
+],
+"windInfo2_speedAtten": [
+1692,
+"0x140057f10"
+],
+"windInfo2_repeateWidth": [
+1696,
+"0x140057f10"
+],
+"windInfo2_time": [
+1700,
+"0x140057f10"
+],
+"fogRayleighColorP20": [
+1344,
+"0x140080c40"
+],
+"fogRayleighColorP10": [
+1360,
+"0x140080c40"
+],
+"fogRayleighColorO00": [
+1376,
+"0x140080c40"
+],
+"fogRayleighColorM10": [
+1392,
+"0x140080c40"
+],
+"fogRayleighColorM20": [
+1408,
+"0x140080c40"
+],
+"fogHeightRayleighColor": [
+1424,
+"0x140080c40"
+],
+"fogMieColorP20": [
+1440,
+"0x140080c40"
+],
+"fogMieColorO00": [
+1456,
+"0x140080c40"
+],
+"fogMieColorM20": [
+1472,
+"0x140080c40"
+],
+"fogRayleighBandRatio": [
+1552,
+"0x140080c40"
+],
+"fogWorldNearScatterPush": [
+1488,
+"0x140057f10"
+],
+"fogWorldRayleighDensity": [
+1492,
+"0x140057f10"
+],
+"fogWorldMieDensity": [
+1496,
+"0x140057f10"
+],
+"fogWorldNormalDistanceRcp": [
+1500,
+"0x140057f10"
+],
+"fogMiePhaseAnisotropy": [
+1504,
+"0x140057f10"
+],
+"fogOcclRate": [
+1508,
+"0x140057f10"
+],
+"fogHeightSeaLevel": [
+1520,
+"0x140057f10"
+],
+"fogHeightDistanceRcp": [
+1524,
+"0x140057f10"
+],
+"fogHeightNearScatterPush": [
+1528,
+"0x140057f10"
+],
+"fogHeightRayleighDensity": [
+1532,
+"0x140057f10"
+],
+"fogHeightMieDensity": [
+1536,
+"0x140057f10"
+],
+"fogHeightNormalDistanceRcp": [
+1540,
+"0x140057f10"
+],
+"sunShaftColor": [
+1568,
+"0x140080c40"
+],
+"sunShaftAtten": [
+1584,
+"0x140057f10"
+],
+"sunShaftBlurScale": [
+1588,
+"0x140057f10"
+],
+"sunShaftBlurCount": [
+1592,
+"0x140057e60"
+],
+"skyColor": [
+1600,
+"0x140080c40"
+],
+"charaAmbient": [
+1712,
+"0x140080c40"
+],
+"charaLightDir": [
+1776,
+"0x140080ce0"
+],
+"charaHighLightColor": [
+1728,
+"0x140080c40"
+],
+"charaHighColor": [
+1728,
+"0x1400574e0"
+],
+"charaHighThreshold": [
+1728,
+"0x140053b40"
+],
+"charaShadowColor1": [
+1744,
+"0x140080c40"
+],
+"charaShadow1": [
+1744,
+"0x1400574e0"
+],
+"charaShadowRate1": [
+1744,
+"0x140053b40"
+],
+"charaShadowColor2": [
+1760,
+"0x140080c40"
+],
+"charaShadow2": [
+1760,
+"0x1400574e0"
+],
+"charaShadowRate2": [
+1760,
+"0x140053b40"
+],
+"depthEdgeParam": [
+1792,
+"0x140080c40"
+],
+"occlusionParam": [
+1808,
+"0x140080c40"
+],
+"charaAmbLightParam": [
+1936,
+"0x14005a270"
+],
+"charaGrTParam": [
+2304,
+"0x140080c40"
+],
+"charaProbLightParam": [
+1944,
+"0x14005a270"
+],
+"charaShadowBias": [
+1824,
+"0x140080c40"
+],
+"charaShadowParam": [
+1840,
+"0x140080c40"
+],
+"charaShadowEnable": [
+1840,
+"0x140053b40"
+],
+"charaSelfShadow": [
+1840,
+"0x140053b40"
+],
+"charaShadowAlphaRate": [
+1840,
+"0x140053b40"
+],
+"charaShadowBlendRate": [
+1840,
+"0x140053b40"
+],
+"charaUnderRimColor": [
+1856,
+"0x140080c40"
+],
+"charaUnderRim": [
+1856,
+"0x1400574e0"
+],
+"charaUnderRimRate": [
+1856,
+"0x140053b40"
+],
+"charaBlendRateParam": [
+1872,
+"0x140080c40"
+],
+"charaRimOutlineMax": [
+1888,
+"0x140053b40"
+],
+"charaMetalShadowRate": [
+1888,
+"0x140053b40"
+],
+"charaDropShadowRate": [
+1888,
+"0x140053b40"
+],
+"charaDropShadowRateMax": [
+1888,
+"0x140053b40"
+],
+"pointLightToonParam": [
+1904,
+"0x140080c40"
+],
+"pointLightBlendParam": [
+1920,
+"0x140080c40"
+],
+"pointLightRimParam": [
+2352,
+"0x140080c40"
+],
+"charaStatusColor": [
+2096,
+"0x140080ce0"
+],
+"charaStatusRimColor": [
+2112,
+"0x140080c40"
+],
+"charaStatusRimPow": [
+2128,
+"0x140053b40"
+],
+"charaStatusTexIn": [
+2128,
+"0x140053b40"
+],
+"charaStatusTexOut": [
+2128,
+"0x140053b40"
+],
+"charaStatusDistotion": [
+2128,
+"0x140053b40"
+],
+"charaStatusUvCenter": [
+2144,
+"0x140080ce0"
+],
+"charaStatusUvSclMove": [
+2160,
+"0x140080c40"
+],
+"charaStatusHitColor": [
+2320,
+"0x140080c40"
+],
+"charaStatusHitParam": [
+2336,
+"0x140080c40"
+],
+"charaPbrLightParam": [
+2368,
+"0x140080c40"
+],
+"charaPbrIBLParam": [
+2384,
+"0x140080c40"
+],
+"charaPbrCustomIBLParam": [
+2400,
+"0x140080c40"
+],
+"charaWindDir": [
+2416,
+"0x140080ce0"
+],
+"charaWindPower": [
+2432,
+"0x140057f10"
+],
+"charaWindRate": [
+2436,
+"0x140057f10"
+],
+"edge2OutlineDepthScaleMax": [
+2440,
+"0x140057f10"
+],
+"edge2OutlineDepthScaleOffset": [
+2444,
+"0x140057f10"
+],
+"edge2OutlineScale": [
+2448,
+"0x140057f10"
+],
+"edgeColor": [
+2464,
+"0x140080c40"
+],
+"edgeWeight0": [
+2480,
+"0x140080c40"
+],
+"edgeWeight1": [
+2496,
+"0x140080c40"
+],
+"charaEdgeFadeBegin": [
+2512,
+"0x140053b40"
+],
+"charaEdgeFadeEnd": [
+2512,
+"0x140053b40"
+],
+"edgePixel": [
+2520,
+"0x140057f10"
+],
+"useExtrutedEdge": [
+2528,
+"0x140057390"
+],
+"writeDepthLumaThreshold": [
+2524,
+"0x140057f10"
+],
+"bloom_SubLum": [
+2608,
+"0x140053b40"
+],
+"bloomTexStepSize": [
+2560,
+"0x140080ce0"
+],
+"bloomIntensity": [
+2576,
+"0x140080ce0"
+],
+"bloomAlphaBlendRate": [
+2592,
+"0x140080ce0"
+],
+"bloomSubLumMap": [
+2608,
+"0x140080c40"
+],
+"bloomSubLumPost": [
+2624,
+"0x140080c40"
+],
+"bloomSubLumAllow": [
+2544,
+"0x140057f10"
+],
+"dofFocusNearZ": [
+2640,
+"0x140053b40"
+],
+"dofFocusFarZ": [
+2640,
+"0x140053b40"
+],
+"dofFocusIn": [
+2640,
+"0x140053b40"
+],
+"dofFocusOut": [
+2640,
+"0x140053b40"
+],
+"dofFrontStrength": [
+2656,
+"0x140053b40"
+],
+"dofBackStrength": [
+2656,
+"0x140053b40"
+],
+"dofGaussParam": [
+2664,
+"0x14005a270"
+],
+"dofGaussCnt": [
+2672,
+"0x140057e60"
+],
+"dofFocusTexelOffset": [
+2676,
+"0x140057f10"
+],
+"dofUseAutoFocus": [
+2680,
+"0x140057390"
+],
+"dofUseFastVersion": [
+2681,
+"0x140057390"
+],
+"tonemapLumMax": [
+2688,
+"0x140053b40"
+],
+"tonemapLumMiddle": [
+2688,
+"0x140053b40"
+],
+"tonemapEnable": [
+2688,
+"0x140053b40"
+],
+"tonemapEnableChara": [
+2688,
+"0x140053b40"
+],
+"tonemapScrLumEnable": [
+2704,
+"0x140053b40"
+],
+"tonemapScrLum": [
+2704,
+"0x140053b40"
+],
+"tonemapFadeSpeed": [
+2716,
+"0x140057f10"
+],
+"vignetteRate": [
+2720,
+"0x140057f10"
+],
+"ssaoBlendColor": [
+2736,
+"0x140080c40"
+],
+"ssaoShieldingScale": [
+2752,
+"0x140057f10"
+],
+"ssaoShieldingLenght": [
+2756,
+"0x140057f10"
+],
+"ssaoShieldingAngle": [
+2760,
+"0x140057f10"
+],
+"ssaoNoiseAccuracy": [
+2764,
+"0x140057f10"
+],
+"ssaoRadius": [
+2768,
+"0x140057f10"
+],
+"ssaoEnableZ": [
+2772,
+"0x140057f10"
+],
+"ssaoSamplingNum": [
+2776,
+"0x140057e60"
+],
+"footShadowRate": [
+2780,
+"0x140057f10"
+],
+"ssrSampleLen": [
+2788,
+"0x140057f10"
+],
+"ssrEnableDistance": [
+2792,
+"0x140057f10"
+],
+"ssrBlendRate": [
+2796,
+"0x140057f10"
+],
+"ssrBlendMulRate": [
+2800,
+"0x140057f10"
+],
+"ssrTemporalBlendRate": [
+2804,
+"0x140057f10"
+],
+"motionBlurScale": [
+2820,
+"0x140057f10"
+],
+"motionBlurAlpha": [
+2824,
+"0x140057f10"
+],
+"motionBlurNoiseWeight": [
+2828,
+"0x140057f10"
+],
+"motionBlurClipScale": [
+2832,
+"0x140057f10"
+],
+"motionBlurLoopCount": [
+2836,
+"0x140057e60"
+],
+"motionBlurTileSampX": [
+2840,
+"0x140057e60"
+],
+"motionBlurTileSampY": [
+2844,
+"0x140057e60"
+],
+"motionBlurResetFadeInTime": [
+2848,
+"0x140057f10"
+],
+"mirageHeightWeight": [
+2856,
+"0x140057f10"
+],
+"mirageViewZWeight": [
+2860,
+"0x140057f10"
+],
+"mirageHorizonY": [
+2864,
+"0x140057f10"
+],
+"mirageFadeHeight": [
+2868,
+"0x140057f10"
+],
+"mirageFadeNear": [
+2872,
+"0x140057f10"
+],
+"mirageFadeFar": [
+2876,
+"0x140057f10"
+],
+"mirageWaveAmiplitude": [
+2880,
+"0x140057f10"
+],
+"mirageWaveFrequency": [
+2884,
+"0x140057e60"
+],
+"mirageWaveLength": [
+2888,
+"0x140057f10"
+],
+"mirageWaveSpeed": [
+2892,
+"0x140057f10"
+],
+"mirageNoiseSpeed": [
+2896,
+"0x140057f10"
+],
+"mirageNoiseWeight": [
+2900,
+"0x140057f10"
+],
+"scatterOcclusionScale": [
+2920,
+"0x140057f10"
+],
+"scatterOcclusionNear": [
+2928,
+"0x140057f10"
+],
+"scatterOcclusionFar": [
+2932,
+"0x140057f10"
+],
+"omnidirectionalShadow_shadowColor": [
+7216,
+"0x14007d010"
+],
+"omnidirectionalShadow_PCF_offset": [
+7232,
+"0x14005a270"
+],
+"omnidirectionalShadow_PCF_weight": [
+7240,
+"0x14005a270"
+],
+"omnidirectionalShadow_searchRadius": [
+7264,
+"0x140057f10"
+],
+"omnidirectionalShadow_searchOffset": [
+7280,
+"0x14005a640"
+],
+"z_near": [
+7392,
+"0x140057f10"
+],
+"z_far": [
+7396,
+"0x140057f10"
+],
+"ref_scale": [
+7400,
+"0x140057f10"
+],
+"shadowTexel": [
+7404,
+"0x14005a270"
+],
+"shadowBiasParam": [
+7424,
+"0x140080ce0"
+],
+"shadowCascadeNear": [
+7440,
+"0x140066e00"
+],
+"shadowCascadeFar": [
+7452,
+"0x140066e00"
+],
+"shadingBlurOffset": [
+7464,
+"0x14005a270"
+],
+"shadingBlurParam": [
+7472,
+"0x140080ce0"
+],
+"shadingBlurCount": [
+7488,
+"0x140057e60"
+],
+"isShadingFullResolution": [
+7492,
+"0x140057390"
+],
+"isAutoCascadeRange": [
+7493,
+"0x140057390"
+],
+"autoCascadeRangeHigh": [
+7496,
+"0x140057f10"
+],
+"autoCascadeRangeLow": [
+7500,
+"0x140057f10"
+],
+"autoCascadeFarMax": [
+7504,
+"0x140057f10"
+],
+"map_cam_pos_offset": [
+7520,
+"0x14005a640"
+],
+"map_cam_ref_offset": [
+7536,
+"0x14005a640"
+],
+"map_cam_ref_length": [
+7552,
+"0x140057f10"
+],
+"map_cam_fov": [
+7556,
+"0x140057f10"
+],
+"map_cam_rot_base": [
+7560,
+"0x140057f10"
+],
+"map_cam_rot_min": [
+7564,
+"0x140057f10"
+],
+"map_cam_rot_max": [
+7568,
+"0x140057f10"
+],
+"map_soccer_cam_min_length": [
+7584,
+"0x140057f10"
+],
+"map_soccer_cam_max_length": [
+7588,
+"0x140057f10"
+],
+"map_soccer_cam_ref_offsetY": [
+7592,
+"0x140057f10"
+],
+"map_soccer_cam_rot_min": [
+7596,
+"0x140057f10"
+],
+"map_soccer_cam_rot_max": [
+7600,
+"0x140057f10"
+],
+"map_soccer_cam_enable": [
+7604,
+"0x140057390"
+],
+"flare_block": [
+7056,
+"0x140057390"
+],
+"flare_enable": [
+7060,
+"0x140057f10"
+],
+"flare_fade": [
+7064,
+"0x140057f10"
+],
+"flare_fadeRange": [
+7068,
+"0x140057f10"
+],
+"flare_fadeEnd": [
+7072,
+"0x140057f10"
+],
+"flare_distanceRate": [
+7076,
+"0x140057f10"
+],
+"flare_center_pos": [
+7080,
+"0x14005a270"
+],
+"flare": [
+2960,
+"0x1402c4ec0"
+],
+"flare_num": [
+2944,
+"0x140057f10"
+],
+"out_frame_flare_rate": [
+7088,
+"0x140057f10"
+],
+"out_frame_flare_front_rot": [
+7092,
+"0x140057f10"
+],
+"out_frame_flare_back_rot": [
+7096,
+"0x140057f10"
+],
+"out_frame_flare_occlInterpRate": [
+7100,
+"0x140057f10"
+],
+"out_frame_flare_manual_rot": [
+7104,
+"0x140057f10"
+],
+"out_frame_flare_offset": [
+7108,
+"0x140057f10"
+],
+"out_frame_flare_scale_color": [
+7120,
+"0x14005a640"
+],
+"out_frame_flare_rot_type": [
+7136,
+"0x1402c4f70"
+],
+"colorGradingCharaEnableRate": [
+7184,
+"0x140057f10"
+],
+"colorGradingMapEnableRate": [
+7188,
+"0x140057f10"
+],
+"colorGradingFadeBgnViewZ": [
+7192,
+"0x140057f10"
+],
+"colorGradingFadeEndViewZ": [
+7196,
+"0x140057f10"
+],
+"colorGradingIsAutoFocus": [
+7200,
+"0x140057390"
+],
+"power_velocity_size_pow": [
+7616,
+"0x140080c40"
+],
+"power_velocity_fade": [
+7632,
+"0x140080c40"
+],
+"power_velocity_radius": [
+7648,
+"0x140057f10"
+],
+"wave_strength": [
+7652,
+"0x140057f10"
+],
+"wave_delta_scale": [
+7656,
+"0x140057f10"
+],
+"wave_conductivity": [
+7660,
+"0x140057f10"
+],
+"wave_damper": [
+7664,
+"0x140057f10"
+],
+"wave_water_height": [
+7668,
+"0x140057f10"
+],
+"wave_limit_height": [
+7672,
+"0x140057f10"
+],
+"is_wave_enable": [
+7676,
+"0x140057390"
+],
+"footStep_survival_time": [
+7680,
+"0x140057f10"
+],
+"footStep_appear_timeRate": [
+7684,
+"0x140057f10"
+],
+"footStep_weight": [
+7688,
+"0x140057f10"
+],
+"footStep_color": [
+7696,
+"0x14007d010"
+],
+"footStep_dark_color": [
+7712,
+"0x14007d010"
+],
+"footStep_bright_color": [
+7728,
+"0x14007d010"
+],
+"is_footStep_enable": [
+7744,
+"0x140057390"
+],
+"enableAA": [
+7296,
+"0x140057390"
+],
+"enableEdge": [
+7297,
+"0x140057390"
+],
+"enableSSAO": [
+7298,
+"0x140057390"
+],
+"enableSSR": [
+7299,
+"0x140057390"
+],
+"enableTonemap": [
+7300,
+"0x140057390"
+],
+"enableColorGrading": [
+7301,
+"0x140057390"
+],
+"enableDoF": [
+7302,
+"0x140057390"
+],
+"enableSunShaft": [
+7303,
+"0x140057390"
+],
+"enableVignette": [
+7304,
+"0x140057390"
+],
+"enableBloom": [
+7305,
+"0x140057390"
+],
+"enableLensFlare": [
+7306,
+"0x140057390"
+],
+"enableMotionBlur": [
+7307,
+"0x140057390"
+],
+"fadeTime": [
+7344,
+"0x140057f10"
+],
+"fadeTimeCounter": [
+7348,
+"0x140057f10"
+],
+"charaWeekLightRate": [
+7376,
+"0x140080ce0"
+]
+}

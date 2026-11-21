@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Studio — Atelier Maillots</title>
+<style>
+:root {
+  --fond: #14161c; --panneau: #1c1f27; --carte: #232733; --bord: #313646; --texte: #e9ecf3; --doux: #9aa3b5;
+  --accent: #ffc83d; --accent2: #3d8bff; --ok: #4fd18b; --danger: #ff6b6b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--fond); color: var(--texte); font: 14px "Segoe UI", system-ui, sans-serif; overflow: hidden; user-select: none; }
+button { font: inherit; color: inherit; }
+header { height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: var(--panneau); border-bottom: 1px solid var(--bord); }
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; letter-spacing: .3px; white-space: nowrap; }
+.logo svg { width: 26px; height: 26px; }
+#nom { color: var(--doux); font-size: 13px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#onglets { display: flex; gap: 4px; margin-left: 8px; flex-wrap: nowrap; overflow-x: auto; }
+.onglet { background: transparent; border: 1px solid var(--bord); border-radius: 18px; padding: 6px 12px; cursor: pointer; color: var(--doux); white-space: nowrap; }
+.onglet:hover { color: var(--texte); border-color: #4a5168; }
+.onglet.actif { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+.espace { flex: 1; }
+.bt { background: var(--carte); border: 1px solid var(--bord); border-radius: 8px; padding: 7px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.bt:hover { border-color: #4f5770; background: #2a2f3d; }
+.bt:disabled { opacity: .4; cursor: default; }
+.bt.principal { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 700; }
+.bt.principal:hover { filter: brightness(1.08); }
+.bt svg { width: 16px; height: 16px; }
+#etat { font-size: 12px; color: var(--doux); min-width: 120px; text-align: right; }
+#etat.ok { color: var(--ok); } #etat.err { color: var(--danger); }
+main { display: grid; grid-template-columns: 84px 1fr 380px; height: calc(100% - 56px); }
+/* outils */
+#outils { background: var(--panneau); border-right: 1px solid var(--bord); padding: 8px 6px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+.outil { background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 7px 2px 5px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--doux); font-size: 11px; }
+.outil svg { width: 24px; height: 24px; }
+.outil:hover { background: var(--carte); color: var(--texte); }
+.outil.actif { background: rgba(255, 200, 61, .14); border-color: var(--accent); color: var(--accent); }
+.sep { height: 1px; background: var(--bord); margin: 4px 6px; }
+/* scène */
+#scene { position: relative; overflow: hidden; background: #0f1116; background-image: linear-gradient(45deg, #171a21 25%, transparent 25%), linear-gradient(-45deg, #171a21 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #171a21 75%), linear-gradient(-45deg, transparent 75%, #171a21 75%); background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0; }
+#monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; box-shadow: 0 10px 40px rgba(0, 0, 0, .6); }
+#monde canvas { position: absolute; left: 0; top: 0; }
+#monde.pixel canvas { image-rendering: pixelated; }
+#c_trait { pointer-events: none; }
+#c_calque, #c_guide { pointer-events: none; }
+#zoombar { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 4px; align-items: center; background: rgba(28, 31, 39, .92); border: 1px solid var(--bord); border-radius: 10px; padding: 4px; }
+#zoombar .bt { padding: 4px 9px; }
+#zoomtxt { min-width: 52px; text-align: center; font-size: 12px; color: var(--doux); }
+#survol { position: absolute; right: 12px; bottom: 12px; background: rgba(28, 31, 39, .92); border: 1px solid var(--bord); border-radius: 10px; padding: 6px 12px; font-size: 13px; }
+#survol b { color: var(--accent); }
+#aideOutil { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(28, 31, 39, .92); border: 1px solid var(--bord); border-radius: 18px; padding: 6px 16px; font-size: 13px; color: var(--doux); white-space: nowrap; }
+#chargement { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--doux); }
+/* panneau de droite */
+#cote { background: var(--panneau); border-left: 1px solid var(--bord); overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 12px; flex: none; }
+@media (max-width: 1250px) {
+  main { grid-template-columns: 76px 1fr 320px; }
+  #vue3d { height: 280px !important; }
+  #nom, .logo span { display: none; }
+  #b_origine { display: none; }
+}
+@media (max-width: 900px) { main { grid-template-columns: 70px 1fr 280px; } .onglet { padding: 5px 8px; font-size: 12px; } }
+.carte h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--doux); display: flex; align-items: center; justify-content: space-between; }
+#vue3d { position: relative; height: 330px; padding: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #2b3142 0%, #171a22 75%); }
+#c3d { width: 100%; height: 100%; display: block; cursor: grab; }
+#vue3d .barre { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 4px; flex-wrap: wrap; }
+#vue3d .barre .bt { padding: 4px 8px; font-size: 12px; background: rgba(35, 39, 51, .9); }
+#vue3d .barre .bt.actif { border-color: var(--accent); color: var(--accent); }
+#vue3d.grand { position: fixed; inset: 56px 0 0 0; z-index: 50; height: auto !important; border-radius: 0; }
+#vue3d .titre3d { position: absolute; left: 10px; top: 8px; font-size: 11px; color: var(--doux); text-transform: uppercase; letter-spacing: .8px; }
+.ligne { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.ligne label, .lib { color: var(--doux); font-size: 12px; min-width: 78px; }
+input[type=range] { flex: 1; accent-color: var(--accent); }
+.val { min-width: 44px; text-align: right; font-size: 12px; color: var(--texte); }
+select, input[type=text], input[type=number] { background: #191c24; color: var(--texte); border: 1px solid var(--bord); border-radius: 7px; padding: 6px 8px; font: inherit; flex: 1; min-width: 0; }
+.choix { display: flex; flex-wrap: wrap; gap: 5px; }
+.puce { background: #191c24; border: 1px solid var(--bord); border-radius: 8px; padding: 5px 9px; cursor: pointer; font-size: 12px; color: var(--doux); }
+.puce:hover { color: var(--texte); }
+.puce.actif { border-color: var(--accent); color: var(--accent); background: rgba(255, 200, 61, .1); }
+.galerie { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.vignette { background: #191c24; border: 2px solid var(--bord); border-radius: 9px; padding: 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; color: var(--doux); }
+.vignette canvas { width: 100%; aspect-ratio: 1; border-radius: 5px; display: block; }
+.vignette:hover { border-color: #4f5770; }
+.vignette.actif { border-color: var(--accent); color: var(--accent); }
+/* couleurs */
+.couleurs { display: flex; align-items: center; gap: 10px; }
+.duo { position: relative; width: 58px; height: 50px; flex: none; }
+.pastille { position: absolute; width: 36px; height: 36px; border-radius: 9px; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .5); cursor: pointer; }
+#p1 { left: 0; top: 0; z-index: 2; } #p2 { left: 20px; top: 14px; z-index: 1; }
+.palette { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; flex: 1; }
+.palette div { aspect-ratio: 1; border-radius: 5px; cursor: pointer; border: 1px solid rgba(255, 255, 255, .12); }
+.palette div:hover { transform: scale(1.15); }
+.petit { font-size: 11px; color: var(--doux); line-height: 1.4; }
+.case { display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 6px 0; font-size: 13px; }
+.case input { accent-color: var(--accent); width: 16px; height: 16px; }
+input[type=color] { width: 40px; height: 30px; border: 1px solid var(--bord); border-radius: 7px; background: #191c24; padding: 2px; cursor: pointer; }
+.cache { display: none !important; }
+kbd { background: #2c3140; border-radius: 4px; padding: 0 5px; font-size: 11px; color: var(--doux); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="#ffc83d"/></svg>Studio Maillots</div>
+  <div id="nom"></div>
+  <div id="onglets"></div>
+  <div class="espace"></div>
+  <button class="bt" id="b_annuler" title="Annuler (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+  <button class="bt" id="b_retablir" title="Rétablir (Ctrl+Y)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+  <button class="bt" id="b_origine" title="Revenir à l'image de départ">Image de départ</button>
+  <span id="etat"></span>
+  <button class="bt principal" id="b_enreg" title="Enregistrer (Ctrl+S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>Enregistrer</button>
+</header>
+<main>
+  <nav id="outils"></nav>
+  <section id="scene">
+    <div id="monde">
+      <canvas id="c_img"></canvas><canvas id="c_trait"></canvas><canvas id="c_guide"></canvas><canvas id="c_calque"></canvas>
+    </div>
+    <div id="aideOutil"></div>
+    <div id="zoombar">
+      <button class="bt" id="z_moins">−</button><span id="zoomtxt">100 %</span><button class="bt" id="z_plus">+</button>
+      <button class="bt" id="z_ajuster">Ajuster</button>
+      <button class="bt" id="b_guide" title="Afficher / cacher les zones (G)">Zones</button>
+      <button class="bt cache" id="b_col" title="Le col du jeu est fait avec les petites bandes « COL » du patron">Colorier le col</button>
+    </div>
+    <div id="survol">Survole le maillot</div>
+    <div id="chargement">Chargement…</div>
+  </section>
+  <aside id="cote">
+    <div class="carte" id="vue3d">
+      <div class="titre3d">Aperçu 3D en direct</div>
+      <canvas id="c3d"></canvas>
+      <div class="barre">
+        <button class="bt" data-vue="0">Devant</button><button class="bt" data-vue="3.1416">Dos</button><button class="bt" data-vue="1.5708">Côté</button>
+        <button class="bt" id="b_tourne">Tourner</button>
+        <button class="bt" id="b_grand" title="Afficher la 3D en grand (Échap pour revenir)">Agrandir</button>
+        <select id="corps" title="Corpulence" style="flex:0 0 auto;padding:3px 4px;font-size:12px"></select>
+      </div>
+    </div>
+    <div class="carte">
+      <h3>Couleurs <span class="petit">clic droit sur le maillot = pipette</span></h3>
+      <div class="couleurs">
+        <div class="duo"><div class="pastille" id="p1" title="Couleur principale"></div><div class="pastille" id="p2" title="2e couleur (contours, motifs à 2 couleurs)"></div></div>
+        <div class="palette" id="palette"></div>
+      </div>
+      <div class="ligne"><span class="lib">Personnalisée</span><input type="color" id="perso1"><input type="color" id="perso2"><button class="bt" id="b_echange" title="Échanger les 2 couleurs (X)">⇄</button></div>
+      <div class="ligne"><span class="lib">Récentes</span><div class="palette" id="recentes" style="grid-template-columns:repeat(10,1fr)"></div></div>
+    </div>
+    <div class="carte" id="options"><h3 id="opt_titre">Outil</h3><div id="opt"></div></div>
+    <div class="carte" id="c_relief">
+      <h3>Relief du tissu</h3>
+      <div class="petit" style="margin-bottom:8px">Le jeu ajoute des ombres (plis) par-dessus ton dessin. Sur beaucoup de maillots,
+        elles contiennent aussi les coutures et décorations du maillot d'origine, qui apparaissent « en relief ».</div>
+      <div class="choix" id="plis">
+        <button class="puce" data-m="simples">Plis simples (conseillé)</button>
+        <button class="puce" data-m="base">Comme le maillot d'origine</button>
+        <button class="puce" data-m="aucun">Tout plat</button>
+      </div>
+      <label class="case"><input type="checkbox" id="voir_relief" checked> Voir le relief sur l'aperçu 3D</label>
+      <div class="ligne"><span class="lib">Force (aperçu)</span><input type="range" id="force_relief" min="0" max="200" value="100"><span class="val" id="v_force">100 %</span></div>
+      <div class="petit" id="plis_info"></div>
+    </div>
+    <div class="carte" id="c_portraits">
+      <h3>Portraits des cartes</h3>
+      <div class="petit" style="margin-bottom:8px">Sur les cartes des joueurs, le haut du buste est un dessin. L'atelier peut y reporter
+        le motif de ton maillot (vue de face de la poitrine), au lieu d'une seule couleur.</div>
+      <button class="bt principal" id="b_portraits">Mettre le motif sur les portraits</button>
+      <canvas id="portrait_apercu" width="300" height="110" style="width:100%;margin-top:8px;border-radius:8px;background:#191c24"></canvas>
+      <div class="petit" id="portraits_info"></div>
+    </div>
+    <div class="carte" id="c_numero">
+      <h3>Numéro dans le dos</h3>
+      <label class="case"><input type="checkbox" id="n_voir" checked> Voir le numéro sur l'aperçu 3D</label>
+      <label class="case"><input type="checkbox" id="n_perso"> Personnaliser le numéro de ce maillot</label>
+      <div id="n_reglages">
+        <div class="ligne"><span class="lib">Aperçu du n°</span><input type="number" id="n_val" min="0" max="99" value="10" style="flex:0 0 70px"></div>
+        <div class="lib" style="margin-top:6px">Police</div>
+        <div class="choix" id="n_polices" style="margin-top:6px"></div>
+        <div class="ligne"><span class="lib">Remplissage</span><input type="color" id="n_rempl" value="#ffffff"><span class="lib" style="min-width:0">Contour</span><input type="color" id="n_cont" value="#1a1a1a"></div>
+        <label class="case"><input type="checkbox" id="n_nom"> Nom du joueur au-dessus du numéro</label>
+        <div class="ligne"><span class="lib">Style des lettres</span><select id="n_lettres"></select></div>
+        <canvas id="n_apercu" width="320" height="120" style="width:100%;border-radius:8px;background:#191c24;margin:4px 0"></canvas>
+        <div class="petit" id="n_lettres_info"></div>
+        <div class="ligne"><span class="lib">Taille</span><input type="range" id="n_taille" min="60" max="150" value="100"><span class="val" id="v_taille">100 %</span></div>
+        <div class="ligne"><span class="lib">Hauteur</span><input type="range" id="n_haut" min="-10" max="10" step="0.5" value="0"><span class="val" id="v_haut">0 cm</span></div>
+        <div class="petit">Couleurs et police : appliquées par VRFW. Taille et hauteur : le numéro du jeu est modifié (nouveau, à vérifier en jeu).</div>
+      </div>
+      <div class="petit" id="n_info" style="margin-top:6px"></div>
+    </div>
+  </aside>
+</main>
+<script src="/vue3d.js"></script>
+<script>
+"use strict";
+// =====================================================================================================  données
+const IMAGES = [['haut_dom', 'Haut domicile'], ['short_dom', 'Short + chaussettes'], ['haut_ext', 'Haut extérieur'], ['short_ext', 'Short + ch. extérieur'], ['icone', 'Icône'], ['embleme', 'Emblème']];
+const ZONES = {
+  haut: [['tout', 'Partout'], ['devant', 'Devant'], ['dos', 'Dos'], ['manches', 'Les 2 manches'], ['manche_g', 'Manche gauche'], ['manche_d', 'Manche droite'], ['col', 'Col'], ['encolure', 'Encolure'], ['col_tout', 'Col + encolure']],
+  short: [['tout', 'Partout'], ['short', 'Tout le short'], ['short_devant', 'Short devant'], ['short_dos', 'Short dos'], ['chaussettes', 'Les 2 chaussettes'], ['chaussette_g', 'Chaussette gauche'], ['chaussette_d', 'Chaussette droite'], ['genoux', 'Genoux']],
+};
+const GROUPES = { manches: ['manche_g', 'manche_d'], chaussettes: ['chaussette_g', 'chaussette_d'], short: ['short_devant', 'short_dos'], col_tout: ['col', 'encolure'] };
+const NOMS_ZONES = { devant: 'Devant', dos: 'Dos (numéro)', manche_g: 'Manche gauche', manche_d: 'Manche droite', col: 'Col', encolure: 'Encolure',
+  short_devant: 'Short — devant', short_dos: 'Short — dos', chaussette_g: 'Chaussette gauche', chaussette_d: 'Chaussette droite', genoux: 'Genoux' };
+const COUL_ZONES = { devant: '#4fd18b', dos: '#ff8a5c', manche_g: '#ffc83d', manche_d: '#ffe08a', col: '#c9a4ff', encolure: '#7fd1ff',
+  short_devant: '#4fd18b', short_dos: '#ff8a5c', chaussette_g: '#ffc83d', chaussette_d: '#ffe08a', genoux: '#9aa3b5' };
+const PALETTE = ['#ffffff', '#d9dde4', '#9aa0aa', '#4a4f58', '#1a1a1a', '#000000', '#e3262e', '#a3101c', '#ff7a1a', '#ffc800', '#ffe66b', '#c9a227',
+  '#1fa34a', '#0b6e3a', '#7ed957', '#00a3a3', '#3ab7ff', '#1d6fe0', '#14388f', '#0b1f4d', '#7a3fd1', '#c43fa6', '#ff8fc1', '#7a4a26'];
+
+const ICONES = {
+  pinceau: '<path d="M18 2l4 4-11 11-4-4z"/><path d="M7 13c-3 0-4 2-4 4s-1 3-2 3c2 1 6 1 8-1s1-5-2-6z"/>',
+  gomme: '<path d="M7 21h13"/><path d="M3 15l9-9 7 7-7 7H7z"/><path d="M8 10l7 7"/>',
+  pipette: '<path d="M2 22l1-4 11-11 3 3L6 21z"/><path d="M14 4l2-2 6 6-2 2"/><path d="M12 6l6 6"/>',
+  remplir: '<path d="M5 12 12 5l7 7-7 7z"/><path d="M5 12h14"/><path d="M20 15c0 2 1 3 1 4a1.5 1.5 0 0 1-3 0c0-1 1-2 2-4z"/>',
+  ligne: '<path d="M4 20 20 4"/><circle cx="4" cy="20" r="2"/><circle cx="20" cy="4" r="2"/>',
+  formes: '<rect x="3" y="3" width="8" height="8" rx="1"/><circle cx="17" cy="7" r="4"/><path d="M12 13l2.6 5.3 5.4.8-4 3.9.9 5.4L12 26"/><path d="M7 14l1.5 3 3.5.5-2.5 2.4.6 3.4L7 21.7 3.9 23.3l.6-3.4L2 17.5l3.5-.5z"/>',
+  motifs: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 3v18M12 3v18M17 3v18"/>',
+  texte: '<path d="M4 6V4h16v2"/><path d="M12 4v16"/><path d="M8 20h8"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/>',
+  main: '<path d="M8 13V5a2 2 0 0 1 4 0v6"/><path d="M12 11V4a2 2 0 0 1 4 0v7"/><path d="M16 11V7a2 2 0 0 1 4 0v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-6-3l-3-5a2 2 0 0 1 3-2l2 2"/>',
+};
+const OUTILS = [
+  ['pinceau', 'Pinceau', 'B', 'Clique et glisse pour peindre. Maj = trait droit.'],
+  ['gomme', 'Gomme', 'E', 'Efface en remettant l\'image de départ.'],
+  ['pipette', 'Pipette', 'I', 'Clique sur le maillot pour prendre une couleur.'],
+  ['remplir', 'Remplir', 'F', 'Clique sur une partie du maillot pour la remplir.'],
+  null,
+  ['ligne', 'Trait droit', 'L', 'Glisse pour tracer un trait droit. Maj = angles ronds (15°).'],
+  ['formes', 'Formes', 'R', 'Glisse pour dessiner la forme. Maj = proportions gardées.'],
+  ['motifs', 'Motifs', 'M', 'Clique sur une partie du maillot pour y poser le motif.'],
+  ['texte', 'Texte', 'T', 'Écris ton texte à droite, puis clique sur le maillot pour le poser.'],
+  ['image', 'Image', 'P', 'Choisis une image (logo, écusson) puis clique pour la poser.'],
+  null,
+  ['main', 'Déplacer', 'H', 'Glisse pour déplacer la vue. Molette = zoom.'],
+];
+
+// =====================================================================================================  état
+const P = new URLSearchParams(location.search);
+let cle = P.get('k') || 'haut_dom';
+const S = {
+  outil: 'pinceau', c1: '#e3262e', c2: '#ffffff', taille: 28, opacite: 100, durete: 100, zone: 'tout',
+  forme: 'etoile', remplissage: 'plein', epaisseur: 10, motif: 'rayures_v', largeur: 60, espacement: 60, angle: 45, rayon: 18,
+  texte: 'INAZUMA', police: 'Arial Black', tTaille: 120, tContour: 0, rotation: 0, remplirMode: 'zone', tolerance: 40,
+  imgTaille: 300, recentes: [], guide: true,
+};
+try { Object.assign(S, JSON.parse(localStorage.getItem('studio_reglages') || '{}')); } catch (e) {}
+S.outil = S.outil === 'main' ? 'pinceau' : S.outil;
+const memo = () => { try { localStorage.setItem('studio_reglages', JSON.stringify(S)); } catch (e) {} };
+
+const cImg = document.getElementById('c_img'), cTrait = document.getElementById('c_trait'), cCalque = document.getElementById('c_calque'), cGuide = document.getElementById('c_guide');
+const xImg = cImg.getContext('2d', { willReadFrequently: true }), xTrait = cTrait.getContext('2d'), xCalque = cCalque.getContext('2d'), xGuide = cGuide.getContext('2d');
+const monde = document.getElementById('monde'), scene = document.getElementById('scene');
+let W = 0, H = 0, orig = null, zonesUV = null, partie = null, sale = false, logo = null;
+let annuler = [], retablir = [];
+let vue = { s: 1, x: 0, y: 0 };
+const etatEl = document.getElementById('etat');
+function etat(t, c) { etatEl.textContent = t; etatEl.className = c || ''; }
+
+// =====================================================================================================  3D
+let v3 = null;
+try { v3 = new Vue3D(document.getElementById('c3d')); } catch (e) { document.getElementById('vue3d').innerHTML = '<div style="padding:20px" class="petit">3D indisponible dans ce navigateur.</div>'; }
+let vModele = -1, vNum = -1, versionsTex = {}, numeroBase = null;
+const cote = () => (cle.endsWith('_ext') ? 'ext' : 'dom');
+async function suivre() {
+  try {
+    const s = await (await fetch('/etat', { cache: 'no-store' })).json();
+    document.getElementById('nom').textContent = s.titre || '';
+    if (v3 && s.modele !== vModele && s.modele > 0) {
+      const mo = await (await fetch('/modele')).json();
+      v3.chargerModele(mo, vModele < 0); vModele = s.modele; chargerNumeroModele();
+      // pièces en plus (cape, accessoires…) : leur image du jeu
+      for (const k in mo.parties) if (k.startsWith('x')) v3.chargerTexture(k, '/extra/' + k + '?c=' + cote() + '&b=' + s.base).catch(() => {});
+    }
+    if (v3) {
+      // la partie qu'on modifie vient du dessin ; l'autre vient du serveur
+      for (const nom of ['haut', 'short']) {
+        const k = nom + '_' + cote();
+        if (k === cle) continue;
+        const v = s.tex[k];
+        if (v && versionsTex[nom] !== v) { versionsTex[nom] = v; v3.chargerTexture(nom, '/tex/' + k + '?v=' + encodeURIComponent(v)); }
+      }
+    }
+    if (String(s.corps) !== corpsSel.value) corpsSel.value = s.corps;
+    if (s.v_numero !== vNum) { vNum = s.v_numero; appliquerNumero(s.numero, false); }
+    if (s.v_plis !== vPlis || s.base !== basePlis) { vPlis = s.v_plis; basePlis = s.base; plisMode = s.plis; majPlis(); chargerOc(); }
+  } catch (e) { etat("L'atelier est fermé", 'err'); }
+}
+const corpsSel = document.getElementById('corps');
+for (let i = 1; i <= 8; i++) corpsSel.add(new Option('Corps ' + i, i));
+corpsSel.onchange = async () => { await fetch('/corps?n=' + corpsSel.value); chargerNumeroModele(); };
+document.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => v3 && v3.vue(parseFloat(b.dataset.vue)));
+function grand3d(oui) {
+  const c = document.getElementById('vue3d'), b = document.getElementById('b_grand');
+  c.classList.toggle('grand', oui); b.textContent = oui ? 'Réduire' : 'Agrandir'; b.classList.toggle('actif', oui);
+  if (v3) v3.dessiner();
+}
+document.getElementById('b_grand').onclick = () => grand3d(!document.getElementById('vue3d').classList.contains('grand'));
+addEventListener('keydown', ev => { if (ev.key === 'Escape') grand3d(false); });
+document.getElementById('b_tourne').onclick = ev => { if (!v3) return; v3.auto = !v3.auto; ev.currentTarget.classList.toggle('actif', v3.auto); };
+let t3d = 0, minuteur3d = null;
+const tmp3d = document.createElement('canvas');
+function maj3d(avecTrait) {
+  if (!v3 || !partie) return;
+  const faire = () => {
+    t3d = performance.now(); minuteur3d = null;
+    const n = Math.min(1024, W); tmp3d.width = n; tmp3d.height = Math.round(H * n / W);
+    const x = tmp3d.getContext('2d'); x.clearRect(0, 0, tmp3d.width, tmp3d.height);
+    x.drawImage(cImg, 0, 0, tmp3d.width, tmp3d.height);
+    if (avecTrait) { x.globalAlpha = S.opacite / 100; x.drawImage(cTrait, 0, 0, tmp3d.width, tmp3d.height); x.globalAlpha = 1; }
+    v3.texture(partie, tmp3d);
+  };
+  const reste = 90 - (performance.now() - t3d);
+  if (reste <= 0) faire(); else if (!minuteur3d) minuteur3d = setTimeout(faire, reste);
+}
+
+// =====================================================================================================  portraits
+async function vuePoitrine(cote_) {
+  // vue de face du haut seul (sans manches tendues, short, numéro), recadrée sur la poitrine
+  const img = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = '/tex/haut_' + cote_ + '?t=' + Date.now(); });
+  if (!img) return null;
+  const garde = { parties: v3.parties, yaw: v3.yaw, pitch: v3.pitch, dist: v3.dist, hauteur: v3.hauteur, auto: v3.auto, vis: v3.numero.visible, rel: v3.relief };
+  const texAvant = v3.textures.haut;
+  v3.textures.haut = null; v3.texture('haut', img);
+  v3.parties = Object.fromEntries(Object.entries(garde.parties).filter(([k]) => k !== 'short' && !k.startsWith('x')));
+  v3.auto = false; v3.numero.visible = false; v3.relief = true;
+  const etaitGrand = document.getElementById('vue3d').classList.contains('grand'); grand3d(true);   // grand cadre : plus de pixels
+  v3.yaw = 0; v3.pitch = 0; v3.hauteur = 1.08; v3.dist = 1.4; v3._dessiner();
+  const c = v3.cv, w = c.width, h = c.height;
+  const t = document.createElement('canvas'); t.width = w; t.height = h; const tx = t.getContext('2d'); tx.drawImage(c, 0, 0);
+  // remise en état de la vue
+  v3.gl.deleteTexture(v3.textures.haut); v3.textures.haut = texAvant;
+  Object.assign(v3, { parties: garde.parties, yaw: garde.yaw, pitch: garde.pitch, dist: garde.dist, hauteur: garde.hauteur, auto: garde.auto, relief: garde.rel });
+  v3.numero.visible = garde.vis; grand3d(etaitGrand); maj3d(false); v3.dessiner();
+  // colonnes du torse (les manches tendues sont plus courtes en hauteur)
+  const d = tx.getImageData(0, 0, w, h).data, haut_ = new Array(w).fill(0), top = new Array(w).fill(-1);
+  for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) if (d[(y * w + x) * 4 + 3] > 40) { haut_[x]++; if (top[x] < 0) top[x] = y; }
+  const hmax = Math.max(...haut_); let x0 = -1, x1 = -1;
+  for (let x = 0; x < w; x++) if (haut_[x] > hmax * 0.62) { if (x0 < 0) x0 = x; x1 = x; }
+  if (x0 < 0) return null;
+  const y0 = Math.min(...top.slice(x0, x1 + 1).filter(v => v >= 0));
+  const larg = x1 - x0, out = document.createElement('canvas'); out.width = 512; out.height = Math.round(512 * 0.6);
+  out.getContext('2d').drawImage(t, x0, y0, larg, larg * 0.6, 0, 0, out.width, out.height);
+  return out;
+}
+document.getElementById('b_portraits').onclick = async () => {
+  const info = document.getElementById('portraits_info'); info.textContent = 'Vue de la poitrine…';
+  const ap = document.getElementById('portrait_apercu'), ax = ap.getContext('2d'); ax.clearRect(0, 0, ap.width, ap.height);
+  let i = 0;
+  for (const cote_ of ['dom', 'ext']) {
+    const v = await vuePoitrine(cote_); if (!v) continue;
+    ax.drawImage(v, i * 150 + 4, 4, 142, 142 * v.height / v.width); i++;
+    const blob = await new Promise(ok => v.toBlob(ok, 'image/png'));
+    await fetch('/enregistrer?k=buste_' + cote_, { method: 'POST', body: blob });
+  }
+  info.textContent = i ? 'Motif enregistré (domicile et extérieur) : il sera mis sur les portraits à la construction du mod.' : 'Pas d\'image du haut.';
+};
+
+// =====================================================================================================  relief du tissu
+let vPlis = -1, basePlis = null, plisMode = 'simples', nOc = 0;
+function majPlis() { document.querySelectorAll('#plis .puce').forEach(b => b.classList.toggle('actif', b.dataset.m === plisMode)); }
+async function chargerOc() {
+  if (!v3) return;
+  const n = ++nOc, info = document.getElementById('plis_info');
+  info.textContent = 'Préparation du relief… (quelques secondes la première fois)';
+  try {
+    const imgs = await Promise.all(['haut', 'short'].map(p => new Promise(ok => {
+      const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null);
+      i.src = '/oc/' + p + '?m=' + plisMode + '&b=' + basePlis + '&n=' + n; })));
+    if (n !== nOc) return;                   // un autre réglage a été choisi entre-temps : on garde le plus récent
+    ['haut', 'short'].forEach((p, i) => imgs[i] && v3.texture('oc_' + p, imgs[i]));
+    info.textContent = '';
+  } catch (e) { info.textContent = ''; }
+}
+document.querySelectorAll('#plis .puce').forEach(b => b.onclick = async () => {
+  plisMode = b.dataset.m; majPlis();
+  try { await fetch('/plis', { method: 'POST', body: JSON.stringify({ mode: plisMode }) }); vPlis++; etat('Relief : ' + b.textContent, 'ok'); } catch (e) {}
+  chargerOc();
+});
+document.getElementById('force_relief').oninput = ev => { if (v3) { v3.forceRelief = ev.target.value / 100; v3.dessiner(); }
+  document.getElementById('v_force').textContent = ev.target.value + ' %'; };
+document.getElementById('voir_relief').onchange = ev => { if (v3) { v3.relief = ev.target.checked; v3.dessiner(); } };
+
+// =====================================================================================================  numéro
+let numero = null, planches = {};
+async function chargerNumeroModele() {
+  if (!v3) return;
+  try { v3.numeroModele(await (await fetch('/numero/modele' + (numero && numero.perso && numero.nom ? '?f=n0002' : ''))).json()); } catch (e) {}
+}
+// ------------------------------------------------------------------ lettres du nom et des numéros (planches faites ici)
+const POLICES_LETTRES = [['jeu', 'Lettres du jeu'], ['Georgia', 'Georgia (comme MUKU)'], ['Times New Roman', 'Times'], ['Arial Black', 'Arial Black'],
+  ['Impact', 'Impact'], ['Trebuchet MS', 'Trebuchet'], ['Segoe UI Black', 'Segoe UI Black'], ['Comic Sans MS', 'Comic Sans']];
+const CARS_NOMS = ['ABCDEFGH', 'IJKLMNOP', 'QRSTUVWX', 'YZ', 'abcdefgh', 'ijklmnop', 'qrstuvwx', 'yz', 'ÁÄĂÃÇÉÈÊ', 'ÍÑÓÔÕÖÚÙ', 'Ü', '01234567', '89'];
+const policeChiffres = p => (p === 'Georgia' ? 'Times New Roman' : p);    // Georgia : chiffres qui montent et descendent
+function planchesLettres(police) {
+  const fab = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  // forme (avec contour) et remplissage seul -> image (blanc, alpha = forme) + masque (vert = remplissage, bleu = contour)
+  const finir = (forme, rempl) => {
+    const w = forme.width, h = forme.height, a = forme.getContext('2d').getImageData(0, 0, w, h), r = rempl.getContext('2d').getImageData(0, 0, w, h);
+    const img = new ImageData(w, h), msk = new ImageData(w, h);
+    for (let i = 0; i < w * h * 4; i += 4) {
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = a.data[i + 3];
+      const f = r.data[i + 3]; msk.data[i] = 0; msk.data[i + 1] = f; msk.data[i + 2] = 255 - f; msk.data[i + 3] = 255;
+    }
+    const ci = fab(w, h); ci.getContext('2d').putImageData(img, 0, 0); const cm = fab(w, h); cm.getContext('2d').putImageData(msk, 0, 0);
+    return [ci, cm];
+  };
+  const ecrire = (cf, cr, txt, cx, by, taille, police_, maxw, trait) => {
+    for (const [c, contour] of [[cf, true], [cr, false]]) {
+      const x = c.getContext('2d'); x.save(); x.font = 'bold ' + taille + 'px "' + police_ + '", serif'; x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+      const w = x.measureText(txt).width + trait; x.translate(cx, by); if (w > maxw) x.scale(maxw / w, 1);
+      x.fillStyle = '#fff'; x.strokeStyle = '#fff'; x.lineJoin = 'round';
+      if (contour) { x.lineWidth = trait; x.strokeText(txt, 0, 0); }
+      x.fillText(txt, 0, 0); x.restore();
+    }
+  };
+  const nf = fab(512, 1024), nr = fab(512, 1024);
+  CARS_NOMS.forEach((ligne, row) => [...ligne].forEach((ch, col) => ecrire(nf, nr, ch, col * 64 + 32, row * 64 + 53, 58, row >= 11 ? policeChiffres(police) : police, 56, 5)));
+  const cf = fab(2048, 2048), cr = fab(2048, 2048);
+  for (let n = 0; n < 100; n++) ecrire(cf, cr, String(n), (n % 10) * 204.8 + 102.4, Math.floor(n / 10) * 204.8 + 154, 176, policeChiffres(police), 184, 12);
+  const [noms, noms_msk] = finir(nf, nr), [num, num_msk] = finir(cf, cr);
+  return { noms, noms_msk, num, num_msk };
+}
+let lettresFaites = null;
+async function envoyerLettres(police) {
+  const info = document.getElementById('n_lettres_info');
+  info.textContent = 'Fabrication des lettres « ' + police + ' »…';
+  await new Promise(r => setTimeout(r, 30));
+  const p = planchesLettres(police);
+  for (const k of ['noms', 'noms_msk', 'num', 'num_msk']) {
+    const blob = await new Promise(ok => p[k].toBlob(ok, 'image/png'));
+    const r = await (await fetch('/lettres?k=' + k, { method: 'POST', body: blob })).json();
+    if (r.erreur) { info.textContent = 'Erreur : ' + r.erreur; return; }
+  }
+  lettresFaites = police;
+  // aperçu 3D du numéro avec ces chiffres (rouge = remplissage, alpha = forme)
+  const pl = document.createElement('canvas'); pl.width = pl.height = 1024; const px = pl.getContext('2d');
+  const a = document.createElement('canvas'); a.width = a.height = 1024; a.getContext('2d').drawImage(p.num, 0, 0, 1024, 1024);
+  const m = document.createElement('canvas'); m.width = m.height = 1024; m.getContext('2d').drawImage(p.num_msk, 0, 0, 1024, 1024);
+  const da = a.getContext('2d').getImageData(0, 0, 1024, 1024), dm = m.getContext('2d').getImageData(0, 0, 1024, 1024), o = px.createImageData(1024, 1024);
+  for (let i = 0; i < 1024 * 1024 * 4; i += 4) { o.data[i] = dm.data[i + 1]; o.data[i + 3] = da.data[i + 3]; }
+  px.putImageData(o, 0, 0); if (v3) v3.numeroPlanche(pl);
+  info.textContent = 'Lettres « ' + police + ' » prêtes (elles seront mises dans le mod à la construction).';
+}
+function apercuNom() {
+  const c = document.getElementById('n_apercu'), x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height);
+  if (!numero) return;
+  const pol = numero.lettres && numero.lettres !== 'jeu' ? numero.lettres : 'Arial';
+  const nomEx = ((document.getElementById('nom').textContent || 'JOUEUR').replace(/^(Maillot|Tenue)\s+/i, '').split(' ')[0] || 'JOUEUR').toUpperCase();
+  const dessin = (txt, taille, y, police_) => { x.font = 'bold ' + taille + 'px "' + police_ + '", serif'; x.textAlign = 'center'; x.lineJoin = 'round';
+    x.lineWidth = taille / 9; x.strokeStyle = '#' + numero.contour; x.strokeText(txt, 160, y); x.fillStyle = '#' + numero.remplissage; x.fillText(txt, 160, y); };
+  if (numero.nom) dessin(nomEx, 30, 38, pol);
+  dessin(String(+document.getElementById('n_val').value || 10), numero.nom ? 64 : 80, numero.nom ? 106 : 96, policeChiffres(pol));
+}
+async function chargerPlanche(p) {
+  if (!v3) return;
+  const info = document.getElementById('n_info');
+  if (!planches[p]) {
+    info.textContent = 'Lecture de la police ' + p + ' du jeu (≈ 15 s la première fois)…';
+    planches[p] = new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = '/numero/planche?p=' + p; });
+  }
+  try { const img = await planches[p]; if (numero && numero.police === p) { v3.numeroPlanche(img); info.textContent = ''; } } catch (e) { info.textContent = 'Police introuvable.'; }
+}
+function appliquerNumero(r, envoyer) {
+  numero = Object.assign({ perso: false, remplissage: 'FFFFFF', contour: '1A1A1A', police: 1, taille: 1, hauteur: 0, nom: false, lettres: 'jeu' }, numero || {}, r || {});
+  const $ = id => document.getElementById(id);
+  $('n_perso').checked = numero.perso;
+  $('n_reglages').style.opacity = numero.perso ? 1 : .45;
+  $('n_rempl').value = '#' + numero.remplissage.replace('#', '').toLowerCase();
+  $('n_cont').value = '#' + numero.contour.replace('#', '').toLowerCase();
+  $('n_taille').value = Math.round(numero.taille * 100); $('v_taille').textContent = Math.round(numero.taille * 100) + ' %';
+  $('n_haut').value = numero.hauteur; $('v_haut').textContent = (numero.hauteur > 0 ? '+' : '') + numero.hauteur + ' cm';
+  document.querySelectorAll('#n_polices .puce').forEach(b => b.classList.toggle('actif', +b.dataset.p === numero.police));
+  if (v3) v3.reglerNumero({ visible: $('n_voir').checked, valeur: +$('n_val').value, rempl: numero.remplissage, cont: numero.contour,
+    taille: numero.perso ? numero.taille : 1, hauteur: numero.perso ? numero.hauteur : 0 });
+  $('n_nom').checked = !!numero.nom; $('n_lettres').value = numero.lettres || 'jeu';
+  const persoLettres = numero.perso && numero.nom && numero.lettres && numero.lettres !== 'jeu';
+  if (!persoLettres) chargerPlanche(numero.perso ? (numero.nom ? 0 : numero.police) : 1);
+  else if (lettresFaites !== numero.lettres) envoyerLettres(numero.lettres);
+  const famille = numero.perso && numero.nom ? 'n0002' : 'n0001';
+  if (famille !== window._familleNum) { window._familleNum = famille; chargerNumeroModele(); }
+  apercuNom();
+  if (envoyer) envoyerNumero();
+}
+let minuteurNum = null;
+function envoyerNumero() {
+  clearTimeout(minuteurNum);
+  minuteurNum = setTimeout(async () => {
+    try { const r = await (await fetch('/numero', { method: 'POST', body: JSON.stringify(numero) })).json(); vNum++; etat('Numéro enregistré ✓', 'ok'); } catch (e) { etat('Numéro non enregistré', 'err'); }
+  }, 300);
+}
+(function initNumero() {
+  const pol = document.getElementById('n_polices');
+  for (let i = 1; i <= 6; i++) { const b = document.createElement('button'); b.className = 'puce'; b.dataset.p = i; b.textContent = 'Style ' + i;
+    b.onclick = () => appliquerNumero({ police: i, perso: true }, true); pol.appendChild(b); }
+  const $ = id => document.getElementById(id);
+  $('n_perso').onchange = ev => appliquerNumero({ perso: ev.target.checked }, true);
+  for (const [v, l] of POLICES_LETTRES) $('n_lettres').add(new Option(l, v));
+  $('n_nom').onchange = ev => appliquerNumero({ nom: ev.target.checked, perso: true }, true);
+  $('n_lettres').onchange = ev => { lettresFaites = null; appliquerNumero({ lettres: ev.target.value, perso: true, nom: true }, true); };
+  $('n_voir').onchange = () => appliquerNumero({}, false);
+  $('n_val').oninput = () => appliquerNumero({}, false);
+  $('n_rempl').oninput = ev => appliquerNumero({ remplissage: ev.target.value.slice(1).toUpperCase(), perso: true }, true);
+  $('n_cont').oninput = ev => appliquerNumero({ contour: ev.target.value.slice(1).toUpperCase(), perso: true }, true);
+  $('n_taille').oninput = ev => appliquerNumero({ taille: ev.target.value / 100, perso: true }, true);
+  $('n_haut').oninput = ev => appliquerNumero({ hauteur: +ev.target.value, perso: true }, true);
+})();
+
+// =====================================================================================================  chargement
+function onglets() {
+  const o = document.getElementById('onglets'); o.innerHTML = '';
+  for (const [k, lib] of IMAGES) {
+    const b = document.createElement('button'); b.className = 'onglet' + (k === cle ? ' actif' : ''); b.textContent = lib;
+    b.onclick = async () => {
+      if (k === cle) return;
+      if (sale && confirm('Enregistrer tes modifications avant de changer d\'image ?')) await enregistrer();
+      cle = k; history.replaceState(null, '', '?k=' + k); charger();
+    };
+    o.appendChild(b);
+  }
+}
+async function charger() {
+  onglets();
+  partie = cle.startsWith('haut') ? 'haut' : cle.startsWith('short') ? 'short' : null;
+  document.getElementById('chargement').style.display = 'flex';
+  document.getElementById('chargement').textContent = 'Chargement de l\'image…';
+  let img;
+  if (partie === 'short') {
+    // combinaisons d'une seule pièce : pas d'image de short séparée
+    try { const mo = await (await fetch('/modele')).json(); if (mo.parties && !mo.parties.short) {
+      document.getElementById('chargement').textContent = 'Ce maillot est d\'une seule pièce : tout est sur l\'image du haut (onglet « Haut domicile »).'; return; } } catch (e) {}
+  }
+  for (let essai = 0; essai < 60; essai++) {
+    try { img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = '/image/' + cle + '?t=' + Date.now(); }); break; }
+    catch (e) { document.getElementById('chargement').textContent = 'Préparation des images du maillot de base… (l\'atelier les extrait du jeu)'; await new Promise(r => setTimeout(r, 1500)); }
+  }
+  if (!img) { document.getElementById('chargement').textContent = 'Image introuvable. Choisis un maillot dans l\'atelier.'; return; }
+  let w = img.width, h = img.height, agrandi = false;
+  if (partie && w < 512) { w = h = 1024; agrandi = true; }    // image du jeu trop petite (ex. short de 128 px)
+  W = cImg.width = cTrait.width = cCalque.width = cGuide.width = w;
+  H = cImg.height = cTrait.height = cCalque.height = cGuide.height = h;
+  for (const c of [cImg, cTrait, cCalque, cGuide]) { c.style.width = W + 'px'; c.style.height = H + 'px'; }
+  monde.style.width = W + 'px'; monde.style.height = H + 'px';
+  xImg.imageSmoothingQuality = 'high';
+  xImg.clearRect(0, 0, W, H); xImg.drawImage(img, 0, 0, W, H);
+  orig = document.createElement('canvas'); orig.width = W; orig.height = H; orig.getContext('2d').drawImage(cImg, 0, 0);
+  annuler = []; retablir = []; sale = agrandi; boutons();
+  document.getElementById('chargement').style.display = 'none';
+  try { zonesUV = partie ? (await (await fetch('/zones')).json())[partie] || {} : {}; } catch (e) { zonesUV = {}; }
+  masques = {}; cacheMorceaux = {}; imgEncolure = null;
+  if (zonesUV && zonesUV.col) {
+    imgEncolure = await new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = '/masque/encolure?t=' + Date.now(); });
+  }
+  document.getElementById('b_col').classList.toggle('cache', !(zonesUV && zonesUV.col));
+  ajuster(); dessinerGuide(); panneauOptions();
+  etat(agrandi ? 'Image agrandie à 1024 px pour plus de détails' : '', agrandi ? 'ok' : '');
+  versionsTex = {};
+  if (v3 && partie) { v3.texture(partie, cImg); }
+  suivre();
+}
+
+// =====================================================================================================  zones
+let masques = {};
+function trisZone(z) {
+  if (!zonesUV) return [];
+  if (GROUPES[z]) return GROUPES[z].flatMap(n => zonesUV[n] || []);
+  return zonesUV[z] || [];
+}
+let imgEncolure = null;
+function masque(z) {
+  if (z === 'tout' || !partie) return null;
+  if (masques[z]) return masques[z];
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.strokeStyle = '#fff'; x.lineWidth = Math.max(2, W / 400); x.lineJoin = 'round';
+  // l'encolure est une bande précise calculée par l'atelier (pas des triangles entiers)
+  if ((z === 'encolure' || z === 'col_tout') && imgEncolure) x.drawImage(imgEncolure, 0, 0, W, H);
+  const t = z === 'encolure' && imgEncolure ? [] : trisZone(z === 'col_tout' && imgEncolure ? 'col' : z);
+  x.beginPath();
+  for (let i = 0; i < t.length; i += 6) { x.moveTo(t[i] * W, t[i + 1] * H); x.lineTo(t[i + 2] * W, t[i + 3] * H); x.lineTo(t[i + 4] * W, t[i + 5] * H); x.closePath(); }
+  x.fill(); x.stroke();
+  return masques[z] = c;
+}
+function boiteZone(z) {
+  const t = trisZone(z);
+  if (z === 'tout' || !t.length) return { x: 0, y: 0, w: W, h: H };
+  let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+  for (let i = 0; i < t.length; i += 2) { x0 = Math.min(x0, t[i]); x1 = Math.max(x1, t[i]); y0 = Math.min(y0, t[i + 1]); y1 = Math.max(y1, t[i + 1]); }
+  return { x: x0 * W, y: y0 * H, w: (x1 - x0) * W, h: (y1 - y0) * H };
+}
+// morceaux séparés d'une zone (triangles qui se touchent), du plus grand au plus petit
+let cacheMorceaux = {};
+function morceaux(z) {
+  if (cacheMorceaux[z]) return cacheMorceaux[z];
+  const t = zonesUV[z] || [], n = t.length / 6, parent = Array.from({ length: n }, (_, i) => i);
+  const rac = a => { while (parent[a] !== a) a = parent[a] = parent[parent[a]]; return a; };
+  const cle = (u, v) => Math.round(u * 4000) + ',' + Math.round(v * 4000), vu = {};
+  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) {
+    const c = cle(t[i * 6 + k * 2], t[i * 6 + k * 2 + 1]);
+    if (vu[c] === undefined) vu[c] = i; else parent[rac(i)] = rac(vu[c]);
+  }
+  const g = {};
+  for (let i = 0; i < n; i++) {
+    const r = rac(i), e = g[r] || (g[r] = { n: 0, sx: 0, sy: 0, x0: 1, y0: 1, x1: 0, y1: 0 });
+    for (let k = 0; k < 3; k++) {
+      const u = t[i * 6 + k * 2], v = t[i * 6 + k * 2 + 1];
+      e.sx += u; e.sy += v; e.n++; e.x0 = Math.min(e.x0, u); e.x1 = Math.max(e.x1, u); e.y0 = Math.min(e.y0, v); e.y1 = Math.max(e.y1, v);
+    }
+  }
+  const l = Object.values(g).map(e => Object.assign(e, { w: e.x1 - e.x0 })).sort((a, b) => b.n - a.n);
+  return cacheMorceaux[z] = l;
+}
+function zoneSous(px, py) {
+  if (!zonesUV) return null;
+  const u = px / W, v = py / H;
+  for (const z in zonesUV) {
+    if (z === 'encolure') continue;
+    const t = zonesUV[z];
+    for (let i = 0; i < t.length; i += 6) {
+      const ax = t[i], ay = t[i + 1], bx = t[i + 2], by = t[i + 3], cx = t[i + 4], cy = t[i + 5];
+      const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy); if (!d) continue;
+      const a = ((by - cy) * (u - cx) + (cx - bx) * (v - cy)) / d, b = ((cy - ay) * (u - cx) + (ax - cx) * (v - cy)) / d;
+      if (a >= -0.01 && b >= -0.01 && a + b <= 1.02) return z;
+    }
+  }
+  return null;
+}
+function dessinerGuide(surligne) {
+  xGuide.clearRect(0, 0, W, H);
+  if (!zonesUV) return;
+  for (const z in zonesUV) {
+    const t = zonesUV[z], col = COUL_ZONES[z] || '#fff';
+    const fort = surligne && (surligne === z || (GROUPES[surligne] || []).includes(z));
+    if (!S.guide && !fort) continue;
+    xGuide.globalAlpha = fort ? 0.35 : 0.13; xGuide.fillStyle = col;
+    xGuide.beginPath();
+    for (let i = 0; i < t.length; i += 6) { xGuide.moveTo(t[i] * W, t[i + 1] * H); xGuide.lineTo(t[i + 2] * W, t[i + 3] * H); xGuide.lineTo(t[i + 4] * W, t[i + 5] * H); xGuide.closePath(); }
+    xGuide.fill();
+  }
+  xGuide.globalAlpha = 1;
+  if (!S.guide) return;
+  // noms des zones (au centre de chaque zone)
+  xGuide.font = `bold ${Math.round(W / 34)}px Segoe UI, sans-serif`; xGuide.textAlign = 'center'; xGuide.textBaseline = 'middle';
+  for (const z in zonesUV) {
+    if (z === 'encolure') continue;
+    const lib = (NOMS_ZONES[z] || z).toUpperCase();
+    xGuide.lineWidth = W / 220; xGuide.strokeStyle = 'rgba(0,0,0,.8)'; xGuide.fillStyle = COUL_ZONES[z] || '#fff';
+    const ms = morceaux(z);
+    for (const g of ms) {
+      if (z !== 'col' && g.n < ms[0].n * 0.3) continue;      // une étiquette par grand morceau
+      const x = g.sx / g.n * W, y = g.sy / g.n * H;
+      if (g.w < 0.06) {           // bande étroite (col) : texte vertical
+        xGuide.save(); xGuide.translate(x, y); xGuide.rotate(-Math.PI / 2);
+        xGuide.font = 'bold ' + Math.round(W / 60) + 'px Segoe UI, sans-serif';
+        xGuide.strokeText(lib, 0, 0); xGuide.fillText(lib, 0, 0); xGuide.restore();
+        xGuide.font = 'bold ' + Math.round(W / 34) + 'px Segoe UI, sans-serif';
+      } else { xGuide.strokeText(lib, x, y); xGuide.fillText(lib, x, y); }
+    }
+  }
+  if (zonesUV.col) {          // le col : bandes fines, bien encadrées
+    xGuide.lineWidth = Math.max(2, W / 400); xGuide.strokeStyle = COUL_ZONES.col;
+    for (const g of morceaux('col')) xGuide.strokeRect(g.x0 * W - 3, g.y0 * H - 3, (g.x1 - g.x0) * W + 6, (g.y1 - g.y0) * H + 6);
+  }
+}
+
+// =====================================================================================================  vue (zoom, déplacement)
+function appliquerVue() {
+  monde.style.transform = `translate(${vue.x}px, ${vue.y}px) scale(${vue.s})`;
+  monde.classList.toggle('pixel', vue.s > 2);
+  document.getElementById('zoomtxt').textContent = Math.round(vue.s * 100) + ' %';
+}
+function ajuster() {
+  const r = scene.getBoundingClientRect();
+  vue.s = Math.max(0.05, Math.min((r.width - 40) / W, (r.height - 90) / H));
+  vue.x = (r.width - W * vue.s) / 2; vue.y = (r.height - H * vue.s) / 2 - 10;
+  appliquerVue();
+}
+function zoomer(f, cx, cy) {
+  const r = scene.getBoundingClientRect();
+  if (cx === undefined) { cx = r.width / 2; cy = r.height / 2; }
+  const s2 = Math.max(0.05, Math.min(16, vue.s * f));
+  vue.x = cx - (cx - vue.x) * s2 / vue.s; vue.y = cy - (cy - vue.y) * s2 / vue.s; vue.s = s2; appliquerVue();
+}
+document.getElementById('z_moins').onclick = () => zoomer(1 / 1.25);
+document.getElementById('z_plus').onclick = () => zoomer(1.25);
+document.getElementById('z_ajuster').onclick = ajuster;
+document.getElementById('b_guide').onclick = () => { S.guide = !S.guide; memo(); dessinerGuide(); document.getElementById('b_guide').classList.toggle('actif', S.guide); };
+document.getElementById('b_guide').classList.toggle('actif', S.guide);
+document.getElementById('b_col').onclick = () => {
+  poser(x => { x.fillStyle = S.c1; x.fillRect(0, 0, W, H); }, zonesUV.encolure ? 'col_tout' : 'col', 100);
+  etat('Col et encolure coloriés avec la couleur principale (' + S.c1 + ')', 'ok');
+};
+scene.addEventListener('wheel', ev => { const r = scene.getBoundingClientRect(); zoomer(ev.deltaY > 0 ? 1 / 1.15 : 1.15, ev.clientX - r.left, ev.clientY - r.top); ev.preventDefault(); }, { passive: false });
+addEventListener('resize', () => appliquerVue());
+
+// =====================================================================================================  historique
+function memoriser() {
+  annuler.push(xImg.getImageData(0, 0, W, H)); if (annuler.length > (W > 1024 ? 10 : 20)) annuler.shift();
+  retablir = []; boutons();
+}
+function boutons() {
+  document.getElementById('b_annuler').disabled = !annuler.length;
+  document.getElementById('b_retablir').disabled = !retablir.length;
+  document.getElementById('b_enreg').classList.toggle('principal', true);
+  document.title = (sale ? '• ' : '') + 'Studio — Atelier Maillots';
+}
+function changer() { sale = true; boutons(); maj3d(false); etat('Modifié (pas encore enregistré)'); }
+function defaire() { if (!annuler.length) return; retablir.push(xImg.getImageData(0, 0, W, H)); xImg.putImageData(annuler.pop(), 0, 0); changer(); }
+function refaire() { if (!retablir.length) return; annuler.push(xImg.getImageData(0, 0, W, H)); xImg.putImageData(retablir.pop(), 0, 0); changer(); }
+document.getElementById('b_annuler').onclick = defaire;
+document.getElementById('b_retablir').onclick = refaire;
+document.getElementById('b_origine').onclick = () => { if (!confirm('Revenir à l\'image de départ ? (Annuler reste possible)')) return; memoriser(); xImg.clearRect(0, 0, W, H); xImg.drawImage(orig, 0, 0); changer(); };
+
+// pose d'un dessin : dessiné sur un calque, découpé à la zone choisie, puis posé avec l'opacité
+function poser(dessin, zone, opacite) {
+  memoriser();
+  const t = document.createElement('canvas'); t.width = W; t.height = H;
+  const x = t.getContext('2d'); dessin(x);
+  const m = masque(zone === undefined ? S.zone : zone);
+  if (m) { x.globalCompositeOperation = 'destination-in'; x.drawImage(m, 0, 0); }
+  xImg.globalAlpha = (opacite === undefined ? S.opacite : opacite) / 100; xImg.drawImage(t, 0, 0); xImg.globalAlpha = 1;
+  changer();
+}
+
+// =====================================================================================================  couleurs
+function couleur(c, laquelle) {
+  c = c.toLowerCase();
+  if (laquelle === 2) S.c2 = c; else S.c1 = c;
+  S.recentes = [c].concat(S.recentes.filter(x => x !== c)).slice(0, 10);
+  majCouleurs(); memo(); apercuOutil();
+}
+function majCouleurs() {
+  document.getElementById('p1').style.background = S.c1; document.getElementById('p2').style.background = S.c2;
+  document.getElementById('perso1').value = S.c1; document.getElementById('perso2').value = S.c2;
+  const r = document.getElementById('recentes'); r.innerHTML = '';
+  for (const c of S.recentes) { const d = document.createElement('div'); d.style.background = c; d.title = c;
+    d.onclick = () => couleur(c, 1); d.oncontextmenu = ev => { ev.preventDefault(); couleur(c, 2); }; r.appendChild(d); }
+  document.querySelectorAll('.vignette canvas[data-motif]').forEach(c => vignetteMotif(c, c.dataset.motif));
+  document.querySelectorAll('.vignette canvas[data-forme]').forEach(c => vignetteForme(c, c.dataset.forme));
+}
+(function initCouleurs() {
+  const p = document.getElementById('palette');
+  for (const c of PALETTE) { const d = document.createElement('div'); d.style.background = c; d.title = c + '  (clic droit = 2e couleur)';
+    d.onclick = () => couleur(c, 1); d.oncontextmenu = ev => { ev.preventDefault(); couleur(c, 2); }; p.appendChild(d); }
+  document.getElementById('perso1').oninput = ev => couleur(ev.target.value, 1);
+  document.getElementById('perso2').oninput = ev => couleur(ev.target.value, 2);
+  document.getElementById('p1').onclick = () => document.getElementById('perso1').click();
+  document.getElementById('p2').onclick = () => document.getElementById('perso2').click();
+  document.getElementById('b_echange').onclick = echanger;
+})();
+function echanger() { [S.c1, S.c2] = [S.c2, S.c1]; majCouleurs(); memo(); apercuOutil(); }
+
+// =====================================================================================================  formes et motifs
+const FORMES = {
+  rectangle: (x, b) => x.rect(b.x, b.y, b.w, b.h),
+  arrondi: (x, b) => { const r = Math.min(Math.abs(b.w), Math.abs(b.h)) * 0.22; x.roundRect ? x.roundRect(b.x, b.y, b.w, b.h, r) : x.rect(b.x, b.y, b.w, b.h); },
+  rond: (x, b) => x.ellipse(b.x + b.w / 2, b.y + b.h / 2, Math.abs(b.w / 2), Math.abs(b.h / 2), 0, 0, Math.PI * 2),
+  etoile: (x, b) => poly(x, b, Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.4 : 1; return [0.5 + Math.cos(a) * r * 0.5, 0.53 + Math.sin(a) * r * 0.5]; })),
+  eclair: (x, b) => poly(x, b, [[0.62, 0], [0.12, 0.56], [0.45, 0.56], [0.3, 1], [0.88, 0.38], [0.54, 0.38], [0.74, 0]]),
+  coeur: (x, b) => { const X = v => b.x + v * b.w, Y = v => b.y + v * b.h; x.moveTo(X(0.5), Y(0.95));
+    x.bezierCurveTo(X(-0.15), Y(0.5), X(0.1), Y(-0.05), X(0.5), Y(0.25)); x.bezierCurveTo(X(0.9), Y(-0.05), X(1.15), Y(0.5), X(0.5), Y(0.95)); x.closePath(); },
+  triangle: (x, b) => poly(x, b, [[0.5, 0], [1, 1], [0, 1]]),
+  losange: (x, b) => poly(x, b, [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]]),
+  chevron: (x, b) => poly(x, b, [[0, 0], [0.5, 0.55], [1, 0], [1, 0.45], [0.5, 1], [0, 0.45]]),
+  fleche: (x, b) => poly(x, b, [[0, 0.35], [0.6, 0.35], [0.6, 0.1], [1, 0.5], [0.6, 0.9], [0.6, 0.65], [0, 0.65]]),
+  bouclier: (x, b) => { poly(x, b, [[0.06, 0.05], [0.94, 0.05], [0.94, 0.45]]); const X = v => b.x + v * b.w, Y = v => b.y + v * b.h;
+    x.beginPath(); x.moveTo(X(0.06), Y(0.04)); x.lineTo(X(0.94), Y(0.04)); x.lineTo(X(0.94), Y(0.45)); x.quadraticCurveTo(X(0.9), Y(0.85), X(0.5), Y(1));
+    x.quadraticCurveTo(X(0.1), Y(0.85), X(0.06), Y(0.45)); x.closePath(); },
+  croix: (x, b) => poly(x, b, [[0.35, 0], [0.65, 0], [0.65, 0.35], [1, 0.35], [1, 0.65], [0.65, 0.65], [0.65, 1], [0.35, 1], [0.35, 0.65], [0, 0.65], [0, 0.35], [0.35, 0.35]]),
+};
+const NOMS_FORMES = { rectangle: 'Carré', arrondi: 'Arrondi', rond: 'Rond', etoile: 'Étoile', eclair: 'Éclair', coeur: 'Cœur', triangle: 'Triangle', losange: 'Losange', chevron: 'Chevron', fleche: 'Flèche', bouclier: 'Blason', croix: 'Croix' };
+function poly(x, b, pts) { x.beginPath(); pts.forEach(([u, v], i) => (i ? x.lineTo : x.moveTo).call(x, b.x + u * b.w, b.y + v * b.h)); x.closePath(); }
+function dessinerForme(x, nom, b) {
+  x.beginPath(); FORMES[nom](x, b);
+  if (S.remplissage !== 'contour') { x.fillStyle = S.c1; x.fill(); }
+  if (S.remplissage !== 'plein') { x.lineWidth = S.epaisseur; x.lineJoin = 'round'; x.strokeStyle = S.remplissage === 'contour' ? S.c1 : S.c2; x.stroke(); }
+}
+const MOTIFS = {
+  rayures_v: 'Rayures', rayures_h: 'Cerceaux', rayures_d: 'Diagonales', damier: 'Damier', pois: 'Pois', chevrons: 'Chevrons',
+  bande_v: 'Bande', bande_h: 'Bande ventre', echarpe: 'Écharpe', moitie: 'Moitié', degrade: 'Dégradé', zigzag: 'Zigzag',
+  carreaux: 'Carreaux', eclairs: 'Éclairs', etoiles: 'Étoiles', fines: 'Fines rayures',
+};
+function dessinerMotif(x, nom, b, opts) {
+  const o = Object.assign({ c1: S.c1, c2: S.c2, l: S.largeur, e: S.espacement, a: S.angle, r: S.rayon }, opts || {});
+  const pas = o.l + o.e;
+  x.save(); x.fillStyle = o.c1; x.strokeStyle = o.c1;
+  x.beginPath(); x.rect(b.x, b.y, b.w, b.h); x.clip();
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2, R = Math.hypot(b.w, b.h);
+  switch (nom) {
+    case 'rayures_v': for (let X = cx - o.l / 2 - Math.ceil(b.w / pas) * pas; X < b.x + b.w; X += pas) x.fillRect(X, b.y, o.l, b.h); break;
+    case 'fines': for (let X = b.x; X < b.x + b.w; X += Math.max(4, o.e / 2)) x.fillRect(X, b.y, Math.max(2, o.l / 6), b.h); break;
+    case 'rayures_h': for (let Y = cy - o.l / 2 - Math.ceil(b.h / pas) * pas; Y < b.y + b.h; Y += pas) x.fillRect(b.x, Y, b.w, o.l); break;
+    case 'rayures_d': x.translate(cx, cy); x.rotate(o.a * Math.PI / 180); for (let X = -R; X < R; X += pas) x.fillRect(X, -R, o.l, 2 * R); break;
+    case 'damier': { const c = Math.max(4, o.l); for (let Y = b.y, j = 0; Y < b.y + b.h; Y += c, j++) for (let X = b.x, i = 0; X < b.x + b.w; X += c, i++) if ((i + j) % 2 === 0) x.fillRect(X, Y, c, c); break; }
+    case 'carreaux': x.globalAlpha = 0.55; for (let X = b.x; X < b.x + b.w; X += pas) x.fillRect(X, b.y, o.l / 2, b.h); for (let Y = b.y; Y < b.y + b.h; Y += pas) x.fillRect(b.x, Y, b.w, o.l / 2); break;
+    case 'pois': { const p = o.r * 2 + o.e; for (let Y = b.y + p / 2, j = 0; Y < b.y + b.h + p; Y += p, j++) for (let X = b.x + (j % 2) * p / 2; X < b.x + b.w + p; X += p) { x.beginPath(); x.arc(X, Y, o.r, 0, Math.PI * 2); x.fill(); } break; }
+    case 'etoiles': { const p = o.r * 3 + o.e; for (let Y = b.y + p / 2, j = 0; Y < b.y + b.h + p; Y += p, j++) for (let X = b.x + (j % 2) * p / 2; X < b.x + b.w + p; X += p) { FORMES.etoile(x, { x: X - o.r * 1.4, y: Y - o.r * 1.4, w: o.r * 2.8, h: o.r * 2.8 }); x.fill(); } break; }
+    case 'eclairs': { const p = o.r * 3 + o.e; for (let Y = b.y + p / 2, j = 0; Y < b.y + b.h + p; Y += p, j++) for (let X = b.x + (j % 2) * p / 2; X < b.x + b.w + p; X += p) { FORMES.eclair(x, { x: X - o.r, y: Y - o.r * 1.5, w: o.r * 2, h: o.r * 3 }); x.fill(); } break; }
+    case 'chevrons': x.lineWidth = o.l; x.lineJoin = 'miter'; for (let Y = b.y - b.w / 2; Y < b.y + b.h + pas; Y += pas) { x.beginPath(); x.moveTo(b.x - 10, Y); x.lineTo(cx, Y + b.w * 0.35); x.lineTo(b.x + b.w + 10, Y); x.stroke(); } break;
+    case 'zigzag': x.lineWidth = Math.max(4, o.l / 2); for (let Y = b.y; Y < b.y + b.h + pas; Y += pas) { x.beginPath(); for (let X = b.x - pas, i = 0; X < b.x + b.w + pas; X += pas / 2, i++) x.lineTo(X, Y + (i % 2 ? pas / 3 : 0)); x.stroke(); } break;
+    case 'bande_v': x.fillRect(cx - o.l, b.y, o.l * 2, b.h); break;
+    case 'bande_h': x.fillRect(b.x, b.y + b.h * 0.3, b.w, o.l * 2); break;
+    case 'echarpe': x.translate(cx, cy); x.rotate(o.a * Math.PI / 180); x.fillRect(-o.l, -R, o.l * 2, 2 * R); break;
+    case 'moitie': x.fillRect(b.x, b.y, b.w / 2, b.h); break;
+    case 'degrade': { const g = x.createLinearGradient(0, b.y, 0, b.y + b.h); g.addColorStop(0, o.c1); g.addColorStop(1, o.c2); x.fillStyle = g; x.fillRect(b.x, b.y, b.w, b.h); break; }
+  }
+  x.restore();
+}
+function vignetteMotif(c, nom) {
+  const x = c.getContext('2d'); c.width = c.height = 64;
+  x.fillStyle = nom === 'degrade' ? '#2a2f3d' : S.c2; x.fillRect(0, 0, 64, 64);
+  dessinerMotif(x, nom, { x: 0, y: 0, w: 64, h: 64 }, { l: 8, e: 8, r: 5, a: 45 });
+}
+function vignetteForme(c, nom) {
+  const x = c.getContext('2d'); c.width = c.height = 64; x.clearRect(0, 0, 64, 64);
+  x.beginPath(); FORMES[nom](x, { x: 10, y: 10, w: 44, h: 44 }); x.fillStyle = S.c1; x.fill();
+  x.lineWidth = 3; x.strokeStyle = 'rgba(0,0,0,.35)'; x.stroke();
+}
+
+// =====================================================================================================  panneau d'options
+function curseur(lib, cleS, min, max, pas, unite, quand) {
+  const d = document.createElement('div'); d.className = 'ligne';
+  d.innerHTML = `<span class="lib">${lib}</span><input type="range" min="${min}" max="${max}" step="${pas || 1}" value="${S[cleS]}"><span class="val">${S[cleS]}${unite || ''}</span>`;
+  const i = d.querySelector('input'), v = d.querySelector('.val');
+  i.oninput = () => { S[cleS] = +i.value; v.textContent = i.value + (unite || ''); memo(); (quand || apercuOutil)(); };
+  return d;
+}
+function puces(lib, cleS, liste, quand) {
+  const d = document.createElement('div');
+  if (lib) d.innerHTML = `<div class="lib" style="margin:8px 0 6px">${lib}</div>`;
+  const c = document.createElement('div'); c.className = 'choix';
+  for (const [v, l] of liste) { const b = document.createElement('button'); b.className = 'puce' + (S[cleS] === v ? ' actif' : ''); b.textContent = l;
+    b.onclick = () => { S[cleS] = v; memo(); c.querySelectorAll('.puce').forEach(x => x.classList.toggle('actif', x === b)); (quand || apercuOutil)(); }; c.appendChild(b); }
+  d.appendChild(c); return d;
+}
+function choixZone() {
+  if (!partie) return document.createElement('div');
+  if (!ZONES[partie].some(z => z[0] === S.zone)) S.zone = 'tout';
+  const d = puces('Limiter à une partie du maillot', 'zone', ZONES[partie], () => { dessinerGuide(S.zone !== 'tout' ? S.zone : null); apercuOutil(); });
+  return d;
+}
+function panneauOptions() {
+  const o = document.getElementById('opt'); o.innerHTML = '';
+  const def = OUTILS.find(t => t && t[0] === S.outil);
+  document.getElementById('opt_titre').textContent = def ? def[1] : 'Outil';
+  document.getElementById('aideOutil').textContent = def ? def[3] : '';
+  const ajout = e => o.appendChild(e);
+  switch (S.outil) {
+    case 'pinceau': ajout(curseur('Taille', 'taille', 2, 400, 1, ' px')); ajout(curseur('Opacité', 'opacite', 5, 100, 1, ' %')); ajout(choixZone());
+      ajout(Object.assign(document.createElement('div'), { className: 'petit', innerHTML: 'Avec une partie choisie, le pinceau ne déborde pas dessus. <kbd>[</kbd> <kbd>]</kbd> = taille.' })); break;
+    case 'gomme': ajout(curseur('Taille', 'taille', 2, 400, 1, ' px')); ajout(choixZone()); break;
+    case 'pipette': ajout(Object.assign(document.createElement('div'), { className: 'petit', innerHTML: 'Clic gauche = couleur principale, clic droit = 2e couleur. Dans tous les outils, le clic droit sur le maillot prend la couleur.' })); break;
+    case 'remplir':
+      ajout(puces('Mode', 'remplirMode', [['zone', 'Toute la partie cliquée'], ['seau', 'Même couleur (seau)'], ['partout', 'Remplacer cette couleur partout']]));
+      ajout(curseur('Tolérance', 'tolerance', 0, 150, 1, '')); ajout(curseur('Opacité', 'opacite', 5, 100, 1, ' %'));
+      ajout(Object.assign(document.createElement('div'), { className: 'petit', innerHTML: '« Toute la partie » : clique sur la manche, le devant, une chaussette… elle prend la couleur principale. Le col du jeu = les 2 petites bandes « COL » (ou le bouton « Colorier le col » en bas).' })); break;
+    case 'ligne': ajout(curseur('Épaisseur', 'taille', 2, 400, 1, ' px')); ajout(curseur('Opacité', 'opacite', 5, 100, 1, ' %')); ajout(choixZone()); break;
+    case 'formes': {
+      const g = document.createElement('div'); g.className = 'galerie';
+      for (const f in FORMES) { const v = document.createElement('div'); v.className = 'vignette' + (S.forme === f ? ' actif' : '');
+        v.innerHTML = `<canvas data-forme="${f}"></canvas>${NOMS_FORMES[f]}`; v.onclick = () => { S.forme = f; memo(); g.querySelectorAll('.vignette').forEach(e => e.classList.toggle('actif', e === v)); };
+        g.appendChild(v); vignetteForme(v.querySelector('canvas'), f); }
+      ajout(g);
+      ajout(puces('Style', 'remplissage', [['plein', 'Plein'], ['contour', 'Contour'], ['deux', 'Plein + contour (2e couleur)']]));
+      ajout(curseur('Contour', 'epaisseur', 1, 120, 1, ' px')); ajout(curseur('Opacité', 'opacite', 5, 100, 1, ' %')); ajout(choixZone()); break; }
+    case 'motifs': {
+      const g = document.createElement('div'); g.className = 'galerie';
+      for (const f in MOTIFS) { const v = document.createElement('div'); v.className = 'vignette' + (S.motif === f ? ' actif' : '');
+        v.innerHTML = `<canvas data-motif="${f}"></canvas>${MOTIFS[f]}`; v.onclick = () => { S.motif = f; memo(); g.querySelectorAll('.vignette').forEach(e => e.classList.toggle('actif', e === v)); apercuOutil(); };
+        g.appendChild(v); vignetteMotif(v.querySelector('canvas'), f); }
+      ajout(g);
+      ajout(Object.assign(document.createElement('div'), { className: 'petit', style: 'margin-top:8px', innerHTML: 'Couleur principale = le motif ; 2e couleur = fin du dégradé.' }));
+      ajout(curseur('Largeur', 'largeur', 4, 400, 1, ' px')); ajout(curseur('Espacement', 'espacement', 2, 400, 1, ' px'));
+      ajout(curseur('Angle', 'angle', -90, 90, 1, '°')); ajout(curseur('Taille (pois)', 'rayon', 3, 150, 1, ' px'));
+      ajout(curseur('Opacité', 'opacite', 5, 100, 1, ' %'));
+      const z = choixZone(); ajout(z);
+      const b = document.createElement('button'); b.className = 'bt principal'; b.style.marginTop = '10px'; b.textContent = 'Poser sur la partie choisie';
+      b.onclick = () => poserMotif(S.zone); ajout(b); break; }
+    case 'texte':
+      { const d = document.createElement('div'); d.className = 'ligne'; d.innerHTML = '<span class="lib">Texte</span><input type="text">';
+        const i = d.querySelector('input'); i.value = S.texte; i.oninput = () => { S.texte = i.value; memo(); }; i.onkeydown = ev => ev.stopPropagation(); ajout(d); }
+      { const d = document.createElement('div'); d.className = 'ligne'; d.innerHTML = '<span class="lib">Police</span><select></select>';
+        const s = d.querySelector('select');
+        for (const f of ['Arial Black', 'Impact', 'Bahnschrift', 'Segoe UI Black', 'Georgia', 'Trebuchet MS', 'Verdana', 'Courier New', 'Comic Sans MS', 'Times New Roman'])
+          s.add(new Option(f, f, false, f === S.police));
+        s.onchange = () => { S.police = s.value; memo(); }; ajout(d); }
+      ajout(curseur('Taille', 'tTaille', 10, 600, 1, ' px')); ajout(curseur('Contour', 'tContour', 0, 40, 1, ' px'));
+      ajout(curseur('Rotation', 'rotation', -180, 180, 1, '°')); ajout(curseur('Opacité', 'opacite', 5, 100, 1, ' %')); ajout(choixZone());
+      ajout(Object.assign(document.createElement('div'), { className: 'petit', innerHTML: 'Couleur principale = lettres, 2e couleur = contour.' })); break;
+    case 'image':
+      { const b = document.createElement('button'); b.className = 'bt'; b.textContent = logo ? 'Changer d\'image…' : 'Choisir une image…';
+        const f = document.createElement('input'); f.type = 'file'; f.accept = 'image/*'; f.className = 'cache';
+        f.onchange = () => { const fi = f.files[0]; if (!fi) return; const im = new Image(); im.onload = () => { logo = im; panneauOptions(); etat('Image prête : clique sur le maillot pour la poser', 'ok'); }; im.src = URL.createObjectURL(fi); };
+        b.onclick = () => f.click(); ajout(b); ajout(f); }
+      if (logo) { const c = document.createElement('canvas'); c.width = 120; c.height = 120; c.style.cssText = 'display:block;margin:8px 0;background:#191c24;border-radius:8px';
+        const x = c.getContext('2d'), k = Math.min(110 / logo.width, 110 / logo.height); x.drawImage(logo, 60 - logo.width * k / 2, 60 - logo.height * k / 2, logo.width * k, logo.height * k); ajout(c); }
+      ajout(curseur('Taille', 'imgTaille', 16, 1500, 1, ' px')); ajout(curseur('Rotation', 'rotation', -180, 180, 1, '°'));
+      ajout(curseur('Opacité', 'opacite', 5, 100, 1, ' %')); ajout(choixZone());
+      ajout(Object.assign(document.createElement('div'), { className: 'petit', innerHTML: 'PNG avec fond transparent de préférence (écusson, logo de marque…).' })); break;
+    case 'main': ajout(Object.assign(document.createElement('div'), { className: 'petit', innerHTML: 'Glisse pour déplacer. Molette pour zoomer. Partout : <kbd>Espace</kbd> + glisser.' })); break;
+  }
+  apercuOutil();
+}
+function choisirOutil(o) {
+  S.outil = o; memo();
+  document.querySelectorAll('.outil').forEach(b => b.classList.toggle('actif', b.dataset.o === o));
+  scene.style.cursor = o === 'main' ? 'grab' : 'crosshair';
+  xCalque.clearRect(0, 0, W, H);
+  panneauOptions();
+}
+(function initOutils() {
+  const n = document.getElementById('outils');
+  for (const t of OUTILS) {
+    if (!t) { n.appendChild(Object.assign(document.createElement('div'), { className: 'sep' })); continue; }
+    const b = document.createElement('button'); b.className = 'outil'; b.dataset.o = t[0]; b.title = t[1] + ' (' + t[2] + ')';
+    b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONES[t[0]]}</svg>${t[1]}`;
+    b.onclick = () => choisirOutil(t[0]); n.appendChild(b);
+  }
+})();
+
+// =====================================================================================================  souris sur le patron
+let geste = null, souris = null, espace = false;
+function pt(ev) { const r = cImg.getBoundingClientRect(); return { x: (ev.clientX - r.left) * W / r.width, y: (ev.clientY - r.top) * H / r.height }; }
+function apercuOutil() {
+  xCalque.clearRect(0, 0, W, H);
+  if (!souris || !W) return;
+  const p = souris, o = S.outil;
+  if (o === 'pinceau' || o === 'gomme' || o === 'ligne') {
+    xCalque.lineWidth = Math.max(1.5, 1.5 / vue.s); xCalque.strokeStyle = '#fff'; xCalque.beginPath(); xCalque.arc(p.x, p.y, S.taille / 2, 0, 7); xCalque.stroke();
+    xCalque.strokeStyle = '#000'; xCalque.beginPath(); xCalque.arc(p.x, p.y, S.taille / 2 + 1.5 / vue.s, 0, 7); xCalque.stroke();
+  } else if (o === 'texte') {
+    xCalque.globalAlpha = 0.75; dessinerTexte(xCalque, p); xCalque.globalAlpha = 1;
+  } else if (o === 'image' && logo) {
+    xCalque.globalAlpha = 0.75; dessinerLogo(xCalque, p); xCalque.globalAlpha = 1;
+  } else if (o === 'motifs') {
+    const z = S.zone !== 'tout' ? S.zone : (zoneSous(p.x, p.y) || 'tout');
+    xCalque.save(); dessinerMotif(xCalque, S.motif, boiteZone(z)); xCalque.restore();
+    const m = masque(z); if (m) { xCalque.globalCompositeOperation = 'destination-in'; xCalque.drawImage(m, 0, 0); xCalque.globalCompositeOperation = 'source-over'; }
+    xCalque.globalCompositeOperation = 'source-over';
+    cCalque.style.opacity = 0.7 * S.opacite / 100;
+    return;
+  } else if (o === 'remplir' && S.remplirMode === 'zone') {
+    const z = zoneSous(p.x, p.y), m = z && masque(z);
+    if (m) { xCalque.fillStyle = S.c1; xCalque.fillRect(0, 0, W, H); xCalque.globalCompositeOperation = 'destination-in'; xCalque.drawImage(m, 0, 0); xCalque.globalCompositeOperation = 'source-over'; cCalque.style.opacity = 0.6; return; }
+  }
+  cCalque.style.opacity = 1;
+}
+function dessinerTexte(x, p) {
+  x.save(); x.translate(p.x, p.y); x.rotate(S.rotation * Math.PI / 180);
+  x.font = `bold ${S.tTaille}px "${S.police}", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  if (S.tContour > 0) { x.lineWidth = S.tContour * 2; x.lineJoin = 'round'; x.strokeStyle = S.c2; x.strokeText(S.texte, 0, 0); }
+  x.fillStyle = S.c1; x.fillText(S.texte, 0, 0); x.restore();
+}
+function dessinerLogo(x, p) {
+  const k = S.imgTaille / Math.max(logo.width, logo.height);
+  x.save(); x.translate(p.x, p.y); x.rotate(S.rotation * Math.PI / 180);
+  x.drawImage(logo, -logo.width * k / 2, -logo.height * k / 2, logo.width * k, logo.height * k); x.restore();
+}
+function boite(a, b, carre) {
+  let w = b.x - a.x, h = b.y - a.y;
+  if (carre) { const m = Math.max(Math.abs(w), Math.abs(h)); w = Math.sign(w || 1) * m; h = Math.sign(h || 1) * m; }
+  return { x: Math.min(a.x, a.x + w), y: Math.min(a.y, a.y + h), w: Math.abs(w), h: Math.abs(h) };
+}
+function droit(a, b) {
+  const ang = Math.atan2(b.y - a.y, b.x - a.x), pas = Math.PI / 12, r = Math.hypot(b.x - a.x, b.y - a.y), q = Math.round(ang / pas) * pas;
+  return { x: a.x + Math.cos(q) * r, y: a.y + Math.sin(q) * r };
+}
+scene.addEventListener('contextmenu', ev => ev.preventDefault());
+scene.addEventListener('mousedown', ev => {
+  if (!W || ev.target.closest('#zoombar')) return;
+  const p = pt(ev);
+  if (ev.button === 1 || espace || S.outil === 'main') { geste = { type: 'vue', x: ev.clientX, y: ev.clientY }; scene.style.cursor = 'grabbing'; ev.preventDefault(); return; }
+  if (ev.button === 2) { pipette(p, 1); return; }
+  if (ev.button !== 0) return;
+  const o = S.outil;
+  if (o === 'pipette') { pipette(p, 1); return; }
+  if (o === 'remplir') { remplir(p); return; }
+  if (o === 'motifs') { poserMotif(S.zone !== 'tout' ? S.zone : (zoneSous(p.x, p.y) || 'tout')); return; }
+  if (o === 'texte') { if (!S.texte.trim()) return; poser(x => dessinerTexte(x, p)); return; }
+  if (o === 'image') { if (!logo) { etat('Choisis d\'abord une image (panneau à droite)', 'err'); return; } poser(x => dessinerLogo(x, p)); return; }
+  if (o === 'pinceau' || o === 'gomme') {
+    xTrait.clearRect(0, 0, W, H);
+    cTrait.style.opacity = o === 'gomme' ? 0.5 : S.opacite / 100;
+    xTrait.strokeStyle = xTrait.fillStyle = o === 'gomme' ? '#ffffff' : S.c1; xTrait.lineWidth = S.taille; xTrait.lineCap = xTrait.lineJoin = 'round';
+    const depart = ev.shiftKey && dernierPoint ? dernierPoint : p;
+    xTrait.beginPath(); xTrait.moveTo(depart.x, depart.y); xTrait.lineTo(p.x + 0.01, p.y); xTrait.stroke();
+    geste = { type: o, dernier: p }; dernierPoint = p; maj3d(true); return;
+  }
+  if (o === 'ligne' || o === 'formes') { geste = { type: o, debut: p }; }
+});
+let dernierPoint = null;
+addEventListener('mousemove', ev => {
+  if (geste && geste.type === 'vue') { vue.x += ev.clientX - geste.x; vue.y += ev.clientY - geste.y; geste.x = ev.clientX; geste.y = ev.clientY; appliquerVue(); return; }
+  if (!W) return;
+  const p = pt(ev);
+  const dedans = p.x >= 0 && p.y >= 0 && p.x < W && p.y < H;
+  souris = dedans || geste ? p : null;
+  const z = dedans ? zoneSous(p.x, p.y) : null;
+  document.getElementById('survol').innerHTML = z ? `Tu es sur : <b>${NOMS_ZONES[z] || z}</b>` : (dedans ? 'Partie pas visible sur le maillot' : 'Survole le maillot');
+  if (!geste) { apercuOutil(); if (S.outil === 'motifs' || S.outil === 'remplir') dessinerGuide(z); return; }
+  if (geste.type === 'pinceau' || geste.type === 'gomme') {
+    xTrait.beginPath(); xTrait.moveTo(geste.dernier.x, geste.dernier.y); xTrait.lineTo(p.x, p.y); xTrait.stroke();
+    geste.dernier = p; dernierPoint = p; apercuOutil(); maj3d(true);
+  } else if (geste.type === 'ligne') {
+    const b = ev.shiftKey ? droit(geste.debut, p) : p;
+    xCalque.clearRect(0, 0, W, H); xCalque.globalAlpha = S.opacite / 100; xCalque.strokeStyle = S.c1; xCalque.lineWidth = S.taille; xCalque.lineCap = 'round';
+    xCalque.beginPath(); xCalque.moveTo(geste.debut.x, geste.debut.y); xCalque.lineTo(b.x, b.y); xCalque.stroke(); xCalque.globalAlpha = 1; geste.fin = b;
+  } else if (geste.type === 'formes') {
+    const b = boite(geste.debut, p, ev.shiftKey); geste.b = b;
+    xCalque.clearRect(0, 0, W, H); xCalque.globalAlpha = S.opacite / 100; dessinerForme(xCalque, S.forme, b); xCalque.globalAlpha = 1;
+    xCalque.setLineDash([8 / vue.s, 6 / vue.s]); xCalque.lineWidth = 1.5 / vue.s; xCalque.strokeStyle = '#fff'; xCalque.strokeRect(b.x, b.y, b.w, b.h); xCalque.setLineDash([]);
+  }
+});
+addEventListener('mouseup', ev => {
+  if (!geste) return;
+  const g = geste; geste = null;
+  if (g.type === 'vue') { scene.style.cursor = S.outil === 'main' ? 'grab' : 'crosshair'; return; }
+  if (g.type === 'pinceau') { poser(x => x.drawImage(cTrait, 0, 0)); xTrait.clearRect(0, 0, W, H); }
+  else if (g.type === 'gomme') {
+    poser(x => { x.drawImage(cTrait, 0, 0); x.globalCompositeOperation = 'source-in'; x.drawImage(orig, 0, 0); }, undefined, 100);
+    xTrait.clearRect(0, 0, W, H);
+  } else if (g.type === 'ligne' && g.fin) {
+    poser(x => { x.strokeStyle = S.c1; x.lineWidth = S.taille; x.lineCap = 'round'; x.beginPath(); x.moveTo(g.debut.x, g.debut.y); x.lineTo(g.fin.x, g.fin.y); x.stroke(); });
+  } else if (g.type === 'formes' && g.b && g.b.w > 2 && g.b.h > 2) {
+    poser(x => dessinerForme(x, S.forme, g.b));
+  }
+  xCalque.clearRect(0, 0, W, H); apercuOutil();
+});
+scene.addEventListener('mouseleave', () => { if (!geste) { souris = null; xCalque.clearRect(0, 0, W, H); } });
+
+function pipette(p, laquelle) {
+  const d = xImg.getImageData(Math.max(0, Math.min(W - 1, p.x | 0)), Math.max(0, Math.min(H - 1, p.y | 0)), 1, 1).data;
+  const c = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+  couleur(c, laquelle); etat('Couleur prise : ' + c, 'ok');
+}
+function poserMotif(z) {
+  const b = boiteZone(z);
+  poser(x => dessinerMotif(x, S.motif, b), z);
+  etat('Motif posé' + (z !== 'tout' ? ' sur : ' + (NOMS_ZONES[z] || z) : ''), 'ok');
+}
+function hexRGB(c) { return [1, 3, 5].map(i => parseInt(c.substr(i, 2), 16)); }
+function remplir(p) {
+  const X = Math.max(0, Math.min(W - 1, p.x | 0)), Y = Math.max(0, Math.min(H - 1, p.y | 0));
+  if (S.remplirMode === 'zone') {
+    const z = zoneSous(p.x, p.y);
+    if (!z) { etat('Clique sur une partie visible du maillot', 'err'); return; }
+    poser(x => { x.fillStyle = S.c1; x.fillRect(0, 0, W, H); }, z);
+    etat((NOMS_ZONES[z] || z) + ' remplie', 'ok'); return;
+  }
+  const src = xImg.getImageData(0, 0, W, H), d = src.data, i0 = (Y * W + X) * 4;
+  const r0 = d[i0], g0 = d[i0 + 1], b0 = d[i0 + 2], tol = S.tolerance * 3;
+  const proche = i => Math.abs(d[i] - r0) + Math.abs(d[i + 1] - g0) + Math.abs(d[i + 2] - b0) <= tol;
+  const [cr, cg, cb] = hexRGB(S.c1);
+  const masq = new Uint8Array(W * H);
+  if (S.remplirMode === 'seau') {
+    const pile = [X, Y];
+    while (pile.length) {
+      const y = pile.pop(); let x = pile.pop();
+      let i = y * W + x; while (x > 0 && !masq[i - 1] && proche((i - 1) * 4)) { x--; i--; }
+      let haut = false, bas = false;
+      while (x < W && !masq[i] && proche(i * 4)) {
+        masq[i] = 1;
+        if (y > 0) { const j = i - W; if (!masq[j] && proche(j * 4)) { if (!haut) { pile.push(x, y - 1); haut = true; } } else haut = false; }
+        if (y < H - 1) { const j = i + W; if (!masq[j] && proche(j * 4)) { if (!bas) { pile.push(x, y + 1); bas = true; } } else bas = false; }
+        x++; i++;
+      }
+    }
+  } else { for (let i = 0; i < W * H; i++) if (proche(i * 4)) masq[i] = 1; }
+  const out = xImg.createImageData(W, H), o = out.data;
+  const L0 = Math.max(1, 0.299 * r0 + 0.587 * g0 + 0.114 * b0);
+  for (let i = 0; i < W * H; i++) if (masq[i]) {
+    const k = i * 4, f = S.remplirMode === 'partout' ? (0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]) / L0 : 1;   // « partout » garde les ombres
+    o[k] = Math.min(255, cr * f); o[k + 1] = Math.min(255, cg * f); o[k + 2] = Math.min(255, cb * f); o[k + 3] = d[k + 3];
+  }
+  const t = document.createElement('canvas'); t.width = W; t.height = H; t.getContext('2d').putImageData(out, 0, 0);
+  poser(x => x.drawImage(t, 0, 0), 'tout');
+  etat('Rempli', 'ok');
+}
+
+// =====================================================================================================  clavier, enregistrement
+addEventListener('keydown', ev => {
+  if (ev.target.tagName === 'INPUT' && ev.target.type !== 'range' && ev.target.type !== 'checkbox') return;
+  const k = ev.key.toLowerCase();
+  if (ev.ctrlKey && k === 'z') { defaire(); ev.preventDefault(); return; }
+  if (ev.ctrlKey && (k === 'y' || (ev.shiftKey && k === 'z'))) { refaire(); ev.preventDefault(); return; }
+  if (ev.ctrlKey && k === 's') { enregistrer(); ev.preventDefault(); return; }
+  if (ev.ctrlKey) return;
+  if (k === ' ') { espace = true; scene.style.cursor = 'grab'; ev.preventDefault(); return; }
+  if (k === '[') { S.taille = Math.max(2, Math.round(S.taille / 1.2)); panneauOptions(); return; }
+  if (k === ']') { S.taille = Math.min(400, Math.round(S.taille * 1.2)); panneauOptions(); return; }
+  if (k === 'x') { echanger(); return; }
+  if (k === 'g') { document.getElementById('b_guide').click(); return; }
+  if (k === '0') { ajuster(); return; }
+  if (k === '+' || k === '=') { zoomer(1.25); return; }
+  if (k === '-') { zoomer(1 / 1.25); return; }
+  const t = OUTILS.find(o => o && o[2].toLowerCase() === k); if (t) choisirOutil(t[0]);
+});
+addEventListener('keyup', ev => { if (ev.key === ' ') { espace = false; scene.style.cursor = S.outil === 'main' ? 'grab' : 'crosshair'; } });
+addEventListener('beforeunload', ev => { if (sale) { ev.preventDefault(); ev.returnValue = ''; } });
+async function enregistrer() {
+  etat('Enregistrement…');
+  const blob = await new Promise(ok => cImg.toBlob(ok, 'image/png'));
+  try {
+    const r = await (await fetch('/enregistrer?k=' + cle, { method: 'POST', body: blob })).json();
+    if (r.erreur) throw new Error(r.erreur);
+    sale = false; boutons(); etat('Enregistré ✓  (' + r.chemin.split(/[\\/]/).pop() + ')', 'ok');
+  } catch (e) { etat('Erreur : ' + e.message, 'err'); }
+}
+document.getElementById('b_enreg').onclick = enregistrer;
+
+// =====================================================================================================  départ
+majCouleurs();
+choisirOutil(S.outil);
+fetch('/numero').then(r => r.json()).then(n => appliquerNumero(n.reglages, false)).catch(() => {});
+charger();
+setInterval(suivre, 1000);
+</script>
+</body>
+</html>

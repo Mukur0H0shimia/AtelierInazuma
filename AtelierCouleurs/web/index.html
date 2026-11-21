@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier Inazuma</title>
+<link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+<header>
+  <div class="marque">ATELIER <b>INAZUMA</b></div>
+  <nav class="onglets">
+    <button data-onglet="hub" class="actif">Mes créations</button>
+    <button data-onglet="techniques">Techniques</button>
+    <button data-onglet="esprits">Esprits guerriers</button>
+    <button data-onglet="totems">Totems</button>
+    <button data-onglet="bannieres">Bannières</button>
+    <button data-onglet="maillots">Maillots</button>
+    <button data-onglet="tenues" title="Tenues, chaussures, peau : tout le dossier _uniform du jeu (sauf les maillots)">Tenues</button>
+    <button data-onglet="armures" title="Armures des esprits (dossier _armd)">Armures</button>
+    <button data-onglet="personnages" title="Têtes de tous les personnages du jeu (dossier _face)">Personnages</button>
+    <button data-onglet="objets" title="Objets et animaux (dossiers _item, _animal)">Objets</button>
+  </nav>
+  <div class="recherche">
+    <input id="cherche" placeholder="Chercher une technique (nom ou code : Frappe stellaire, whs01430…)" autocomplete="off">
+    <div id="resultats" class="liste-flottante"></div>
+  </div>
+  <div id="titre-tech" class="titre-tech">Rien d'ouvert</div>
+</header>
+
+<!-- (15/11/2026) hub façon menus du jeu (captures de muku : AtelierCouleurs/references_menus) : en-tête orange de
+     « Composition d'équipe », bannières AVATAR / VOTRE ÉQUIPE et compteur VICTOIRES du menu principal, tuiles bleues
+     penchées, cartes de la Banque. Images : celles du jeu (moteur/menus_jeu.py, lues dans dx11/menu). -->
+<section id="page-hub">
+  <div class="jm">
+    <div class="jm-entete"><div class="jm-coin"><i class="jm-icone" data-ic="m3" data-t="54"></i><span>Mes créations</span></div>
+      <div class="jm-entete-milieu"><span class="jm-petit">CRÉATIONS</span><b id="hub-n-tout">0</b></div>
+      <div class="jm-marque">ATELIER <b>INAZUMA</b></div></div>
+    <div class="jm-bannieres">
+      <button class="jm-banniere gauche" id="jm-b-continuer"><span class="jm-b-img"></span><span class="jm-b-haut">PROJETS EN COURS</span>
+        <span class="jm-b-nb" id="hub-n-projets">0</span><span class="jm-b-titre">À CONTINUER</span></button>
+      <div class="jm-compteur"><span class="jm-c-titre">TERMINÉES</span><b id="hub-n-creations">0</b></div>
+      <button class="jm-banniere droite" id="jm-b-terminees"><span class="jm-b-img"></span><span class="jm-b-haut">INSTALLÉES DANS LE JEU</span>
+        <span class="jm-b-nb" id="hub-n-installees">0</span><span class="jm-b-titre">MES MODS</span></button>
+    </div>
+    <div class="jm-tuiles" id="jm-tuiles"></div>
+    <div class="jm-etiquette-zone"><span class="jm-etiquette" id="jm-etiquette">Choisis un onglet</span></div>
+
+    <div class="jm-filtres"><div class="jm-onglets" id="jm-onglets"></div>
+      <div class="jm-recherche"><span class="jm-touche">X</span><input id="hub-cherche" placeholder="Chercher par nom" autocomplete="off"></div>
+      <button class="jm-bouton-or" id="hub-nouveau">+ Nouvelle création</button></div>
+    <div id="hub-etat" class="jm-etat"></div>
+
+    <div class="hub-section" id="jm-s-continuer"><h2>À continuer</h2><span>sauvegardé tout seul, pas encore transformé en mod</span></div>
+    <div id="hub-projets" class="hub-grille"></div>
+    <div class="hub-section" id="jm-s-terminees"><h2>Terminées</h2><span>mods faits avec « Créer le mod »</span></div>
+    <div id="hub-creations" class="hub-grille"></div>
+    <div class="hub-section" id="jm-s-prereglages"><h2>Préréglages <b id="hub-n-prereglages"></b></h2><span>à appliquer sur n'importe quelle technique (bloc « Remplacer une couleur partout »)</span></div>
+    <div id="hub-prereglages" class="hub-puces"></div>
+    <div id="hub-stats" hidden></div>
+    <div class="jm-aide"><span><i class="jm-touche">🖱</i> Ouvrir</span><span><i class="jm-touche">X</i> Chercher par nom</span><span>Les images des menus viennent de ton jeu (lues, jamais modifiées)</span></div>
+  </div>
+</section>
+
+<section id="page-bannieres">
+  <aside class="panneau">
+    <h2>Pour quelle technique ?</h2>
+    <div id="b-choix" class="liste"></div>
+    <p class="aide">« Technique ouverte » = celle de l'onglet Techniques (la bannière partira avec « Créer le mod »).
+      Les autres = tes copies déjà créées (MesTechniques).</p>
+    <h2>Styles tout prêts</h2>
+    <div id="b-styles" class="ligne"></div>
+  </aside>
+  <div class="b-centre">
+    <div class="b-cadre"><canvas id="b-vue"></canvas></div>
+    <div class="aide">Modèle : la bannière du jeu de la technique d'origine</div>
+    <div class="b-cadre b-modele"><img id="b-modele" alt=""></div>
+    <div class="ligne">
+      <button id="b-utiliser" class="primaire">Utiliser pour la technique ouverte</button>
+      <button id="b-enregistrer">Enregistrer dans la copie choisie</button>
+    </div>
+    <pre id="b-rapport" class="rapport"></pre>
+  </div>
+  <aside class="panneau formulaire" id="b-reglages">
+    <h2>Texte</h2>
+    <label>Texte <input id="b-texte"></label>
+    <label>Police <select id="b-police"></select></label>
+    <div class="ligne"><label>Taille (0 = auto) <input type="range" id="b-taille" min="0" max="300" value="0"></label></div>
+    <div class="ligne"><label>Espacement <input type="range" id="b-espacement" min="-20" max="60" value="2"></label></div>
+    <h2>Forme</h2>
+    <div class="ligne"><label>Penché <input type="range" id="b-penche" min="-40" max="60" value="18"></label></div>
+    <div class="ligne"><label>Sautillement <input type="range" id="b-saute" min="0" max="60" value="18"></label></div>
+    <div class="ligne"><label>Rotation des lettres <input type="range" id="b-tourne" min="0" max="20" value="5"></label></div>
+    <div class="ligne"><button id="b-graine">Autre tirage des lettres</button></div>
+    <div class="ligne"><label>Position X <input type="range" id="b-x" min="-500" max="500" value="0"></label></div>
+    <div class="ligne"><label>Position Y <input type="range" id="b-y" min="-120" max="120" value="0"></label></div>
+    <h2>Couleurs</h2>
+    <div class="ligne"><label>Haut <input type="color" id="b-haut"></label><label>Milieu <input type="color" id="b-milieu"></label><label>Bas <input type="color" id="b-bas"></label></div>
+    <div class="ligne"><label>Contour clair <input type="color" id="b-c1"></label><input type="range" id="b-e1" min="0" max="20"></div>
+    <div class="ligne"><label>Contour foncé <input type="color" id="b-c2"></label><input type="range" id="b-e2" min="0" max="20"></div>
+    <h2>Ombre et lueur</h2>
+    <div class="ligne"><label>Ombre <input type="color" id="b-ombre"></label><input type="range" id="b-ombreA" min="0" max="100"></div>
+    <div class="ligne"><label>Décalage <input type="range" id="b-ombreX" min="-30" max="30"></label><input type="range" id="b-ombreY" min="-30" max="30"></div>
+    <div class="ligne"><label>Lueur <input type="color" id="b-lueur"></label><input type="range" id="b-lueurT" min="0" max="40"></div>
+  </aside>
+</section>
+
+<section id="page-maillots">
+  <div class="carte">
+    <h1>Maillots</h1>
+    <p>Les maillots se font dans l'<b>Atelier Maillots</b> (son propre logiciel : patron, numéros, noms, emblème, aperçu 3D, mod <code>MesMaillots</code>).</p>
+    <div class="ligne"><button id="ouvrir-maillots" class="primaire">Ouvrir l'Atelier Maillots</button></div>
+    <pre id="rapport-maillots" class="rapport"></pre>
+  </div>
+</section>
+
+<main>
+  <!-- gauche : pièces -->
+  <section id="panneau-pieces" class="panneau">
+    <!-- (15/11/2026) une tenue a un maillage par CORPULENCE : on choisit lequel voir -->
+    <div id="corps-bloc" class="corps-bloc" style="display:none"><label>Corpulence <select id="corps-choix"></select></label></div>
+    <h2 id="titre-pieces">Pièces de l'effet</h2>
+    <div class="ligne">
+      <button id="tout-sel">Tout sélectionner</button>
+      <button id="rien-sel">Rien</button>
+    </div>
+    <div class="ligne">
+      <button id="isoler">Isoler la sélection</button>
+      <button id="tout-voir">Tout afficher</button>
+    </div>
+    <div id="pieces" class="liste"></div>
+    <p class="aide">Clic = sélectionner (Ctrl pour plusieurs). La sélection montre ses textures à droite.</p>
+  </section>
+
+  <!-- centre : 3D -->
+  <section id="centre">
+    <canvas id="vue"></canvas>
+    <!-- (15/11/2026) objets du jeu : leur icône en grand (pas de 3D) -->
+    <div id="objet-grand" class="objet-grand"><img id="objet-grand-img" alt=""><div id="objet-grand-txt"></div></div>
+    <canvas id="vue-d3d" title="Image dessinée par Direct3D avec les shaders du jeu (prototype)"></canvas>
+    <img id="l-telop" alt="">
+    <div class="barre-vue">
+      <label><input type="checkbox" id="additif" checked> Lumière (additif)</label>
+      <label><input type="checkbox" id="fil"> Fil de fer sélection</label>
+      <button id="recadrer">Recadrer</button>
+      <button id="avant-apres" title="Voir la technique d'origine du jeu, puis tes couleurs (touche A). Tes changements sont gardés.">◐ Avant / après</button>
+      <span class="aide">Glisser : tourner · Molette : zoom · Clic droit : déplacer</span>
+    </div>
+    <div class="lecteur seul-tech" id="lecteur">
+      <button id="l-jouer" title="Lecture avec le lecteur natif (C++ / Direct3D 11, comme le jeu), DANS cette vue (Espace aussi). Ensuite : Espace ou clic sur l'image = pause, flèches = image par image, Début = recommencer, E = effets d'écran, Échap = revenir à l'aperçu">▶</button>
+      <input type="range" id="l-image" min="0" max="100" value="0">
+      <span id="l-info" class="aide">—</span>
+      <select id="l-vitesse"><option value="1">× 1</option><option value="0.5">× 0,5</option><option value="0.25">× 0,25</option></select>
+      <label><input type="checkbox" id="l-camera" checked> Caméra du jeu</label>
+      <label><input type="checkbox" id="l-boucle" checked> En boucle</label>
+      <select id="l-perso" title="Personnage qui fait la technique"></select>
+      <label><input type="checkbox" id="l-terrain" checked> Terrain</label>
+      <label><input type="checkbox" id="l-banniere" checked> Bannière</label>
+      <label><input type="checkbox" id="l-son" checked> Son</label>
+      <label><input type="checkbox" id="l-anim" checked> Animation</label>
+      <label title="Vraies particules du jeu (.ptlb) : étincelles, poussières… simulées comme dans le jeu (code lu dans nie.exe). Le hasard change à chaque partie, même dans le jeu."><input type="checkbox" id="l-particules" checked> Particules</label>
+      <label title="Lumières ponctuelles des techniques (CCustomPointLight) : position, rayon et couleur pris sur des os de l'effet, comme dans le jeu (code lu dans nie.exe). Elles éclairent le stade avec la formule de son shader."><input type="checkbox" id="l-lumieres" checked> Lumières</label>
+      <label title="Stade dessiné avec le vrai shader du jeu (map_pbrt1… traduit de nie.exe / dx11) : soleil, reflets de la cubemap, relief, lumières. Sans ombres portées ni brouillard (pas encore)."><input type="checkbox" id="l-vraistade" checked> Shader du stade</label>
+      <button id="l-natif-bouton" title="Lecteur natif (C++ / Direct3D 11) : calcule l'animation et dessine EN DIRECT, comme le jeu, avec les vrais shaders. S'affiche dans la vue 3D (comme ▶ et Espace) ; tes couleurs et les pièces décochées sont reprises. Espace ou clic = pause, flèches = image par image, Début = recommencer, E = effets d'écran, Échap = revenir à l'aperçu.">Lecteur natif</button>
+      <span id="l-film-info" class="aide"></span>
+      <button id="l-video" title="Vidéo officielle de la technique (site zukan.inazuma.jp), pour comparer">Vidéo du jeu</button>
+    </div>
+    <div id="video-jeu" class="video-jeu" style="display:none">
+      <video id="video-jeu-v" controls muted playsinline></video>
+      <button id="video-jeu-x" title="Fermer">×</button>
+    </div>
+    <div class="note-vue" id="note-vue">Aperçu fixe : les pièces en place, sans l'animation. L'animation se voit en jeu (touche P de BetterQoL).</div>
+  </section>
+
+  <!-- droite : couleurs -->
+  <section id="panneau-couleurs" class="panneau">
+    <div id="info-sel" class="info-sel"></div>
+    <!-- (15/11/2026) entrée du MODE DESSIN (atelier.js) : les outils façon Photoshop ne vivent que dans ce mode -->
+    <div class="at-entree seul-perso"><button id="at-entrer" class="primaire">✎ Mode dessin</button>
+      <span class="aide">Calques, réglages, pinceaux… Clique une partie de l'esprit pour ne colorier qu'elle.</span></div>
+    <div id="reprise" class="reprise" style="display:none"><span id="reprise-texte"></span>
+      <div class="ligne"><button id="reprise-oui" class="primaire">Reprendre</button><button id="reprise-non">Repartir de zéro</button></div>
+      <p class="aide">Rien n'est sauvegardé tant que tu n'as pas choisi.</p></div>
+    <details class="bloc" id="bloc-remplacer"><summary>Remplacer une couleur partout <span class="compte" id="cpt-rc"></span></summary>
+    <p class="aide">Une couleur de la technique devient une autre, sur tout l'effet d'un coup (textures, matériaux, sommets,
+    particules). Nuances et luminosité gardées, blancs et gris jamais touchés.</p>
+    <div class="sous">Couleurs de la technique (clic : la choisir)</div>
+    <div id="rc-palette" class="rc-palette"></div>
+    <div class="ligne"><label>Remplacer <input type="color" id="rc-de" value="#ff8800"></label><button id="rc-inverser" title="Échanger les deux couleurs">⇄</button><label>par <input type="color" id="rc-vers" value="#2a6cff"></label></div>
+    <div class="ligne"><label>Tolérance <input type="range" id="rc-tol" min="5" max="90" value="30"></label><span id="v-rc-tol" class="aide">30°</span></div>
+    <div class="ligne rc-cibles"><label><input type="checkbox" id="rc-tex" checked> Textures</label><label><input type="checkbox" id="rc-mat" checked> Matériaux</label>
+      <label><input type="checkbox" id="rc-som" checked> Sommets</label><label><input type="checkbox" id="rc-ptl" checked> Particules</label></div>
+    <div class="ligne"><button id="rc-ok" class="primaire">Remplacer</button><button id="rc-annuler">Annuler le dernier</button></div>
+    <div id="rc-recette" class="rc-recette"></div>
+    <div class="sous">Préréglages (réutilisables sur d'autres techniques)</div>
+    <div class="ligne"><select id="pr-liste"></select><button id="pr-appliquer">Appliquer</button><button id="pr-suppr" title="Supprimer ce préréglage">✕</button></div>
+    <div class="ligne"><input id="pr-nom" placeholder="Nom (ex. Tout en bleu)"><button id="pr-garder">Garder</button></div>
+    <p class="aide">Garde les remplacements faits ici (dans l'ordre) + aura du ballon, couleur du tir, traînée et lueurs.</p>
+    </details>
+    <details class="bloc" open><summary>Textures <span class="compte" id="cpt-tex"></span></summary>
+    <div class="ligne">
+      <label><input type="checkbox" id="filtre-sel" checked> Seulement celles des pièces sélectionnées</label>
+    </div>
+    <div class="ligne">
+      <button id="tex-tout">Toutes</button><button id="tex-rien">Aucune</button>
+      <button id="tex-dessiner" class="primaire" title="Ouvrir la texture choisie en grand pour dessiner (ou double-clic sur une vignette)">✎ Dessiner</button>
+    </div>
+    <div id="textures" class="grille"></div>
+
+    <h2>Changer la couleur</h2>
+    <div class="ligne">
+      <select id="mode">
+        <option value="teinte">Teinte (garde les nuances)</option>
+        <option value="coloriser">Coloriser (une couleur)</option>
+        <option value="degrade">Dégradé (2 couleurs)</option>
+      </select>
+    </div>
+    <div class="ligne">
+      <label>Couleur <input type="color" id="c1" value="#5a3df0"></label>
+      <label id="lab-c2">2e couleur <input type="color" id="c2" value="#f5c842"></label>
+    </div>
+    <div class="ligne"><label>Saturation <input type="range" id="sat" min="0" max="250" value="120"></label><span id="v-sat">1,2</span></div>
+    <div class="ligne"><label>Luminosité <input type="range" id="lum" min="20" max="250" value="100"></label><span id="v-lum">1,0</span></div>
+    <div class="ligne">
+      <label><input type="checkbox" id="garder-or"> Garder l'or / le jaune</label>
+      <label><input type="checkbox" id="garder-blanc" checked> Garder les blancs</label>
+    </div>
+    <div class="ligne"><label><input type="checkbox" id="zone-on"> Seulement une couleur de la texture</label></div>
+    <div id="zone" class="zone">
+      <div class="ligne"><label>Couleur à changer <input type="color" id="zone-c" value="#f5c842"></label>
+        <label>Tolérance <input type="range" id="zone-t" min="5" max="100" value="30"></label></div>
+      <p class="aide">Clique dans la grande vignette pour prendre une couleur (ex. seulement les ailes, seulement l'armure).</p>
+      <canvas id="zone-apercu"></canvas>
+    </div>
+    <div class="ligne">
+      <button id="appliquer" class="primaire">Appliquer aux textures choisies</button>
+    </div>
+    <h3 id="titre-tout">Tout l'effet</h3>
+    <div class="ligne">
+      <button id="aleatoire">Aléatoire</button>
+      <button id="degrade-tout">Dégradé</button>
+      <button id="remettre">Tout remettre</button>
+    </div>
+    </details>
+
+    <div class="seul-tech">
+    <details class="bloc" id="bloc-mat"><summary>Couleurs des matériaux <span class="compte" id="cpt-mat"></span></summary>
+    <p class="aide">Quand une pièce garde sa couleur alors que sa texture est blanche ou grise (ex. anneaux jaunes).</p>
+    <div id="materiaux"></div>
+    </details>
+
+    <details class="bloc" id="bloc-teintes"><summary>Sommets et particules <span class="compte" id="cpt-teintes"></span></summary>
+    <p class="aide">Fumées, traînées, étincelles : ce qui ne vient ni d'une texture ni d'un matériau. Teinte et saturation remplacées,
+    luminosité gardée. Particules : une couleur pour tout l'objet.</p>
+    <div id="teintes"></div>
+    </details>
+
+    <details class="bloc"><summary>Lueurs (tout l'effet d'un coup)</summary>
+    <p class="aide">Couleur des sommets, des matériaux et des particules (ce qui n'est pas dans les textures).</p>
+    <div class="ligne"><label><input type="checkbox" id="lueurs-on"> Recolorer les lueurs</label></div>
+    <div class="ligne"><label>Teinte <input type="range" id="lueurs-h" min="0" max="359" value="262"></label><span id="v-lh" class="pastille"></span></div>
+
+    </details>
+
+    <details class="bloc"><summary>Aura du ballon</summary>
+    <div id="auras"></div>
+    </details>
+
+
+    <details class="bloc" open><summary>Créer la technique</summary>
+    <div class="formulaire">
+      <label>Nom <input id="f-nom" placeholder="Frappe galactique"></label>
+      <label>Description <textarea id="f-desc" rows="2"></textarea></label>
+      <label>Couleur du tir
+        <select id="f-couleur">
+          <option value="">Garder celle d'origine</option>
+          <option value="0">Montagne</option><option value="1">Air</option><option value="2">Feu</option>
+          <option value="3">Forêt</option><option value="4">Néant</option><option value="6">Esprit (jaune)</option>
+        </select>
+      </label>
+      <label>Traînée du ballon (tirs)
+        <select id="f-trainee">
+          <option value="">Celle du jeu</option>
+          <option value="ega0075">Tir spécial</option>
+          <option value="ega0080">Tir enchaîné</option>
+          <option value="ega0085">Tir lointain</option>
+        </select>
+        <select id="f-trainee-el">
+          <option value="void">Néant (violet)</option><option value="wind">Air</option><option value="fire">Feu</option>
+          <option value="forest">Forêt</option><option value="mountain">Montagne</option>
+        </select>
+      </label>
+      <label>Prix en boutique (jetons, vide = pas de vente) <input id="f-prix" type="number" min="0" value="18"></label>
+      <label>Bannière (texte) <input id="f-ban" placeholder="FRAPPE GALACTIQUE"></label>
+      <div class="ligne"><label>Lettres <input type="color" id="f-ban-c" value="#f5c842"></label><label>Contour <input type="color" id="f-ban-o" value="#0d1a4a"></label></div>
+      <div class="ligne">
+        <button id="exporter" class="primaire">Créer le mod</button>
+        <button id="installer">Installer dans le jeu</button>
+      </div>
+    </div>
+    </details>
+    </div>
+
+    <!-- (15/11/2026) maillots : l'Atelier Maillots est ici (moteur/mes_maillots.py) -->
+    <div class="seul-maillot">
+      <h2>Mes maillots</h2>
+      <div id="mm-liste" class="mm-liste"></div>
+      <p class="aide">Clique un de tes maillots pour le reprendre, ou cherche un maillot du jeu (en haut) : il sert de <b>coupe</b>.
+        Dessine le haut (texture « _20 ») et le short + chaussettes (« _30 ») avec ✎ Mode dessin.</p>
+      <div class="formulaire">
+        <div class="mm-en-cours" id="mm-en-cours">Nouveau maillot</div>
+        <!-- (15/11/2026) côtés du maillot et accessoires (chaussures, gants des gardiens) -->
+        <div class="ligne mm-cotes"><button data-mm-cote="10" class="actif">Domicile</button><button data-mm-cote="20">Extérieur</button></div>
+        <p class="aide" id="mm-parties"></p>
+        <label>Nom <input id="mm-nom" placeholder="Maillot Galaxie"></label>
+        <label>Prix (jetons de la boutique générale d'Inazuma Fantasy) <input id="mm-prix" type="number" min="1" value="1"></label>
+        <label>Relief du tissu <select id="mm-plis"><option value="simples">Plis simples (conseillé)</option><option value="base">Comme le maillot d'origine</option><option value="plat">Tout plat</option></select></label>
+        <details class="bloc"><summary>Numéro dans le dos</summary>
+          <label><input type="checkbox" id="mm-num-perso"> Personnaliser le numéro</label>
+          <div class="ligne"><label>Remplissage <input type="color" id="mm-num-c1" value="#ffffff"></label><label>Contour <input type="color" id="mm-num-c2" value="#000000"></label></div>
+          <label>Police des chiffres <select id="mm-num-police">
+            <optgroup label="Polices du jeu"><option value="1">Jeu 1</option><option value="2">Jeu 2</option><option value="3">Jeu 3</option><option value="4">Jeu 4</option><option value="5">Jeu 5</option><option value="6">Jeu 6</option></optgroup>
+            <optgroup label="Polices de l'ordinateur"><option value="f:Impact">Impact</option><option value="f:Arial Black">Arial Black</option><option value="f:Bahnschrift">Bahnschrift</option><option value="f:Segoe UI Black">Segoe UI Black</option><option value="f:Georgia">Georgia</option><option value="f:Times New Roman">Times New Roman</option><option value="f:Trebuchet MS">Trebuchet MS</option><option value="f:Verdana">Verdana</option><option value="f:Comic Sans MS">Comic Sans MS</option><option value="f:Consolas">Consolas</option></optgroup>
+          </select></label>
+          <div class="ligne"><label>Taille % <input type="number" id="mm-num-taille" min="50" max="200" value="100"></label><label>Hauteur (cm) <input type="number" id="mm-num-hauteur" min="-30" max="30" value="0"></label></div>
+          <label><input type="checkbox" id="mm-num-nom"> Nom du joueur au-dessus du numéro</label>
+          <label>Style des lettres du nom <select id="mm-num-lettres"><option value="">Lettres du jeu</option><option>Impact</option><option>Arial Black</option><option>Bahnschrift</option><option>Segoe UI Black</option><option>Georgia</option><option>Times New Roman</option><option>Trebuchet MS</option><option>Verdana</option><option>Comic Sans MS</option><option>Consolas</option></select></label>
+          <!-- (16/11/2026) aperçu du numéro (police, couleurs, nom) -->
+          <div class="mm-num-apercu"><canvas id="mm-num-apercu" width="320" height="220"></canvas>
+            <label>Numéro d'essai <input type="number" id="mm-num-essai" min="0" max="99" value="10"></label></div>
+          <p class="aide">Polices de l'ordinateur : l'Atelier refait la planche des chiffres 0 à 99 (comme celle du jeu) à l'enregistrement.
+            Couleurs : réglage de VRFW. Taille, hauteur et nom : à vérifier en jeu.</p>
+        </details>
+        <details class="bloc"><summary>Icône et emblème</summary>
+          <div class="ligne"><img id="mm-icone-img" class="mm-vign" alt=""><label>Icône de la boutique (256 × 256, fond transparent) <input type="file" id="mm-icone" accept="image/png"></label></div>
+          <div class="ligne"><img id="mm-embleme-img" class="mm-vign" alt=""><label>Emblème d'équipe (512 × 512, fond transparent ; vendu avec le maillot) <input type="file" id="mm-embleme" accept="image/png"></label></div>
+        </details>
+        <div class="ligne">
+          <button id="mm-enregistrer" class="primaire">Enregistrer le maillot</button>
+          <button id="mm-nouveau" title="Le prochain enregistrement crée un nouveau maillot">Nouveau</button>
+        </div>
+        <div class="ligne"><button id="mm-construire" class="primaire">Ajouter au mod « Mes maillots »</button></div>
+        <p class="aide">Comme les autres créations : le maillot est enregistré et le mod <code>MesMaillots</code> est refait dans
+          <code>AtelierCouleurs/sortie</code> avec tous tes maillots, <b>sans toucher au jeu</b>. Pour le mettre dans le jeu :
+          « Installer » dans <b>Mes créations</b> (sauvegarde avant). Ils seront à la boutique générale d'Inazuma Fantasy.
+          Sans retouche extérieure, l'extérieur reprend le domicile.</p>
+      </div>
+    </div>
+    <!-- (15/11/2026) SEULEMENT DES COPIES (choix de muku) : plus de remplacement de l'original (l'ancien mod MesRetouches est retiré). -->
+    <div class="seul-jeu-autre">
+      <h2>Mettre dans le jeu</h2>
+      <p class="aide avertissement">Pas encore pour ce genre d'élément : l'Atelier ne fait que des <b>copies</b> (l'original du jeu ne change jamais),
+        et la copie d'une tenue ou d'un objet n'est pas encore faite. Tes couleurs sont gardées dans le projet (« Mes créations »).</p>
+    </div>
+    <!-- (15/11/2026) tenues et objets : COPIE = un nouveau joueur qui les porte (moteur/copies_tenues.py, mod MesPersonnages) -->
+    <div class="seul-copie-outfit" id="bloc-outfit">
+      <h2>Créer une copie (tenue à équiper)</h2>
+      <p class="aide avertissement">Une <b>nouvelle tenue</b> en boutique : tes joueurs la mettent comme les tenues du jeu. La tenue du jeu ne change pas.
+        Elle va à <b>chaque corpulence</b> qui a un maillage (comme les tenues de ChronicleDeluxe et d'Inazuma Fantasy).</p>
+      <p class="aide" id="co-corps"></p>
+      <div class="cu-corps-titre">Qui peut la mettre ? <small>(coché = a sa version dans le jeu ; « emprunte » = prend la version d'un corps au même squelette, à vérifier en jeu)</small></div>
+      <div id="cu-corps" class="cu-corps"></div>
+      <div class="formulaire">
+        <label>Nom de la tenue <input id="cu-nom" placeholder="Costume de Jude (rouge)"></label>
+        <label>Description <textarea id="cu-desc" rows="2"></textarea></label>
+        <label>Prix (jetons) <input id="cu-prix" type="number" min="1" value="28"></label>
+        <div class="ligne"><img id="cu-icone-img" class="mm-vign" alt=""><label>Icône (256 × 256, sinon la texture réduite) <input type="file" id="cu-icone" accept="image/png"></label></div>
+        <div class="ligne"><button id="cu-exporter" class="primaire">Créer la tenue</button><button id="cu-installer">Installer dans le jeu</button></div>
+      </div>
+    </div>
+    <div class="seul-copie-tenue" id="bloc-nouveau-joueur">
+      <h2>Créer une copie (nouveau joueur avec cette tenue)</h2>
+      <p class="aide avertissement">Un <b>nouveau</b> joueur : la copie d'un personnage qui porte cette tenue dans le jeu, habillé de ta tenue recolorée.
+        La tenue du jeu et le personnage d'origine ne changent pas. Il garde ses habits même dans une équipe (comme l'armure de Michael).
+        Il arrive au <b>tirage Kizuna</b> de ChronicleDeluxe.</p>
+      <div class="formulaire">
+        <label>Copie de qui ? <select id="ct-porteur"></select></label>
+        <label>Nom du joueur <input id="ct-nom" placeholder="Agent Rouge"></label>
+        <label>Description <textarea id="ct-desc" rows="2"></textarea></label>
+        <div class="ligne"><button id="ct-exporter" class="primaire">Créer la copie</button><button id="ct-installer">Installer dans le jeu</button></div>
+      </div>
+    </div>
+    <!-- (15/11/2026) OBJETS DU JEU : copie = un nouvel objet (moteur/objets_jeu.py, mod MesObjets) -->
+    <div class="seul-objet-jeu">
+      <h2>Objet du jeu</h2>
+      <div class="objet-fiche"><b id="oj-nom"></b><small id="oj-genre"></small><p id="oj-desc" class="aide"></p></div>
+      <p class="aide">Recolore son icône avec ✎ Mode dessin (ou double-clic sur la vignette dans « Textures »).</p>
+      <h2>Créer une copie (nouvel objet)</h2>
+      <p class="aide avertissement" id="oj-etat"></p>
+      <div class="formulaire" id="oj-formulaire">
+        <label>Nom <input id="oj-nom-copie"></label>
+        <label>Description <textarea id="oj-desc-copie" rows="3"></textarea></label>
+        <label>Prix (jetons, boutique générale d'Inazuma Fantasy) <input id="oj-prix" type="number" min="1" value="10"></label>
+        <div class="ligne"><button id="oj-exporter" class="primaire">Créer la copie</button><button id="oj-installer">Installer dans le jeu</button></div>
+        <p class="aide">Mêmes effets que l'original (copie de l'objet du jeu). Écrit comme les objets de CharacterReforged et de MesMaillots.</p>
+      </div>
+    </div>
+    <div class="seul-copie-objet" id="bloc-objet">
+      <h2>Créer une copie (nouveau joueur avec cet objet)</h2>
+      <p class="aide avertissement">Pour un objet que les personnages <b>portent</b> (lunettes, casquette… : accessoire) : un <b>nouveau</b> joueur,
+        copie du personnage choisi, qui porte ton objet recoloré. L'objet du jeu ne change pas. Tirage Kizuna de ChronicleDeluxe.</p>
+      <p class="aide" id="co-etat"></p>
+      <div class="formulaire">
+        <label>Porté par (copie de) <input id="co-tete" list="co-tetes" placeholder="Nom du personnage (Mark Evans…)"></label><datalist id="co-tetes"></datalist>
+        <label>Nom du joueur <input id="co-nom" placeholder="Mark à lunettes"></label>
+        <label>Description <textarea id="co-desc" rows="2"></textarea></label>
+        <div class="ligne"><button id="co-exporter" class="primaire">Créer la copie</button><button id="co-installer">Installer dans le jeu</button></div>
+      </div>
+    </div>
+    <!-- (15/11/2026) armures : COPIE pour une de mes copies d'esprit (moteur/armures_copies.py, mod MesEsprits) -->
+    <div class="seul-copie-armure">
+      <h2>Créer une copie (armure d'un de mes esprits)</h2>
+      <p class="aide avertissement">Cette armure recolorée devient la <b>forme en armure</b> d'une de tes copies d'esprit guerrier.
+        L'armure du jeu ne change pas. Comme l'armure de Michael : technique d'armure copiée, porteurs donnés par CharacterReforged.</p>
+      <div class="formulaire">
+        <label>Pour quelle copie d'esprit ? <select id="ca-esprit"></select></label>
+        <label>Nom de l'armure <input id="ca-nom" placeholder="Armure de Pégase galactique"></label>
+        <div class="ligne">
+          <button id="ca-exporter" class="primaire">Créer la copie</button>
+          <button id="ca-installer">Installer dans le jeu</button>
+        </div>
+        <p class="aide">Installer remet tout le mod <code>MesEsprits</code> (tes esprits et leurs armures). Les maillages restent ceux de l'armure du jeu.</p>
+      </div>
+    </div>
+    <!-- (15/11/2026) personnages : COPIE avec un code neuf (moteur/copies_persos.py, mod MesPersonnages) -->
+    <div class="seul-copie-perso">
+      <h2>Créer une copie (nouveau joueur)</h2>
+      <p class="aide avertissement">Un <b>nouveau</b> joueur : la copie de ce personnage avec ta tête recolorée, un code neuf, l'original ne change pas.
+        Même corps, mêmes statistiques et techniques (carte copiée). Il arrive au <b>tirage Kizuna</b> de ChronicleDeluxe, comme Mukuro.</p>
+      <div class="formulaire">
+        <label>Nom du joueur <input id="cp-nom" placeholder="Mark Galaxie"></label>
+        <label>Description <textarea id="cp-desc" rows="2"></textarea></label>
+        <div class="ligne">
+          <button id="cp-exporter" class="primaire">Créer la copie</button>
+          <button id="cp-installer">Installer dans le jeu</button>
+        </div>
+        <p class="aide">Le portrait des cartes reste celui de l'original (couleurs d'origine). Un même nom garde son code d'une fois à l'autre.</p>
+      </div>
+    </div>
+    <div class="seul-perso seul-esprit">
+      <h2>Créer la copie</h2>
+      <p class="aide avertissement">L'outil fait une <b>copie</b> avec un code neuf (esprits <code>k0029NN</code>, totems <code>a0009NN</code>) :
+        l'original du jeu ne change pas. La copie garde les gestes, l'invocation et les sons de l'original.</p>
+      <div class="formulaire">
+        <label>Nom <input id="p-nom" placeholder="Pégase galactique"></label>
+        <label>Description <textarea id="p-desc" rows="2"></textarea></label>
+        <label>Prix (points de Passion, boutique d'entraînement d'Inazuma Fantasy ; vide = pas de vente) <input id="p-prix" type="number" min="0" value="30"></label>
+        <div class="ligne">
+          <button id="exporter-perso" class="primaire">Créer le mod</button>
+          <button id="installer-perso">Installer dans le jeu</button>
+        </div>
+        <p class="aide">Créer le mod réencode les textures (environ 45 s pour un grand modèle). Un même nom garde son code d'un export à l'autre.</p>
+      </div>
+    </div>
+    <pre id="rapport" class="rapport"></pre>
+  </section>
+<!-- (15/11/2026) MODE DESSIN (atelier.js) : outils à gauche, grande texture au centre, panneaux à droite ; la vue 3D reste à
+     gauche : un clic sur une partie du modèle = on ne colorie qu'elle -->
+<section id="atelier-dessin">
+  <header class="ad-entete"><b class="ad-titre-mode">✎ Mode dessin</b><select id="at-texture" title="Texture"></select><span class="compte" id="zn-info"></span>
+    <span class="ad-esp"></span><button id="zn-annuler" title="Annuler (Ctrl+Z)">↶</button><button id="zn-retablir" title="Rétablir (Ctrl+Y)">↷</button>
+    <button id="at-jeu" title="Remettre la texture du jeu sous les calques (Ctrl+Z pour revenir)">Texture du jeu</button><button id="at-terminer" class="primaire" title="Revenir à l'Atelier (Échap)">Terminer</button></header>
+  <div class="ad-outils"><div id="at-outils"></div>
+    <div class="at-couleurs" title="Couleur 1 (outils) et couleur 2 (dégradé) · X : échanger">
+      <label class="at-c1"><span id="at-ap1"></span><input type="color" id="at-c1" value="#d9a520"></label>
+      <label class="at-c2"><span id="at-ap2"></span><input type="color" id="at-c2" value="#ffffff"></label>
+      <button id="at-echanger" title="Échanger (X)">⇄</button></div></div>
+  <div class="ad-centre">
+    <div class="ad-options"><b id="at-nom-outil"></b>
+      <span id="at-opt-pinceau" class="at-opt"><label>Taille <input type="range" id="at-taille" min="1" max="160" value="18"><span class="val">18 px</span></label>
+        <label>Dureté <input type="range" id="at-durete" min="0" max="100" value="60"><span class="val">60 %</span></label>
+        <label>Opacité <input type="range" id="at-opacite" min="5" max="100" value="100"><span class="val">100 %</span></label>
+        <label title="Combien chaque passage ajoute (100 % : un clic donne toute la couleur)">Flux <input type="range" id="at-flux" min="5" max="100" value="100"><span class="val">100 %</span></label>
+        <label class="seul-perso" title="Le pinceau ne déborde pas sur les pièces voisines de la texture"><input type="checkbox" id="at-limiter" checked> Dans la pièce</label></span>
+      <span id="at-opt-baguette" class="at-opt" style="display:none"><label>Tolérance <input type="range" id="at-tol" min="1" max="100" value="20"><span class="val">20</span></label>
+        <label><input type="checkbox" id="at-contigu" checked> Contiguë</label></span>
+      <span id="at-opt-mode" class="zn-mode"><button data-at-mode="ombrage" title="Sur le fond : la couleur prend la place, l'ombrage peint reste">Garder l'ombrage</button><button data-at-mode="couvrir" title="Couleur unie">Couvrir</button></span>
+      <span id="at-opt-gomme" class="at-opt" style="display:none"><label title="Sinon : remet la texture du jeu"><input type="checkbox" id="at-gomme-transp"> Rend transparent</label></span>
+      <label class="seul-tech at-verrou" title="Coché : on recolore l'intérieur de la forme sans déborder. Décoché : on peut ajouter de nouvelles formes (elles deviennent visibles)."><input type="checkbox" id="at-verrou" checked> Garder la forme (transparence)</label>
+      <span id="at-recentes" class="zn-recentes"></span></div>
+    <div class="ad-toile"><canvas id="zn-plat" width="600" height="600" title="Molette : zoom · clic droit ou Espace + glisser : déplacer"></canvas>
+      <div class="at-zoom"><button id="at-zoom-moins" title="Zoom arrière">−</button><button id="at-zoom-ajuster" title="Tout voir">Ajuster</button><button id="at-zoom-plus" title="Zoom avant">+</button>
+        <span class="at-fonds" title="Fond derrière les parties transparentes">Fond : <button data-ed-fond="damier">Damier</button><button data-ed-fond="noir">Noir</button><button data-ed-fond="blanc">Blanc</button></span></div>
+      <div id="at-aide" class="ad-aide"></div></div>
+  </div>
+  <aside class="ad-cote">
+    <div class="ad-carte seul-perso"><div class="ad-titre">Partie à colorier</div>
+      <p class="aide">Clique une partie de l'esprit sur la vue 3D (à gauche) : on ne colorie plus qu'elle. Maj + clic : en ajouter. Clic dans le vide : tout.</p></div>
+    <div class="ad-carte"><div class="ad-titre">Couleurs <span class="aide">clic droit : couleur 2</span></div><div id="at-palette" class="at-palette"></div></div>
+    <div id="at-carte-outil" class="ad-carte" style="display:none"><div class="ad-titre" id="at-carte-titre"></div><div id="at-carte-contenu"></div></div>
+    <div id="zn-selection" class="zn-selection" style="display:none">
+      <div class="ligne"><b id="zn-n-sel"></b><button id="zn-rien" title="Tout libérer (Ctrl+D)">✕</button></div>
+      <div class="ligne"><button id="zn-appliquer" class="primaire">Remplir</button><button id="at-sel-inv" title="Ctrl+Maj+I">Inverser</button><button id="at-sel-adoucir" title="Bord progressif (rayon dans « Plus »)">Adoucir</button>
+        <button id="zn-pareil" class="seul-perso" title="Ajouter toutes les parties de la même couleur">+ Même couleur</button></div>
+    </div>
+    <div class="at-onglets"><button data-at-onglet="calques" class="actif">Calques</button><button data-at-onglet="reglages">Réglages</button><button data-at-onglet="historique">Historique</button><button data-at-onglet="plus">Plus</button></div>
+    <div class="at-volet" data-at-volet="calques">
+      <div id="at-calques" class="at-calques"></div>
+      <div class="ligne at-calques-bt"><button id="at-c-plus" title="Nouveau calque (normal)">＋ Calque</button><button id="at-c-couleur" title="Calque en mode Couleur : peindre une couleur en gardant l'ombrage du dessous">＋ Couleur</button>
+        <button id="at-c-dup" title="Dupliquer (Ctrl+J)">⧉</button><button id="at-c-haut" title="Monter">▲</button><button id="at-c-bas" title="Descendre">▼</button><button id="at-c-fus" title="Fusionner vers le bas">⤓</button><button id="at-c-sup" title="Supprimer">🗑</button></div>
+    </div>
+    <div class="at-volet" data-at-volet="reglages" hidden>
+      <div class="at-reglages"><button data-at-reglage="tsl">Teinte / saturation</button><button data-at-reglage="degrade">Courbe de dégradé</button><button data-at-reglage="remplacer">Remplacer la couleur</button>
+        <button data-at-reglage="niveaux">Niveaux</button><button data-at-reglage="courbes">Courbes</button><button data-at-reglage="balance">Balance des couleurs</button></div>
+      <p class="aide">Sur la partie / sélection, sinon tout le calque choisi.</p>
+      <div id="at-reglage" class="at-reglage" style="display:none"></div>
+    </div>
+    <div class="at-volet" data-at-volet="historique" hidden><div id="at-historique" class="at-historique"></div></div>
+    <div class="at-volet" data-at-volet="plus" hidden>
+      <div class="ligne"><button id="at-sel-tout" title="Ctrl+A">Tout sélectionner</button><label>Adoucir <input type="range" id="at-adoucir" min="1" max="30" value="4"><span class="val">4 px</span></label></div>
+      <div class="ligne"><label>Luminosité du remplissage <input type="range" id="zn-lum" min="40" max="160" value="100"><span class="val">100 %</span></label></div>
+      <label class="aide seul-perso"><input type="checkbox" id="zn-metal"> Remplir seulement le métal (carte « spm »)</label>
+      <label class="aide seul-perso"><input type="checkbox" id="zn-reflets" checked> Recolorer aussi les reflets du métal (carte « spm »)</label>
+      <details class="zn-plus seul-perso"><summary>Liste des parties (<span id="zn-n-liste">0</span>)</summary><div id="zn-liste" class="zn-liste"></div></details>
+    </div>
+  </aside>
+</section>
+</main>
+<script src="/web/i18n_en.js"></script>
+<script src="/web/i18n.js"></script>
+<script src="/web/chargement.js"></script>
+<script src="/web/anim3d.js"></script>
+<script src="/web/terrain.js"></script>
+<script src="/web/particules.js"></script>
+<script src="/web/vue3d.js"></script>
+<script src="/web/banniere.js"></script>
+<script src="/web/app.js"></script>
+<script src="/web/zones.js"></script>
+<script src="/web/atelier.js"></script>
+<script src="/web/atelier_outils.js"></script>
+</body>
+</html>

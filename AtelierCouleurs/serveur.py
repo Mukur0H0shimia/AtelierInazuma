@@ -21,12 +21,16 @@ from moteur import config_auto, langue  # noqa: E402
 # config.json : trouvé tout seul au 1er lancement (jeu de base ou copie de dépôt : celui qui a les mods ; données extraites)
 _F_CFG = os.path.join(ICI, 'config.json')
 CFG = json.load(open(_F_CFG, encoding='utf-8')) if os.path.isfile(_F_CFG) else {}
+_JEU_CHOISI = sys.argv[sys.argv.index('--jeu') + 1] if '--jeu' in sys.argv[:-1] else None   # dossier choisi dans le lanceur
+if _JEU_CHOISI:
+    CFG['jeu_dir'] = _JEU_CHOISI
 CFG, _cfg_change = config_auto.completer(CFG, ICI)
+_cfg_change = _cfg_change or bool(_JEU_CHOISI)
 
 
 def sauver_cfg():
     garde = {k: v for k, v in CFG.items() if k not in ('outil_dir', 'lecture_directe')}
-    if CFG.get('lecture_directe'):
+    if CFG.get('lecture_directe') or not config_auto._data_ok(CFG.get('data_dir')):
         garde.pop('data_dir', None)                    # dossier virtuel : jamais écrit dans config.json
     json.dump(garde, open(_F_CFG, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 

@@ -106,6 +106,65 @@ static class Lanceur
         MessageBox.Show(texte, TITRE, MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 
+    public static long TailleFichier(string f)
+    {
+        try { return File.Exists(f) ? new FileInfo(f).Length : 0; } catch (Exception) { return 0; }
+    }
+
+    // ce que le serveur a écrit dans son journal pendant CE lancement (les dernières lignes) : la raison d'un échec
+    public static string FinJournal(string f, long depuis)
+    {
+        try
+        {
+            using (var fs = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                if (depuis > 0 && depuis <= fs.Length) fs.Seek(depuis, SeekOrigin.Begin);
+                string t = new StreamReader(fs, System.Text.Encoding.UTF8).ReadToEnd().Trim();
+                string[] l = t.Split('\n');
+                int n = Math.Min(l.Length, 12);
+                string fin = string.Join("\n", l, l.Length - n, n).Trim();
+                return fin.Length > 1500 ? "…" + fin.Substring(fin.Length - 1500) : fin;
+            }
+        }
+        catch (Exception) { return ""; }
+    }
+
+    static bool JeuValide(string d)
+    {
+        return d != null && File.Exists(Path.Combine(d, "nie.exe")) && File.Exists(Path.Combine(d, "data", "cpk_list.cfg.bin"));
+    }
+
+    // le jeu n'a pas été trouvé tout seul : on demande son dossier (celui qui contient nie.exe) ; null = abandon
+    public static string ChoisirJeu()
+    {
+        MessageBox.Show("Le jeu Inazuma Eleven : Victory Road n'a pas été trouvé automatiquement.\n" +
+                        "Choisis son dossier : celui qui contient nie.exe (et le dossier data).\n\n" +
+                        "Inazuma Eleven: Victory Road was not found automatically.\n" +
+                        "Pick its folder: the one that contains nie.exe (and the data folder).",
+                        TITRE, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        while (true)
+        {
+            using (var dlg = new FolderBrowserDialog())
+            {
+                dlg.Description = "Dossier du jeu (avec nie.exe) / Game folder (with nie.exe)";
+                dlg.ShowNewFolderButton = false;
+                if (dlg.ShowDialog() != DialogResult.OK) return null;
+                string d = dlg.SelectedPath;
+                if (JeuValide(d)) return d;
+                try
+                {
+                    foreach (string s in Directory.GetDirectories(d))       // dossier parent choisi : on regarde dedans
+                        if (JeuValide(s)) return s;
+                }
+                catch (Exception) { }
+                if (MessageBox.Show("Ce dossier ne contient pas le jeu (nie.exe + data\\cpk_list.cfg.bin).\n" +
+                                    "This folder doesn't contain the game (nie.exe + data\\cpk_list.cfg.bin).\n\n" + d,
+                                    TITRE, MessageBoxButtons.RetryCancel, MessageBoxIcon.Warning) != DialogResult.Retry)
+                    return null;
+            }
+        }
+    }
+
     public static string TrouverPythonw()
     {
         string fourni = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "python", "pythonw.exe"));
@@ -197,25 +256,38 @@ class Fenetre : Form
                 Lanceur.Erreur("Python (pythonw.exe) est introuvable.\nInstalle Python 3 depuis python.org, puis relance l'atelier.");
                 Close(); return;
             }
-            var info = new ProcessStartInfo(py, "\"" + Path.Combine(Lanceur.Dossier, "serveur.py") + "\" --sans-navigateur");
-            info.WorkingDirectory = Lanceur.Dossier;
-            info.UseShellExecute = false;
-            info.CreateNoWindow = true;
-            serveur = Process.Start(info);
             string log = Path.Combine(Lanceur.Dossier, "cache", "serveur.log");
-            bool pret = await System.Threading.Tasks.Task.Run(() =>
+            string jeu = null;
+            while (true)
             {
-                var debut = DateTime.Now;
-                while (!Lanceur.PortOuvert(port))
+                long debutLog = Lanceur.TailleFichier(log);
+                var info = new ProcessStartInfo(py, "\"" + Path.Combine(Lanceur.Dossier, "serveur.py") + "\" --sans-navigateur" +
+                                                    (jeu != null ? " --jeu \"" + jeu.TrimEnd('\\') + "\"" : ""));
+                info.WorkingDirectory = Lanceur.Dossier;
+                info.UseShellExecute = false;
+                info.CreateNoWindow = true;
+                serveur = Process.Start(info);
+                bool pret = await System.Threading.Tasks.Task.Run(() =>
                 {
-                    if (serveur.HasExited || (DateTime.Now - debut).TotalSeconds > 900) return false;
-                    Thread.Sleep(250);
+                    var debut = DateTime.Now;
+                    while (!Lanceur.PortOuvert(port))
+                    {
+                        if (serveur.HasExited || (DateTime.Now - debut).TotalSeconds > 900) return false;
+                        Thread.Sleep(250);
+                    }
+                    return true;
+                });
+                if (pret) break;
+                string fin = Lanceur.FinJournal(log, debutLog);
+                // jeu introuvable : on demande où il est (dossier qui contient nie.exe), puis on relance le serveur
+                if (serveur.HasExited && fin.Contains("JEU INTROUVABLE"))
+                {
+                    jeu = Lanceur.ChoisirJeu();
+                    if (jeu != null) continue;
+                    Close(); return;
                 }
-                return true;
-            });
-            if (!pret)
-            {
-                Lanceur.Erreur("Le serveur de l'atelier n'a pas démarré.\nJournal : " + log);
+                Lanceur.Erreur("Le serveur de l'atelier n'a pas démarré / The Atelier server did not start.\n\n" +
+                               (fin.Length > 0 ? fin : "(journal vide / empty log)") + "\n\nJournal / log : " + log);
                 Close(); return;
             }
         }

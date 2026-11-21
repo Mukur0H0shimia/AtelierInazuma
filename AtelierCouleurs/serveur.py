@@ -864,6 +864,29 @@ def telop_png(code):
     return out
 
 
+def telop_apercu(code_tech, code_telop):
+    """(21/11) bannière à MONTRER dans les aperçus (web et lecteur natif) pour la technique code_tech :
+    1. celle faite dans l'onglet Bannières (« Utiliser pour la technique ouverte ») : cache/bannieres_apercu/<code>.png ;
+    2. celle d'une copie déjà créée (sortie/<mod>/content/telops/any/<code>.png), ou d'un mod installé ;
+    3. sinon celle du jeu (code_telop : la bannière de la cinématique d'origine)."""
+    c = os.path.basename(code_tech or '')
+    if c:
+        for p in [os.path.join(CACHE, 'bannieres_apercu', c + '.png')] + \
+                 glob.glob(os.path.join(ICI, 'sortie', '*', 'content', 'telops', 'any', c + '.png')) + \
+                 glob.glob(os.path.join(CFG.get('jeu_dir') or ICI, 'mods', '*', 'content', 'telops', 'any', c + '.png')):
+            if os.path.isfile(p):
+                return p
+    return telop_png(code_telop or code_tech)
+
+
+def telop_apercu_version(code_tech):
+    """date de la bannière perso de la technique (0 sans) : l'aperçu web recharge l'image quand elle change"""
+    c = os.path.basename(code_tech or '')
+    p = os.path.join(CACHE, 'bannieres_apercu', c + '.png')
+    l = [p] + glob.glob(os.path.join(ICI, 'sortie', '*', 'content', 'telops', 'any', c + '.png'))
+    return max([os.path.getmtime(x) for x in l if os.path.isfile(x)] or [0])
+
+
 # joueur générique des cinématiques : maillot u000101 + chaussures s000101 + tête mannequin c21000010, squelette c000101
 JOUEUR = [('common/chr/_uniform/u000101/u000101.g4md', 'dx11/chr/c000101/c000101.g4tx'),
           ('common/chr/_uniform/s000101/s000101.g4md', 'dx11/chr/c000101/c000101.g4tx'),
@@ -1577,6 +1600,10 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._fichier(_num.planche_png(CFG['data_dir'], p_, os.path.join(CACHE, 'numeros')))
             if u.path == '/api/telop_png':
                 return self._fichier(telop_png(q['code'][0]))
+            if u.path == '/api/telop_apercu':              # bannière des aperçus : la perso si elle existe, sinon celle du jeu
+                return self._fichier(telop_apercu(q.get('tech', [''])[0], q.get('telop', [''])[0]))
+            if u.path == '/api/telop_apercu_version':
+                return self._envoyer(200, {'v': telop_apercu_version(q.get('tech', [''])[0])})
             if u.path == '/api/etat':
                 return self._envoyer(200, {'jeu_ouvert': export.jeu_ouvert(), 'deja': export._deja_dans_le_mod(os.path.join(ICI, 'sortie', export.MOD_ID)),
                                        'esprits': esprits.contenu(CFG), 'maillots': os.path.isfile(MAILLOTS)})
@@ -1655,6 +1682,12 @@ class Gestion(BaseHTTPRequestHandler):
                 tmp = f + '.tmp'
                 json.dump(demande.get('etat') or {}, open(tmp, 'w', encoding='utf-8'), ensure_ascii=False)
                 os.replace(tmp, f)
+                return self._envoyer(200, {'ok': True})
+            if u.path == '/api/banniere_apercu':          # (21/11) bannière perso de la technique ouverte : aussi pour les aperçus
+                c = os.path.basename(demande.get('code') or '')
+                if not c:
+                    return self._envoyer(200, {'ok': False, 'erreur': 'technique inconnue'})
+                export.ecrire_png_banniere(demande['image'], os.path.join(CACHE, 'bannieres_apercu', c + '.png'))
                 return self._envoyer(200, {'ok': True})
             if u.path == '/api/banniere':
                 t = PAR_CODE.get(demande.get('base', ''))

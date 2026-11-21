@@ -687,6 +687,31 @@ def _seulement_corps(an, corps=1):
         a.pop('corps', None)
 
 
+def _ecrire_telop(dos, code, telop, S_):
+    """telop.bin de la scène (u32 largeur, hauteur, puis pixels RVBA) ; (21/11) la bannière PERSO de la technique si elle
+    existe (onglet Bannières, copie déjà créée : serveur.telop_apercu), sinon celle du jeu. Refait à chaque ouverture."""
+    f_tel = os.path.join(dos, 'telop.bin')
+    if os.path.exists(f_tel):
+        os.remove(f_tel)
+    if telop and telop.get('courbes'):
+        try:
+            png = S_.telop_apercu(code, telop['code']) if hasattr(S_, 'telop_apercu') else S_.telop_png(telop['code'])
+            if os.path.exists(png):
+                w, h, rows = images.lire_png(png)
+                n = len(rows[0]) // w
+                px = bytearray()
+                for r in rows:
+                    if n == 4:
+                        px += bytes(r[:4 * w])
+                    else:
+                        for x in range(w):
+                            px += bytes(r[n * x:n * x + 3]) + b'\xff'
+                open(f_tel, 'wb').write(struct.pack('<II', w, h) + bytes(px))
+        except Exception as ex:
+            print('bannière :', ex)
+    return f_tel
+
+
 def exporter_technique(code, force=False):
     """scenes/tech_<code>/ : tech.json (animation + pièces + émetteurs + lumières + personnages + réglages),
     effets.bin (ressources), lums.bin (CLightData par réglages), textures.json (clé -> n° de texture : retouches)."""
@@ -698,6 +723,10 @@ def exporter_technique(code, force=False):
     f_emp = os.path.join(dos, 'empreinte.txt')
     emp = 'tech %d / effets %d' % (VERSION_TECH, VERSION_FORMAT)
     if not force and os.path.exists(f_emp) and open(f_emp).read() == emp and os.path.exists(os.path.join(dos, 'tech.json')):
+        try:                                       # (21/11) scène gardée, mais bannière refaite : elle peut avoir changé
+            _ecrire_telop(dos, code, json.load(open(os.path.join(dos, 'tech.json'), encoding='utf-8')).get('telop'), S_)
+        except Exception as ex:
+            print('bannière :', ex)
         return {'dossier': dos, 'technique': 'gardée'}
     os.makedirs(dos, exist_ok=True)
     t = S_.technique(code)                            # (17/11/2026) + techniques des mods : leur racine superposée
@@ -821,25 +850,7 @@ def exporter_technique(code, force=False):
     open(os.path.join(dos, 'lums.bin'), 'wb').write(bytes(o_.b))
     # bannière (14/11/2026) : image de la technique (celle que montre l'Atelier : dx11/menu/220_img/telop_waza/fr) en RVBA brut
     # -> telop.bin (u32 largeur, hauteur, puis les pixels) ; instants et courbes du modèle de menu du jeu dans tech.json
-    f_tel = os.path.join(dos, 'telop.bin')
-    if os.path.exists(f_tel):
-        os.remove(f_tel)
-    if telop and telop.get('courbes'):
-        try:
-            png = S_.telop_png(telop['code'])
-            if os.path.exists(png):
-                w, h, rows = images.lire_png(png)
-                n = len(rows[0]) // w
-                px = bytearray()
-                for r in rows:
-                    if n == 4:
-                        px += bytes(r[:4 * w])
-                    else:
-                        for x in range(w):
-                            px += bytes(r[n * x:n * x + 3]) + b'\xff'
-                open(f_tel, 'wb').write(struct.pack('<II', w, h) + bytes(px))
-        except Exception as ex:
-            print('bannière :', ex)
+    f_tel = _ecrire_telop(dos, code, telop, S_)
     tech = {'code': code, 'anim': an, 'pieces': pieces, 'emetteurs': emetteurs, 'lumieres': lumieres, 'acteurs': acteurs,
             'reglages': regl, 'plan_lum': plan_lum, 'telop': telop if (telop and os.path.exists(f_tel)) else None}
     json.dump(tech, open(os.path.join(dos, 'tech.json'), 'w', encoding='utf-8'), separators=(',', ':'))

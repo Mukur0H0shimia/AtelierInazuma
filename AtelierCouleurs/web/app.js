@@ -1860,6 +1860,7 @@ async function chargerAnimation(t) {
   $('l-info').textContent = 'Lecture de l\'animation…';
   const d = await api('/api/anim?code=' + t.code);
   if (E.tech !== t) return;                                       // une autre technique a été ouverte entre-temps
+  try { E.telopV = (await api('/api/telop_apercu_version?tech=' + encodeURIComponent(t.code))).v; } catch (e) { }   // bannière perso à jour
   const L = new Lecteur(d);
   E.vue.lumieresDefs = [];                                          // lumières ponctuelles (CCustomPointLight) des objets de l'effet
   for (const o of E.objets) { if (o.erreur || !L.objets[o.acteur]) continue;
@@ -1939,7 +1940,9 @@ function majTelop(f) {
     for (let i = 1; i < k.length; i++) if (u < k[i][0]) return k[i - 1][1] + (k[i][1] - k[i - 1][1]) * (u - k[i - 1][0]) / (k[i][0] - k[i - 1][0]); return d; };
   const sortie = C && f >= fin ? (f - fin) * (t.vitesse_out || 1) : null;
   if (!t || !E.vue.lecteur || !$('l-banniere').checked || f < t.debut || (f >= fin && (!C || sortie > 10))) { el.style.display = 'none'; return; }
-  const src = E.banniereImage && E.tech && E.banniereImage.code === E.tech.code ? E.banniereImage.image : '/api/telop_png?code=' + encodeURIComponent(t.code);
+  // (21/11) bannière perso (onglet Bannières ou copie déjà créée) si elle existe, sinon celle du jeu ; v : date de la perso
+  const src = E.banniereImage && E.tech && E.banniereImage.code === E.tech.code ? E.banniereImage.image
+    : '/api/telop_apercu?tech=' + encodeURIComponent(E.tech ? E.tech.code : '') + '&telop=' + encodeURIComponent(t.code) + '&v=' + (E.telopV || 0);
   if (el.dataset.src !== src) { el.src = src; el.dataset.src = src; }
   let s, op;
   if (C) { if (sortie === null) { const u = (f - t.debut) * (t.vitesse_in || 0.5); s = val(C.echelle_in, u, 1); op = val(C.fondu_in, u, 1); }
@@ -2043,11 +2046,12 @@ async function ouvrirBannieres() {
     $('b-utiliser').onclick = () => {
       if (!E.tech || E.tech.perso) return $('b-rapport').textContent = "Ouvre d'abord une technique dans l'onglet Techniques.";
       E.banniereImage = { code: E.tech.code, image: B.ed.image() };
+      api('/api/banniere_apercu', { code: E.tech.code, image: E.banniereImage.image }).then(() => { E.telopV = Date.now(); }).catch(() => {});   // aussi pour le lecteur natif
       $('b-rapport').textContent = `Bannière prête pour « ${E.tech.nom} » : elle partira avec « Créer le mod » (onglet Techniques).`; };
     $('b-enregistrer').onclick = async () => {
       if (!B.choix || B.choix.ouverte) return $('b-rapport').textContent = 'Choisis à gauche une copie déjà créée.';
       $('b-rapport').textContent = 'Enregistrement…';
-      try { const r = await api('/api/banniere', { nom: B.choix.nom, base: B.choix.base, image: B.ed.image() });
+      try { const r = await api('/api/banniere', { nom: B.choix.nom, base: B.choix.base, image: B.ed.image() }); E.telopV = Date.now();
         $('b-rapport').textContent = r.ok ? r.rapport.join('\n') : 'Erreur : ' + r.erreur; } catch (e) { $('b-rapport').textContent = 'Erreur : ' + e.message; } };
     reglagesBanniere();
   }

@@ -60,10 +60,20 @@ def ogg(data_dir, cache_dir, piste='titre'):
     h = b.extrait(ids[0])
     _, debut, fin = boucle_hca(h)
     hca, tmp = out[:-4] + '.tmp.hca', out[:-4] + '.tmp.ogg'
-    open(hca, 'wb').write(h)
+    # (22/11, « énormément saturée ») décodé par moteur/hca.py ; ffmpeg ne fait plus que l'encodage .ogg
+    entree, pcm = ['-i', hca], None
     try:
-        r = subprocess.run([outils_ext.ffmpeg(), '-v', 'error', '-y', '-i', hca, '-c:a', 'libvorbis', '-q:a', '4', tmp],
-                           capture_output=True, text=True)
+        from moteur import hca as _hca
+        x, e = _hca.decoder(h)
+        pcm = x.astype('<f4').tobytes()
+        entree = ['-f', 'f32le', '-ar', str(e['freq']), '-ac', str(e['canaux']), '-i', '-']
+    except Exception as ex:                       # format non pris en charge : décodage de ffmpeg (moins bon)
+        print('musique : décodeur HCA ->', ex)
+        open(hca, 'wb').write(h)
+    try:
+        r = subprocess.run([outils_ext.ffmpeg(), '-v', 'error', '-y'] + entree + ['-c:a', 'libvorbis', '-q:a', '5', tmp],
+                           input=pcm, capture_output=True)
+        r.stderr = r.stderr.decode('utf-8', 'replace')
         if r.returncode != 0 or not os.path.exists(tmp):
             return None, 'décodage impossible : ' + (r.stderr or '')[:200]
         os.replace(tmp, out)

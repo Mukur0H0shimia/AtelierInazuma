@@ -957,3 +957,7 @@ canvas, #atelier-dessin, #centre { touch-action: none; }
 .ms2-puce { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
 .ms2 .ms-section { margin-top: 12px; }
 @media (max-width: 1200px) { .ms2-ligne { grid-template-columns: 140px minmax(120px, 1fr) 30px 100px 30px 28px; } .ms2-l-choix { grid-template-columns: 140px 1fr 28px; } }
+/* (22/11) joueur : trait de l'original et écart sur chaque statistique */
+.ms-stat-barre b.ms2-o { position: absolute; left: calc(var(--o) * 100%); top: 2px; width: 2px; height: 18px; margin-left: -1px; background: rgba(255,255,255,.8); pointer-events: none; }
+.ms-stat-barre .ms2-delta { right: 0; top: -12px; }
+.ms-stat .ms-stat-barre { overflow: visible; }

@@ -103,6 +103,89 @@ def jeu_esprit(data_dir, technique):
     return {}
 
 
+POSTES = {1: 'gk', 2: 'fw', 3: 'mf', 4: 'df'}
+
+
+def _mods_actifs(cfg):
+    import tomllib
+    mods = os.path.join(cfg['jeu_dir'], 'mods')
+    try:
+        return mods, tomllib.load(open(os.path.join(mods, 'enabled.toml'), 'rb')).get('enabled') or []
+    except (OSError, ValueError):
+        return mods, []
+
+
+def jeu_joueur(cfg, carte):
+    """(22/11) l'ORIGINAL d'une copie de joueur, comme en jeu. chara_param (ligne de sa carte) : LU sur 5 721 cartes
+    étiquetées par CharacterReforged (« MF/DF · mountain », 99,97 % d'accord) : colonne 2 = élément (1 air, 2 forêt,
+    3 feu, 4 montagne, 5 néant), 3 = poste (1 GK, 2 FW, 3 MF, 4 DF), 4 = 2e poste. Les stats du jeu de base sont
+    CALCULÉES selon le niveau (growth_table_config : Lv1 / Lv30 / Main + Sub 50 et 99) : pas de valeur à montrer ; un mod
+    activé qui redéfinit la carte ([[edit]] → [[edit.cards]] id = carte, stats = {…}, CharacterReforged…) les donne
+    telles qu'en jeu (le dernier de enabled.toml gagne). -> {position, sub_position, element, stats.<nom>…, '_source'}"""
+    import tomllib
+    from . import cfgbin
+    out = {}
+    if not carte:
+        return out
+    carte &= 0xFFFFFFFF
+    f = _dernier(os.path.join(cfg['data_dir'], 'common', 'gamedata', 'character', 'chara_param_1*.cfg.bin'))
+    if f:
+        for _, v in cfgbin.lire(open(f, 'rb').read()):
+            if len(v) > 4 and isinstance(v[0], int) and v[0] & 0xFFFFFFFF == carte:
+                if v[2] in ELEMENTS:
+                    out['element'] = ELEMENTS[v[2]]
+                if v[3] in POSTES:
+                    out['position'] = POSTES[v[3]]
+                if v[4] in POSTES:
+                    out['sub_position'] = POSTES[v[4]]
+                break
+    mods, actifs = _mods_actifs(cfg)
+    motif = ('0x%08X' % carte).lower()
+    for m in actifs:
+        if m.startswith('Mes'):                       # nos propres mods : jamais l'« original »
+            continue
+        for g in sorted(glob.glob(os.path.join(mods, m, 'content', 'characters', '**', '*.toml'), recursive=True)):
+            try:
+                t = open(g, encoding='utf-8').read()
+                if motif not in t.lower():
+                    continue
+                d = tomllib.loads(t)
+            except (OSError, ValueError):
+                continue
+            for bloc in (d.get('edit') or []) + (d.get('character') or []):
+                for c in (bloc.get('cards') or []) if isinstance(bloc, dict) else []:
+                    if isinstance(c, dict) and isinstance(c.get('id'), int) and c['id'] & 0xFFFFFFFF == carte:
+                        st = c.get('stats') or {}
+                        for k, _ in STATS_JOUEUR:
+                            if isinstance(st.get(k), int):
+                                out['stats.' + k] = st[k]
+                        if c.get('sub_position') in POSTES.values():
+                            out['sub_position'] = c['sub_position']
+                        if st:
+                            out['_source'] = m
+                if isinstance(bloc, dict) and bloc.get('cards') and any(isinstance(c, dict) and c.get('id', 0) & 0xFFFFFFFF == carte for c in bloc['cards']):
+                    for k in ('position', 'element'):
+                        if bloc.get(k) in (POSTES.values() if k == 'position' else NUM_ELEMENT):
+                            out[k] = bloc[k]
+    return out
+
+
+def jeu_technique_en_jeu(cfg, code):
+    """(22/11) valeurs de l'original COMME EN JEU : celles du jeu + les changements des mods activés (HissatsuReforged…)"""
+    jeu = jeu_technique(cfg['data_dir'], code)
+    try:
+        from .coups import stats_mods
+        ch = stats_mods(cfg).get(code) or {}
+    except Exception:
+        ch = {}
+    for n, cle in ((0, 'power_min'), (1, 'power_max'), (2, 'tp')):
+        if n in ch and cle in jeu:
+            jeu[cle] = int(ch[n])
+    if ch and jeu:
+        jeu['_source'] = 'mods'
+    return jeu
+
+
 # ------------------------------------------------------------------ écriture (seulement ce qui change)
 def _changes(stats, jeu):
     return {k: v for k, v in (stats or {}).items() if v not in (None, '') and (k not in jeu or jeu[k] != v)}

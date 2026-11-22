@@ -837,6 +837,9 @@ function dessinerTextures() {
     if (texturePasMontree(cle)) { d.classList.add('cachee');
       d.title += '\nVersion de l’objet que le jeu ne montre PAS dans cette technique : tes changements ici ne se verront pas.'
         + '\nClic droit → « Copier cette image sur … » pour les mettre sur la version montrée.'; }
+    // (22/11) texture empruntée à un autre objet : visible dans l'aperçu, mais le jeu ne la recolore pas dans la copie
+    if (x.info.source && !x.obj.modeleActeur) { d.classList.add('cachee');
+      d.title += `\nPrise dans un autre objet (${x.info.source.split('/').pop().split('.')[0]}) : le jeu ne la recolore pas dans ta copie (ignorée à la création).`; }
     d.append(cv, n);
     d.ondblclick = () => { if (x.cur && !x.info.donnees) ouvrirEditeur(cle); };      // (15/11/2026) éditeur en grand
     d.oncontextmenu = ev => { ev.preventDefault(); menuTexture(ev, cle); };      // (15/11/2026) clic droit : Localiser / Dessiner
@@ -1923,7 +1926,7 @@ async function cpExporter() {
   majRapport('Création de la copie « ' + nom + ' » (réencodage de ' + Object.keys(textures).length + ' texture(s))…');
   const r = await api('/api/copie_personnage', { code: E.tech.code, nom, description: $('cp-desc').value.trim(), textures, portrait: await photoIcone('visage') });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer » enchaîne l'installation
+  return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
 window.addEventListener('load', () => { if (!$('cp-exporter')) return;
   $('cp-exporter').onclick = () => cpExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cp-installer').onclick = () => installer('MesPersonnages'); });
@@ -1946,7 +1949,7 @@ async function caExporter() {
   majRapport('Création de l’armure (réencodage de ' + Object.keys(textures).length + ' texture(s))…');
   const r = await api('/api/copie_armure', { code: E.tech.code, esprit: $('ca-esprit').value, nom: $('ca-nom').value.trim(), textures });
   majRapport(r.ok ? 'Armure créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesEsprits).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer » enchaîne l'installation
+  return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
 window.addEventListener('load', () => { if (!$('ca-exporter')) return;
   $('ca-exporter').onclick = () => caExporter().catch(e => majRapport('Erreur : ' + e.message)); $('ca-installer').onclick = () => installer('MesEsprits');
@@ -1985,7 +1988,7 @@ async function ctExporter() {
   majRapport('Création du nouveau joueur…');
   const r = await api('/api/copie_tenue', { code: E.tech.code, porteur: $('ct-porteur').value, nom: $('ct-nom').value.trim(), description: $('ct-desc').value.trim(), textures });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer » enchaîne l'installation
+  return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
 async function coExporter() {
   if (!E.tech || E.tech.genre !== 'Accessoire') return majRapport('Ouvre d’abord un accessoire (onglet Tenues, tri « Accessoire »).');
@@ -1994,7 +1997,7 @@ async function coExporter() {
   majRapport('Création du nouveau joueur…');
   const r = await api('/api/copie_objet', { code: E.tech.code, tete, nom: $('co-nom').value.trim(), description: $('co-desc').value.trim(), textures });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer » enchaîne l'installation
+  return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
 window.addEventListener('load', () => { if (!$('ct-exporter')) return;
   $('ct-exporter').onclick = () => ctExporter().catch(e => majRapport('Erreur : ' + e.message)); $('ct-installer').onclick = () => installer('MesPersonnages');
@@ -2014,7 +2017,7 @@ async function cuExporter() {
   if (!corps.length) return majRapport('Coche au moins une corpulence (« Qui peut la mettre ? »).');
   const r = await api('/api/copie_outfit', { code: E.tech.code, nom: $('cu-nom').value.trim(), description: $('cu-desc').value.trim(), prix: +$('cu-prix').value || 28, textures, icone: E.cuIcone || null, corps });
   majRapport(r.ok ? 'Tenue créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesTenues).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer » enchaîne l'installation
+  return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
 window.addEventListener('load', () => { if (!$('cu-exporter')) return;
   $('cu-exporter').onclick = () => cuExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cu-installer').onclick = () => installer('MesTenues');
@@ -2050,7 +2053,7 @@ async function ojExporter() {
   majRapport('Création de la copie…');
   const r = await api('/api/copie_objet_jeu', { code: E.tech.code, nom: $('oj-nom-copie').value.trim(), description: $('oj-desc-copie').value, prix: +$('oj-prix').value || 10, icone: x && x.cur ? x.cur.toDataURL('image/png') : null });
   majRapport(r.ok ? 'Objet créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesObjets).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer » enchaîne l'installation
+  return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
 window.addEventListener('load', () => { if (!$('oj-exporter')) return;
   $('oj-exporter').onclick = () => ojExporter().catch(e => majRapport('Erreur : ' + e.message)); $('oj-installer').onclick = () => installer('MesObjets'); });
@@ -2066,6 +2069,7 @@ async function installer(mod) {
     majRapport(r.ok ? 'C’est dans le jeu ! ' + (OU_EN_JEU[mod || 'MesTechniques'] || '') + ' (Relance le jeu s’il était ouvert.)'
                       + (r.avertissement ? '\n⚠ ' + r.avertissement : '')
                       + (r.repares ? '\nRéparé (totem / esprit qui n’apparaissait pas dans la cinématique) : ' + r.repares.join(', ') : '')   // (22/11)
+                      + (r.controle ? '\n⚠ À vérifier (le jeu ignorera) :\n- ' + r.controle.join('\n- ') : '')   // (22/11) moteur/verifier_mods.py
                       + '\nInstallé dans ' + r.dossier + '\nSauvegarde : ' + r.sauvegarde + '\nLance le jeu, puis regarde le journal de VRFW (aucune ligne ERROR).'
                     : 'Pas installé : ' + r.erreur);
     return r;
@@ -2777,9 +2781,9 @@ async function ouvrirStats(c) {
   const jeu = r.jeu || {}, deja = r.stats || {}, champ = k => r.champs.find(x => x.cle === k);
   // valeurs de travail : réglées avant, sinon celles de l'original (joueur : vide = comme l'original)
   const V = {};
-  for (const ch of r.champs) { const k = ch.cle, d = k.startsWith('stats.') ? (deja.stats || {})[k.slice(6)] : deja[k];
-    V[k] = d !== undefined ? d : (jeu[k] !== undefined ? jeu[k] : ''); }
   const joueur = r.genre === 'personnages';
+  for (const ch of r.champs) { const k = ch.cle, d = k.startsWith('stats.') ? (deja.stats || {})[k.slice(6)] : deja[k];
+    V[k] = d !== undefined ? d : (jeu[k] !== undefined && (!joueur || k.startsWith('stats.')) ? jeu[k] : ''); }
   let statsOn = joueur && !!deja.stats;
   // ---- carte + aperçu (gauche)
   const proj = projetDe(c);
@@ -2804,11 +2808,13 @@ async function ouvrirStats(c) {
         <div class="ms-infos"><span class="tc-puce el-${el} ms2-puce">${elIcone(V.element, 22)}${echapper(libEl(V.element) || 'Élément')}</span><span class="tc-niv"><span>Niv. 1</span>${V.power_min}</span></div>`;
       if (jeu.power_max !== undefined) h += `<div class="ms-titre">Original</div><div class="tc-barre petit esprit"><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>${motEsprit}</small>${jeu.power_max}</span></div>`;
     } else {
-      const p = V.position ? MS_POSTE[V.position] : null, el2 = V.element ? MS_EL[V.element] : '';
+      const pos = V.position || jeu.position, sub = V.sub_position || jeu.sub_position, ele = V.element || jeu.element;   // (22/11) vide = l'original
+      const p = pos ? MS_POSTE[pos] : null, el2 = ele ? MS_EL[ele] : '';
       h += `<div class="ms-titre">Comme en jeu</div><div class="ms-joueur-tags">
-        ${p ? `<span class="ms-poste p-${V.position}">${p[0]}</span>` : '<span class="ms-poste vide">poste d’origine</span>'}
-        ${V.sub_position ? `<span class="ms-poste petit p-${V.sub_position}">${MS_POSTE[V.sub_position][0]}</span>` : ''}
-        ${el2 ? `<span class="tc-puce el-${el2}">${echapper(libEl(V.element))}</span>` : '<span class="tc-puce">élément d’origine</span>'}</div>`;
+        ${p ? `<span class="ms-poste p-${pos}">${p[0]}</span>` : '<span class="ms-poste vide">poste d’origine</span>'}
+        ${sub && MS_POSTE[sub] ? `<span class="ms-poste petit p-${sub}">${MS_POSTE[sub][0]}</span>` : ''}
+        ${el2 ? `<span class="tc-puce el-${el2} ms2-puce">${elIcone(ele, 22)}${echapper(libEl(ele))}</span>` : '<span class="tc-puce">élément d’origine</span>'}</div>`;
+      if (r.source) h += `<p class="ms-note">Original : stats du mod ${echapper(r.source)} (activé), comme en jeu.</p>`;
     }
     G.innerHTML = h;
   };
@@ -2855,11 +2861,11 @@ async function ouvrirStats(c) {
         + ligneChoix('element', elems, true, 'ms2-els')
         + `<div class="ms-section">Statistiques <label class="ms-bascule"><input type="checkbox" class="ms-stats-on"${statsOn ? ' checked' : ''}> les changer</label></div>`
         + `<div class="ms-stats${statsOn ? '' : ' eteint'}">` + Object.entries(MS_STAT).map(([k, cl]) => {
-          const ch = champ('stats.' + k), v = V['stats.' + k] === '' ? 200 : V['stats.' + k];
-          return `<div class="ms-stat s-${cl}"><span class="ms-stat-nom">${echapper(ch.nom.toUpperCase())}</span>
-            <span class="ms-stat-barre"><i style="--v:${Math.min(1, v / 300)}"></i><input type="range" data-k="stats.${k}" min="0" max="300" value="${v}"${statsOn ? '' : ' disabled'}></span>
+          const ch = champ('stats.' + k), v = V['stats.' + k] === '' ? 200 : V['stats.' + k], o = jeu['stats.' + k];
+          return `<div class="ms-stat s-${cl}" data-st="${k}"><span class="ms-stat-nom">${echapper(ch.nom.toUpperCase())}</span>
+            <span class="ms-stat-barre"><i style="--v:${Math.min(1, v / 300)}"></i>${o !== undefined ? `<b class="ms2-o" style="--o:${Math.min(1, o / 300)}" title="original : ${o}"></b>` : ''}<small class="ms2-delta"></small><input type="range" data-k="stats.${k}" min="0" max="300" value="${v}"${statsOn ? '' : ' disabled'}></span>
             <input type="number" class="ms-stat-val" data-k="stats.${k}" min="0" max="999" value="${v}"${statsOn ? '' : ' disabled'}></div>`; }).join('')
-        + '</div><p class="ms-note">Sans « les changer » : les statistiques de l’original. Les 8 vont ensemble.</p>';
+        + `</div><p class="ms-note">Sans « les changer » : les statistiques de l’original${Object.keys(jeu).some(k => k.startsWith('stats.')) ? ' (trait blanc)' : ''}. Les 8 vont ensemble.</p>`;
     }
     h += '<div class="ms-etat"></div></div>';
     D.innerHTML = h;
@@ -2898,6 +2904,9 @@ async function ouvrirStats(c) {
       e.textContent = d ? (d > 0 ? '+' : '−') + Math.abs(d) : ''; e.className = 'ms2-delta' + (d > 0 ? ' plus' : d < 0 ? ' moins' : '');
       L.classList.toggle('change', !!d);
     });
+    D.querySelectorAll('.ms-stat[data-st]').forEach(L => { const k = 'stats.' + L.dataset.st, o = jeu[k], e = L.querySelector('.ms2-delta');
+      const d = o !== undefined && statsOn && V[k] !== '' ? +V[k] - o : 0;
+      e.textContent = d ? (d > 0 ? '+' : '−') + Math.abs(d) : ''; e.className = 'ms2-delta' + (d > 0 ? ' plus' : d < 0 ? ' moins' : ''); });
     D.querySelectorAll('.ms2-l-choix').forEach(L => { const b = L.querySelector('.ms-choix'), k = b && b.dataset.k;
       L.classList.toggle('change', !!k && jeu[k] !== undefined && V[k] !== '' && String(V[k]) !== String(jeu[k])); });
     const cases = [];
@@ -2907,6 +2916,9 @@ async function ouvrirStats(c) {
       if (nombre(k) && k !== 'users' && k !== 'growth') { const d = +V[k] - +jeu[k];
         cases.push(`<span class="ms2-case ${d > 0 ? 'plus' : 'moins'}"><small>${echapper(nom)}</small>${d > 0 ? '+' : '−'}${Math.abs(d)}</span>`); }
       else cases.push(`<span class="ms2-case chg"><small>${echapper(nom)}</small>${echapper(libChoix(k, jeu[k]))} → ${echapper(libChoix(k, V[k]))}</span>`); }
+    if (joueur && statsOn) { let n = 0, tot = 0; for (const [k] of Object.entries(MS_STAT)) { const o = jeu['stats.' + k]; if (o === undefined || V['stats.' + k] === '') continue;
+        if (+V['stats.' + k] !== o) n++; tot += +V['stats.' + k] - o; }
+      if (n) cases.push(`<span class="ms2-case ${tot >= 0 ? 'plus' : 'moins'}"><small>${n} stat${n > 1 ? 's' : ''} · total</small>${tot >= 0 ? '+' : '−'}${Math.abs(tot)}</span>`); }
     const Z = D.querySelector('.ms2-deltas');
     if (Z) Z.innerHTML = cases.length ? cases.join('') + `<button class="ms2-tout-raz" title="Remettre toutes les valeurs de l’original (rien n’est écrit avant « Enregistrer »)">↺ Tout remettre</button>`
       : `<span class="ms2-rien">${jeu && Object.keys(jeu).length ? 'Comme l’original : change une valeur, l’écart s’affiche ici.' : 'Valeurs de l’original gardées tant que tu ne changes rien.'}</span>`;

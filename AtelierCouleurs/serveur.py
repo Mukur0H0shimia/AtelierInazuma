@@ -1299,7 +1299,17 @@ def stats_creation(mod, code):
     if not c:
         return {'ok': False, 'erreur': 'création inconnue'}
     genre, _, _, e, jeu, _ = c
-    return {'ok': True, 'genre': genre, 'nom': e.get('nom'), 'champs': st.CHAMPS[genre], 'jeu': jeu, 'stats': e.get('stats')}
+    # (22/11) l'original COMME EN JEU pour le menu (l'écriture garde les valeurs du jeu de base : _creation_stats) :
+    # technique = jeu + mods activés (HissatsuReforged…) ; joueur = carte de l'original (chara_param + mods qui la redéfinissent)
+    try:
+        if genre == 'technique':
+            jeu = st.jeu_technique_en_jeu(CFG, e.get('base'))
+        elif genre == 'personnages':
+            jeu = st.jeu_joueur(CFG, e.get('carte_origine'))
+    except Exception as ex:
+        print('stats : original illisible', ex)
+    src = jeu.pop('_source', None) if isinstance(jeu, dict) else None
+    return {'ok': True, 'genre': genre, 'nom': e.get('nom'), 'champs': st.CHAMPS[genre], 'jeu': jeu, 'stats': e.get('stats'), 'source': src}
 
 
 def regler_stats(mod, code, brut):
@@ -1822,14 +1832,21 @@ class Gestion(BaseHTTPRequestHandler):
                 if not os.path.isfile(f):
                     return self._envoyer(200, {'existe': False})
                 return self._envoyer(200, {'existe': True, 'etat': json.load(open(f, encoding='utf-8'))})
-            if u.path == '/api/technique':
-                return self._envoyer(200, details(q['code'][0]))
+            if u.path in ('/api/technique', '/api/personnage'):
+                # (22/11, chasse aux bugs) code inconnu (projet d'un élément venu d'un mod retiré / désactivé) : avant, erreur 500
+                # « 'whs…' » illisible ; maintenant 404 avec une phrase
+                code_ = (q.get('code') or [''])[0]
+                try:
+                    if u.path == '/api/technique':
+                        return self._envoyer(200, details(code_))
+                    if q.get('cat') and q['cat'][0] in JEU:               # (15/11/2026) maillots, tenues, armures, têtes, objets
+                        return self._envoyer(200, details_jeu(q['cat'][0], code_, q.get('modele', [None])[0], q.get('cote', [None])[0]))
+                    return self._envoyer(200, details_personnage(code_))
+                except KeyError:
+                    return self._envoyer(404, {'ok': False, 'erreur': '« %s » introuvable dans le jeu et les mods activés '
+                                                                     '(il venait peut-être d’un mod retiré ou désactivé).' % code_[:80]})
             if u.path == '/api/personnages':              # (17/11/2026) + esprits guerriers des mods
                 return self._envoyer(200, PERSOS + sans_chemins(mods_liste('esprits')))
-            if u.path == '/api/personnage':
-                if q.get('cat') and q['cat'][0] in JEU:               # (15/11/2026) maillots, tenues, armures, têtes, objets
-                    return self._envoyer(200, details_jeu(q['cat'][0], q['code'][0], q.get('modele', [None])[0], q.get('cote', [None])[0]))
-                return self._envoyer(200, details_personnage(q['code'][0]))
             if u.path == '/api/porteurs':                  # (15/11/2026) qui porte cette tenue / cet objet est-il un accessoire
                 cat, code = q.get('cat', [''])[0], q.get('code', [''])[0]
                 e = JEU_CODE.get((cat, code))

@@ -313,6 +313,15 @@ def exporter(cfg, demande, infos_technique):
             continue
         copie = copie_objet(acteur, ev)
         imgs = reglage.get('textures') or {}
+        # (22/11, chasse aux bugs : journal VRFW de muku « [[recolor]] 1 (ev62891050): image not used: BallAura0010 (no such
+        # texture) ») une texture EMPRUNTÉE à un autre objet (info 'source', ex. BallAura0010 de ev62006200 dans Muraille
+        # impénétrable) n'est pas dans la planche de cet objet : VRFW ne peut pas la recolorer ici -> pas écrite, dite
+        emprunts = {t['nom']: t['source'] for o in infos_technique.get('objets_details') or [] if o.get('acteur') == acteur
+                    for t in o.get('textures') or [] if t.get('source')}
+        for t_ in sorted(set(imgs) & set(emprunts)):
+            rapport.append('texture %s : prise dans un autre objet (%s), le jeu ne la recolore pas dans cette copie -> ignorée'
+                           % (t_, os.path.basename(emprunts[t_]).split('.')[0]))
+        imgs = {k: v for k, v in imgs.items() if k not in emprunts}
         lueurs = reglage.get('lueurs')
         mats = reglage.get('materiaux') or {}      # (14/11/2026) couleurs de matériau : {nom ou crc : [r, v, b]}
         # (14/11/2026) teintes des sommets {pièce : [H, C]} et des particules [H, C] : un bloc [[recolor]] par teinte sur la copie
@@ -573,6 +582,13 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
     r = {'ok': True, 'dossier': dst, 'sauvegarde': sauv}
     if repares:
         r['repares'] = repares
+    try:                                                 # (22/11) contrôle des règles de VRFW (moteur/verifier_mods.py)
+        from .verifier_mods import verifier
+        pb = [t for g, f, t in verifier(cfg, os.path.dirname(src)) if f.split(os.sep)[0] == mod_id]
+        if pb:
+            r['controle'] = pb
+    except Exception as ex:
+        print('contrôle des mods :', ex)
     if not os.path.isdir(os.path.join(mods, 'VRFW')):   # (21/11) sans le chargeur de mods, rien ne se charge en jeu
         r['avertissement'] = ('VRFW n’est pas dans le dossier mods du jeu : installe-le (avec Inazuma Fantasy), sinon le mod '
                               'ne se chargera pas.')

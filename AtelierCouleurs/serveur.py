@@ -79,13 +79,31 @@ def noms_lisibles(nom):
     return _re.sub(r'<[A-Z]+:([A-Za-z0-9_-]+?)\d*>', lambda m: m.group(1).replace('_', ' ').capitalize(), nom)
 
 
+CATALOGUES_EN_ERREUR = []
+
+
+def _essayer(nom, fn, defaut):
+    """(22/11, 2.0 chez un joueur : chara_base illisible -> « Le serveur de l'atelier n'a pas démarré ») un fichier du jeu
+    illisible (modifié par un autre outil de mod…) ne bloque plus tout l'Atelier : ce catalogue reste vide, le journal dit
+    lequel et pourquoi (traceback), la page le signale (/api/etat : catalogues_en_erreur)"""
+    try:
+        return fn()
+    except Exception as ex:
+        import traceback
+        print('CATALOGUE ILLISIBLE / UNREADABLE CATALOGUE : %s (%s)' % (nom, ex))
+        traceback.print_exc()
+        CATALOGUES_EN_ERREUR.append('%s : %s' % (nom, ex))
+        return defaut
+
+
 def charger_catalogues():
     """techniques, Keshin, personnages, tout le jeu, séries : dans la langue choisie (FR / EN)"""
     global INDEX, PAR_CODE, PERSOS, PERSO_CODE, VIDEOS, JEU, JEU_CODE, SERIES
     CT = cache_txt()
-    INDEX = techniques.construire_index(CFG['data_dir'], CT)
+    del CATALOGUES_EN_ERREUR[:]
+    INDEX = _essayer('techniques', lambda: techniques.construire_index(CFG['data_dir'], CT), [])
     PAR_CODE = {t['code']: t for t in INDEX}
-    PERSOS = personnages.construire(CFG['data_dir'], CT)
+    PERSOS = _essayer('esprits / totems (chara_base)', lambda: personnages.construire(CFG['data_dir'], CT), [])
     # vidéos officielles des techniques (site zukan.inazuma.jp, relevé le 13/11/2026) : code -> adresse ; lues sur le site, rien n'est copié
     # (21/11) fourni avec l'Atelier (AtelierCouleurs/videos_officielles.json : des adresses seulement) ; avant : seulement dans
     # le cache de muku -> « Vidéo du jeu » sans vidéo chez tous les autres
@@ -98,7 +116,7 @@ def charger_catalogues():
             pass
     PERSO_CODE = {p['code']: p for p in PERSOS}
     # (15/11/2026) tout le jeu : maillots, tenues, armures, personnages (têtes), objets — ouverts comme les esprits
-    JEU = jeu.construire(CFG['data_dir'], CT, mes_maillots.catalogue(CFG))
+    JEU = _essayer('tout le jeu (maillots, tenues, armures, têtes)', lambda: jeu.construire(CFG['data_dir'], CT, mes_maillots.catalogue(CFG)), {})
     # (15/11/2026) onglet Objets = les OBJETS DU JEU (inventaire) ; les modèles 3D d'objets passent en « objets3d », et les
     # accessoires portés (lunettes, casquettes… : EXMESH) vont dans Tenues (genre « Accessoire ») avec leur copie « nouveau joueur »
     def _accessoires_3d():
@@ -108,9 +126,9 @@ def charger_catalogues():
         return {v[0].split('/')[1] for k, v in _p(parts) if k == 'CHARA_PARTS_EXMESH_INFO' and v and isinstance(v[0], str) and v[0].startswith('_item/')}
     if 'objets3d' not in JEU:
         JEU['objets3d'] = JEU.get('objets', [])
-        _acc = _accessoires_3d()
-        JEU['tenues'] = JEU['tenues'] + [dict(x, nom='Accessoire ' + x['code'], genre='Accessoire') for x in JEU['objets3d'] if x['code'] in _acc]
-    JEU['objets'] = objets_jeu.construire(CFG['data_dir'], CT)
+        _acc = _essayer('accessoires (chara_parts)', _accessoires_3d, set())
+        JEU['tenues'] = JEU.get('tenues', []) + [dict(x, nom='Accessoire ' + x['code'], genre='Accessoire') for x in JEU['objets3d'] if x['code'] in _acc]
+    JEU['objets'] = _essayer('objets', lambda: objets_jeu.construire(CFG['data_dir'], CT), [])
     # (21/11) noms du jeu avec balises (« Maillot <FST:GARCILDO> Team ») : lisibles, comme dans l'Atelier Maillots
     for _l in JEU.values():
         if isinstance(_l, list):
@@ -1961,7 +1979,8 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, {'v': telop_apercu_version(q.get('tech', [''])[0], q.get('projet', [''])[0])})
             if u.path == '/api/etat':
                 return self._envoyer(200, {'jeu_ouvert': export.jeu_ouvert(), 'deja': export._deja_dans_le_mod(os.path.join(ICI, 'sortie', export.MOD_ID)),
-                                       'esprits': esprits.contenu(CFG), 'maillots': os.path.isfile(MAILLOTS)})
+                                       'esprits': esprits.contenu(CFG), 'maillots': os.path.isfile(MAILLOTS),
+                                       'catalogues_en_erreur': CATALOGUES_EN_ERREUR})
             return self._envoyer(404, {'erreur': 'introuvable'})
         except Exception as ex:
             traceback.print_exc()

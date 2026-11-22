@@ -94,23 +94,35 @@ def utilisateurs(data_dir, technique, limite=40):
     return out
 
 
+def _lire(f, abime):
+    """(22/11, 2.0.1 : chez un joueur, chara_base illisible -> l'Atelier ne démarrait pas) fichier illisible (modifié par un
+    autre outil de mod…) : ignoré, dit dans le journal ; les esprits restent listés, avec leur code si le nom manque"""
+    try:
+        return cfgbin.lire(open(f, 'rb').read())
+    except Exception as ex:
+        print('fichier du jeu illisible / unreadable game file : %s (%s)' % (f, ex))
+        abime.append(f)
+        return []
+
+
 def construire(data_dir, cache_dir):
     f_cache = os.path.join(cache_dir, 'index_personnages.json')
     if os.path.exists(f_cache):
         return json.load(open(f_cache, encoding='utf-8'))
     c = os.path.join(data_dir, 'common')
     noms = {}
-    for crc, v in cfgbin.lire(open(os.path.join(c, 'text', _langue.code(), 'chara_text.cfg.bin'), 'rb').read()):
+    abime = []
+    for crc, v in _lire(os.path.join(c, 'text', _langue.code(), 'chara_text.cfg.bin'), abime):
         if len(v) > 5 and isinstance(v[0], int) and v[1] == 0 and isinstance(v[5], str):
             noms.setdefault(v[0] & 0xFFFFFFFF, v[5])
     id_nom = {}
     base = _dernier(os.path.join(c, 'gamedata', 'character', 'chara_base_*.cfg.bin'))
-    for crc, v in cfgbin.lire(open(base, 'rb').read()):
+    for crc, v in _lire(base, abime):
         if len(v) > 3 and isinstance(v[0], int) and isinstance(v[3], int):
             id_nom.setdefault(v[0] & 0xFFFFFFFF, v[3] & 0xFFFFFFFF)          # crc32 du code -> id du nom
     techniques, noms_aura = {}, {}
     aura = _dernier(os.path.join(c, 'gamedata', 'skill', 'aura_skill_config_*.cfg.bin'))
-    for crc, v in cfgbin.lire(open(aura, 'rb').read()):
+    for crc, v in _lire(aura, abime):
         if len(v) > 7 and isinstance(v[1], str) and isinstance(v[7], int):
             techniques.setdefault(v[7] & 0xFFFFFFFF, []).append(v[1])         # crc32 du modèle -> techniques
             if isinstance(v[2], int):
@@ -129,5 +141,6 @@ def construire(data_dir, cache_dir):
                 nom = textes.get(noms_aura.get(crc)) or nom
             liste.append({'code': code, 'nom': nom or code, 'genre': genre, 'dossier': dossier,
                           'techniques': techniques.get(crc, [])})
-    json.dump(liste, open(f_cache, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    if not abime:                                  # liste incomplète (noms manquants) : pas gardée en cache
+        json.dump(liste, open(f_cache, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     return liste

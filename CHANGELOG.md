@@ -2,6 +2,11 @@
 
 *English below.*
 
+## 2.0.1
+- **L'Atelier démarre même si un fichier du jeu est illisible** (par exemple modifié par un autre outil de mod). Avant, il s'arrêtait sur « Le serveur de l'atelier n'a pas démarré ». Maintenant, seule la partie concernée reste vide, et un message dit laquelle.
+- Esprits et totems : toujours listés avec leur nom, même si la table des personnages ne se lit pas.
+- Les fichiers « libres » compressés posés dans le dossier du jeu sont lus correctement.
+
 ## 2.0
 
 ### Créer et installer, plus simple
@@ -91,6 +96,11 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 2.0.1
+- **The Atelier starts even if a game file can't be read** (for example changed by another mod tool). Before, it stopped on "The Atelier server did not start". Now only that part stays empty, and a message says which one.
+- Spirits and totems: still listed with their names even if the character table can't be read.
+- Compressed loose files placed in the game folder are read correctly.
 
 ## 2.0
 

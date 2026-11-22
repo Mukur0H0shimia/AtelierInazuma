@@ -298,7 +298,10 @@ class Jeu:
         k = self.bas[rel.lower()]
         arch = self.liste[k][0]
         if arch is None:                       # fichier libre dans data/
-            return open(os.path.join(self.jeu, 'data', *k.split('/')), 'rb').read()
+            d = open(os.path.join(self.jeu, 'data', *k.split('/')), 'rb').read()
+            # (22/11, 2.0.1 : retour d'un joueur, chara_base illisible) un fichier libre posé par un autre outil de mod peut
+            # être compressé comme dans les paquets : même décompression
+            return crilayla(d) if d[:8] == b'CRILAYLA' else d
         return self._archive(arch).extraire(k)
 
     def debut(self, rel, n):
@@ -307,5 +310,6 @@ class Jeu:
         arch = self.liste[k][0]
         if arch is None:
             with open(os.path.join(self.jeu, 'data', *k.split('/')), 'rb') as f:
-                return f.read(n)
+                d = f.read(n)
+            return self.lire(rel)[:n] if d[:8] == b'CRILAYLA' else d
         return self._archive(arch).debut(k, n)

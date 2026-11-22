@@ -3084,3 +3084,12 @@ function dessinerMenuJeu() {
 document.addEventListener('keydown', ev => {        // X : chercher par nom (comme la Banque), seulement au hub et hors d'un champ
   if ((ev.key === 'x' || ev.key === 'X') && $('page-hub') && $('page-hub').offsetParent !== null && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
     ev.preventDefault(); $('hub-cherche').focus(); } });
+
+// (22/11, 2.0.1) un fichier du jeu illisible (modifié par un autre outil de mod…) ne bloque plus le démarrage : on le dit une fois
+(async () => { try {
+  const e = await api('/api/etat');
+  if (e.catalogues_en_erreur && e.catalogues_en_erreur.length)
+    alert("Certains fichiers du jeu sont illisibles (sans doute modifiés par un autre outil de mod) : ces parties de l'Atelier restent vides.\n"
+          + 'Some game files cannot be read (probably changed by another mod tool): these parts of the Atelier stay empty.\n\n'
+          + e.catalogues_en_erreur.join('\n') + '\n\nJournal / log : AtelierCouleurs\\cache\\serveur.log');
+} catch (_) {} })();

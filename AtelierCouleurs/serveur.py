@@ -45,6 +45,13 @@ def sauver_cfg():
 if _cfg_change:
     sauver_cfg()
 JEU_AU_DEMARRAGE = CFG.get('jeu_dir')            # (22/11) dossier du jeu lu par l'Atelier (lecture directe, mods des onglets)
+try:                                             # (22/11) enabled.toml créé par un Atelier d'avant (que nos mods) : tous les mods
+    if export.reparer_enabled(os.path.join(CFG.get('jeu_dir') or '', 'mods', 'enabled.toml'),     # éteints -> retiré
+                              os.path.join(CFG.get('sauvegardes_dir') or os.path.join(ICI, 'sauvegardes'), 'enabled_toml')):
+        print('enabled.toml (créé par une version précédente de l’Atelier : il éteignait VRFW et les autres mods) retiré / '
+              'enabled.toml (made by an older Atelier: it switched VRFW and the other mods off) removed')
+except Exception as _ex:
+    print('enabled.toml :', _ex)
 if not config_auto._data_ok(CFG.get('data_dir')):
     # pas de fichiers extraits : LECTURE DIRECTE dans les paquets du jeu (moteur/donnees_virtuelles.py)
     if CFG.get('jeu_dir') and os.path.isfile(os.path.join(CFG['jeu_dir'], 'data', 'cpk_list.cfg.bin')):

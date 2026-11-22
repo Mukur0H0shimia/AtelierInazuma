@@ -756,6 +756,8 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
             vieux = os.path.join(dst, 'content', 'anims', os.path.basename(a_) + '.retire')
             if os.path.isfile(vieux):
                 os.remove(vieux)
+    if reparer_enabled(en, sauv):                        # (22/11) enabled.toml créé par un Atelier d'avant : tous les mods éteints
+        repares.append('enabled.toml (créé par une version précédente de l’Atelier, il éteignait VRFW et tes autres mods) retiré')
     activer_mod(en, mod_id)
     r = {'ok': True, 'dossier': dst, 'sauvegarde': sauv}
     if repares:
@@ -775,11 +777,40 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
     return r
 
 
+MES_MODS = ('MesTechniques', 'MesEsprits', 'MesPersonnages', 'MesTenues', 'MesObjets', 'MesMaillots')
+
+
+def reparer_enabled(en, sauv=None):
+    """(22/11) enabled.toml CRÉÉ par un Atelier d'avant le 22/11 (le jeu n'en avait pas) : il ne liste que nos mods, donc VRFW et
+    tous les autres mods sont éteints. Reconnu ainsi (que des Mes*, pas VRFW, d'autres mods installés) -> retiré (copie dans la
+    sauvegarde) : VRFW recharge alors tous les mods, comme avant. Renvoie True si retiré."""
+    if not os.path.isfile(en):
+        return False
+    try:
+        ids = tomllib.load(open(en, 'rb')).get('enabled')
+    except (OSError, ValueError):
+        return False
+    d = os.path.dirname(en)
+    autres = [x for x in os.listdir(d) if os.path.isfile(os.path.join(d, x, 'mod.toml')) and x not in MES_MODS]
+    if not isinstance(ids, list) or not ids or not set(ids) <= set(MES_MODS) or not autres:
+        return False
+    if sauv:
+        os.makedirs(sauv, exist_ok=True)
+        shutil.copy(en, os.path.join(sauv, 'enabled.toml.cree_par_l_atelier'))
+    os.remove(en)
+    return True
+
+
 def activer_mod(en, mod_id):
     """(21/11) ajoute mod_id à enabled.toml de VRFW (créé s'il manque) ; une liste vide donne ["mod"] (avant : « [, "mod"] »,
     TOML invalide). Renvoie True si le fichier a changé."""
     os.makedirs(os.path.dirname(en), exist_ok=True)
-    t = open(en, encoding='utf-8').read() if os.path.isfile(en) else 'enabled = []\n'
+    # (22/11, joueur : après « Installer », TOUS ses mods « ne seront pas chargés ») sans enabled.toml, VRFW charge tous les
+    # mods (LU dans winmm.dll : « : every mod enabled », « not in enabled.toml », « requires `VRFW`, which is not enabled ») ;
+    # le créer avec nos seuls mods éteignait VRFW et tous les autres -> on ne le crée plus
+    if not os.path.isfile(en):
+        return False
+    t = open(en, encoding='utf-8').read()
     if '"%s"' % mod_id in t:
         return False
     m = re.search(r'enabled\s*=\s*\[(.*?)\]', t, re.S)

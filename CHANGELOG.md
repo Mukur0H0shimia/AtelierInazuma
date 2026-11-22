@@ -2,6 +2,9 @@
 
 *English below.*
 
+## 2.0.3
+- **Important si tous tes mods se sont éteints après « Installer »** : quand le jeu n'avait pas de fichier `mods\enabled.toml`, l'Atelier en créait un qui ne listait que ses propres mods. VRFW éteignait alors tous les autres, VRFW compris. L'Atelier ne crée plus ce fichier, et retire au démarrage celui qu'une version précédente avait créé : tes mods se rechargent tous.
+
 ## 2.0.2
 - **⚙ Paramètres > Dossier du jeu** : montre le dossier du jeu où « Installer » met tes créations, et toutes les installations trouvées (avec ou sans VRFW, tes mods déjà dedans). On peut en choisir une autre ou en taper le chemin. Utile si ton gestionnaire de mods utilise une autre installation du jeu (créations « installées » mais absentes en jeu).
 - Au premier lancement, l'Atelier choisit d'abord l'installation du jeu qui a VRFW.
@@ -107,6 +110,9 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 2.0.3
+- **Important if all your mods were switched off after "Install"**: when the game had no `mods\enabled.toml` file, the Atelier created one listing only its own mods. VRFW then switched every other mod off, VRFW included. The Atelier no longer creates this file, and on start it removes the one an older version made: all your mods load again.
 
 ## 2.0.2
 - **⚙ Settings > Game folder**: shows the game folder where "Install" puts your creations, and every installation found (with or without VRFW, your mods already in it). You can pick another one or type its path. Useful if your mod manager uses another installation of the game (creations "installed" but missing in game).

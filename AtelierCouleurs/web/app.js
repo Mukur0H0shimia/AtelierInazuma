@@ -1477,9 +1477,9 @@ function dessinerAuras() {
 // (sans chemins de fichiers ni codes), et le texte complet replié dans « Détails » ; en mode avancé, tout le texte comme avant.
 const CHEMIN_RE = /\s*:?\s*[A-Za-z]:\\[^\n]*/g;
 function phraseSimple(l) {
-  return l.replace(/^Mod créé \(pas encore installé\).*$/, 'C’est créé ! Il reste à le mettre dans le jeu.')
-    .replace(/^(Copie|Tenue|Armure) créée \(pas encore installée\).*$/, (_, q) => q + ' créée ! Il reste à la mettre dans le jeu.')
-    .replace(/^Objet créé \(pas encore installé\).*$/, 'Objet créé ! Il reste à le mettre dans le jeu.')
+  return l.replace(/^Mod créé \(pas encore installé\).*$/, 'C’est créé ! Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.')
+    .replace(/^(Copie|Tenue|Armure) créée \(pas encore installée\).*$/, (_, q) => q + ' créée ! Pour la mettre dans le jeu : « Installer » sur sa carte dans Mes créations.')
+    .replace(/^Objet créé \(pas encore installé\).*$/, 'Objet créé ! Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.')
     .replace(/^Erreur : /, 'Ça n’a pas marché : ').replace(/^Pas installé : /, 'Pas mis dans le jeu : ')
     .replace(CHEMIN_RE, '').trim();
 }
@@ -1534,15 +1534,15 @@ async function proposerReprise() {
 // (22/11, « les interfaces ne sont pas assez graphiques ») HABILLAGE MENUS DU JEU (style.css, fin) : coin orange avec l'icône et le nom de
 // l'écran, bande d'aide du bas (ce qu'on fait ici + touches), images du jeu (fond, orange) pour toute la page ; suit l'onglet ouvert.
 const AIDE_ONGLET = {
-  techniques: 'Choisis une technique en haut, change ses couleurs, puis « Créer et mettre dans le jeu ».',
-  esprits: 'Choisis un esprit guerrier en haut, recolore-le, puis « Créer et mettre dans le jeu ».',
-  totems: 'Choisis un totem en haut, recolore-le, puis « Créer et mettre dans le jeu ».',
+  techniques: 'Choisis une technique en haut, change ses couleurs, puis « Créer ».',
+  esprits: 'Choisis un esprit guerrier en haut, recolore-le, puis « Créer ».',
+  totems: 'Choisis un totem en haut, recolore-le, puis « Créer ».',
   bannieres: 'Choisis un style, écris ton texte, puis utilise la bannière pour ta technique.',
-  maillots: 'Choisis un maillot du jeu comme coupe, dessine le haut et le short, puis « Créer et mettre dans le jeu ».',
-  tenues: 'Choisis une tenue en haut, recolore-la, puis « Créer et mettre dans le jeu ».',
-  armures: 'Choisis une armure en haut, recolore-la pour un de tes esprits, puis « Créer et mettre dans le jeu ».',
-  personnages: 'Choisis un personnage en haut, recolore sa tête, donne-lui un nom, puis « Créer et mettre dans le jeu ».',
-  objets: 'Choisis un objet en haut, donne-lui un nom et un prix, puis « Créer et mettre dans le jeu ».',
+  maillots: 'Choisis un maillot du jeu comme coupe, dessine le haut et le short, puis « Créer ».',
+  tenues: 'Choisis une tenue en haut, recolore-la, puis « Créer ».',
+  armures: 'Choisis une armure en haut, recolore-la pour un de tes esprits, puis « Créer ».',
+  personnages: 'Choisis un personnage en haut, recolore sa tête, donne-lui un nom, puis « Créer ».',
+  objets: 'Choisis un objet en haut, donne-lui un nom et un prix, puis « Créer ».',
 };
 function habillageJeu() {
   const h = document.querySelector('header'), nav = document.querySelector('header .onglets');
@@ -1585,26 +1585,17 @@ window.addEventListener('load', () => {
   }).observe(t, { childList: true, characterData: true, subtree: true });
   appliquerMode(modeAvance());
   habillageJeu();
-  // UN SEUL GESTE : « Créer et mettre dans le jeu » = la création existante, puis l'installation de son mod ; les anciens boutons
-  // séparés (« Créer… », « Installer dans le jeu ») restent en mode avancé
-  const PAIRES = [['exporter', () => exporter(), 'MesTechniques', 'installer'], ['exporter-perso', () => exporterPerso(), 'MesEsprits', 'installer-perso'],
-    ['cp-exporter', () => cpExporter(), 'MesPersonnages', 'cp-installer'], ['ct-exporter', () => ctExporter(), 'MesPersonnages', 'ct-installer'],
-    ['co-exporter', () => coExporter(), 'MesPersonnages', 'co-installer'], ['cu-exporter', () => cuExporter(), 'MesTenues', 'cu-installer'],
-    ['oj-exporter', () => ojExporter(), 'MesObjets', 'oj-installer'], ['ca-exporter', () => caExporter(), 'MesEsprits', 'ca-installer']];
-  // (22/11, retour de muku) maillots : un seul bouton « Créer » (refait le mod sans l'installer : l'installation remplaçait
-  // le mod MesMaillots du jeu et voulait retirer un ancien « Maillot Mukuro » fait hors de l'Atelier) ; « Installer » au hub
-  for (const [id, creer, mod, idInst] of PAIRES) {
-    const orig = $(id); if (!orig || $(id + '-jeu')) continue;
-    const b = document.createElement('button'); b.id = id + '-jeu'; b.className = 'primaire creer-jeu'; b.textContent = 'Créer et mettre dans le jeu';
-    b.title = 'Crée ta copie puis la met dans le jeu (le jeu doit être fermé)';
-    b.onclick = async () => { b.disabled = true;
-      try { if ($('suite-creation')) $('suite-creation').remove();
-        const r = await creer(); if (r && r.ok) { const ri = await installer(mod); if ($('page-hub') && typeof chargerHub === 'function') chargerHub(); if (ri && ri.ok) await proposerSuite(mod, r.code); } }
-      catch (e) { majRapport('Erreur : ' + e.message); } finally { b.disabled = orig.disabled; } };
-    orig.parentNode.insertBefore(b, orig);
-    orig.classList.remove('primaire'); orig.classList.add('avance');
-    if (idInst && $(idInst)) $(idInst).classList.add('avance');
-    new MutationObserver(() => { b.disabled = orig.disabled; }).observe(orig, { attributes: true, attributeFilter: ['disabled'] }); b.disabled = orig.disabled;
+  // (22/11, demande de muku : « supprime "Créer et mettre dans le jeu", mets juste "Créer", on n'a besoin que de créer »)
+  // UN SEUL BOUTON par panneau : « Créer » (la création, sans toucher au jeu). Plus de bouton « Installer dans le jeu » dans
+  // les panneaux : on installe depuis la carte de la création dans Mes créations. (L'installation automatique remplaçait le
+  // mod du jeu et demandait de retirer des créations faites ailleurs.)
+  for (const [id, idInst] of [['exporter', 'installer'], ['exporter-perso', 'installer-perso'], ['cp-exporter', 'cp-installer'], ['ct-exporter', 'ct-installer'],
+    ['co-exporter', 'co-installer'], ['cu-exporter', 'cu-installer'], ['oj-exporter', 'oj-installer'], ['ca-exporter', 'ca-installer']]) {
+    const b = $(id); if (!b) continue;
+    // onglet Tenues : deux créations différentes (tenue de boutique / nouveau joueur qui la porte) -> nommées
+    b.textContent = { 'cu-exporter': 'Créer la tenue', 'ct-exporter': 'Créer le joueur' }[id] || 'Créer'; b.title = 'Crée ta copie, sans toucher au jeu. Pour la mettre dans le jeu : « Installer » sur sa carte dans Mes créations.';
+    b.classList.add('primaire', 'creer-jeu'); b.classList.remove('avance');
+    if ($(idInst)) $(idInst).remove();
   }
 });
 async function exporter() {
@@ -1918,7 +1909,7 @@ async function cpExporter() {
   majRapport('Création de la copie « ' + nom + ' » (réencodage de ' + Object.keys(textures).length + ' texture(s))…');
   const r = await api('/api/copie_personnage', { code: E.tech.code, nom, description: $('cp-desc').value.trim(), textures, portrait: await photoIcone('visage') });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
+  return r;                                   // (21/11) « Créer » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('cp-exporter')) return;
   $('cp-exporter').onclick = () => cpExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cp-installer').onclick = () => installer('MesPersonnages'); });
@@ -1941,7 +1932,7 @@ async function caExporter() {
   majRapport('Création de l’armure (réencodage de ' + Object.keys(textures).length + ' texture(s))…');
   const r = await api('/api/copie_armure', { code: E.tech.code, esprit: $('ca-esprit').value, nom: $('ca-nom').value.trim(), textures });
   majRapport(r.ok ? 'Armure créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesEsprits).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
+  return r;                                   // (21/11) « Créer » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('ca-exporter')) return;
   $('ca-exporter').onclick = () => caExporter().catch(e => majRapport('Erreur : ' + e.message)); $('ca-installer').onclick = () => installer('MesEsprits');
@@ -1980,7 +1971,7 @@ async function ctExporter() {
   majRapport('Création du nouveau joueur…');
   const r = await api('/api/copie_tenue', { code: E.tech.code, porteur: $('ct-porteur').value, nom: $('ct-nom').value.trim(), description: $('ct-desc').value.trim(), textures });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
+  return r;                                   // (21/11) « Créer » enchaîne l'installation
 }
 async function coExporter() {
   if (!E.tech || E.tech.genre !== 'Accessoire') return majRapport('Ouvre d’abord un accessoire (onglet Tenues, tri « Accessoire »).');
@@ -1989,7 +1980,7 @@ async function coExporter() {
   majRapport('Création du nouveau joueur…');
   const r = await api('/api/copie_objet', { code: E.tech.code, tete, nom: $('co-nom').value.trim(), description: $('co-desc').value.trim(), textures });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
+  return r;                                   // (21/11) « Créer » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('ct-exporter')) return;
   $('ct-exporter').onclick = () => ctExporter().catch(e => majRapport('Erreur : ' + e.message)); $('ct-installer').onclick = () => installer('MesPersonnages');
@@ -2009,7 +2000,7 @@ async function cuExporter() {
   if (!corps.length) return majRapport('Coche au moins une corpulence (« Qui peut la mettre ? »).');
   const r = await api('/api/copie_outfit', { code: E.tech.code, nom: $('cu-nom').value.trim(), description: $('cu-desc').value.trim(), prix: +$('cu-prix').value || 28, textures, icone: E.cuIcone || null, corps });
   majRapport(r.ok ? 'Tenue créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesTenues).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
+  return r;                                   // (21/11) « Créer » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('cu-exporter')) return;
   $('cu-exporter').onclick = () => cuExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cu-installer').onclick = () => installer('MesTenues');
@@ -2045,7 +2036,7 @@ async function ojExporter() {
   majRapport('Création de la copie…');
   const r = await api('/api/copie_objet_jeu', { code: E.tech.code, nom: $('oj-nom-copie').value.trim(), description: $('oj-desc-copie').value, prix: +$('oj-prix').value || 10, icone: x && x.cur ? x.cur.toDataURL('image/png') : null });
   majRapport(r.ok ? 'Objet créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesObjets).' : 'Erreur : ' + r.erreur);
-  return r;                                   // (21/11) « Créer et mettre dans le jeu » enchaîne l'installation
+  return r;                                   // (21/11) « Créer » enchaîne l'installation
 }
 window.addEventListener('load', () => { if (!$('oj-exporter')) return;
   $('oj-exporter').onclick = () => ojExporter().catch(e => majRapport('Erreur : ' + e.message)); $('oj-installer').onclick = () => installer('MesObjets'); });
@@ -2313,7 +2304,7 @@ async function ouvrirBannieres() {
       $('b-rapport').textContent = 'Application…';
       api('/api/banniere_apercu', { code: E.tech.code, projet: E.projet, image: E.banniereImage.image })
         .then(() => { E.telopV = Date.now(); window.changerOnglet('techniques');
-          majRapport('Bannière appliquée : tu la vois dans l’aperçu de la technique. Elle partira avec « Créer et mettre dans le jeu ».'); })
+          majRapport('Bannière appliquée : tu la vois dans l’aperçu de la technique. Elle partira avec « Créer ».'); })
         .catch(e => { $('b-rapport').textContent = 'Erreur : ' + e.message; }); };
     $('b-enregistrer').onclick = async () => {
       if (!B.choix || B.choix.ouverte) return $('b-rapport').textContent = 'Choisis à gauche une copie déjà créée.';
@@ -2600,7 +2591,7 @@ async function ouvrirCoups(c) {
       <div class="tc-boutons"><button data-f="origine" title="Les techniques de la carte d'origine (fichiers du jeu)">Celles du jeu</button>
         ${r.mods.length ? `<button data-f="mods" title="Ce que ${echapper(r.mod)} donne à l'original (ce que tu vois en jeu)">Celles de ${echapper(r.mod)}</button>` : ''}
         <button data-f="aucun" title="Ne rien écrire : la copie garde la liste de la carte d'origine">Ne rien changer</button></div>
-      <button class="tc-enregistrer" data-f="garder">Enregistrer et mettre dans le jeu</button><div class="tc-etat"></div>
+      <button class="tc-enregistrer" data-f="garder">Enregistrer</button><div class="tc-etat"></div>
       ${r.plateau ? '<div class="tc-note">La carte d’origine a son propre plateau de compétences : une technique ajoutée n’y apparaît que si le plateau la contient (VRFW).</div>' : ''}`;
     G.querySelectorAll('.tc-barre').forEach(b => { if (+b.dataset.i === sel) b.classList.add('sel'); b.onclick = () => { sel = +b.dataset.i; filtreG = ''; dessiner(); }; });
     G.querySelector('[data-f="origine"]').onclick = () => { poser(r.origine); dessiner(); };
@@ -2644,8 +2635,8 @@ async function ouvrirCoups(c) {
     try { const q = await api('/api/coups', { cle: c.cle, coups: L });
       if (!q.ok) { e.textContent = q.erreur; return; }
       f.close();
-      // (22/11, parcours plus simple) enregistré ET remis dans le jeu tout de suite (avant : penser à « Installer » ensuite)
-      e.textContent = ''; await installer('MesPersonnages'); $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub();
+      // (22/11, « on n'a besoin que de créer ») enregistré dans la création ; « Installer » sur sa carte pour le jeu
+      e.textContent = ''; majRapport(q.rapport.join('\n')); $('hub-etat').textContent = 'Enregistré. Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.'; chargerHub();
     } catch (x) { e.textContent = x.message; } };
   dessiner();
   // (15/11/2026) maillot porté dans l'aperçu : un maillot du jeu (Raimon par défaut), gardé pour la prochaine fois
@@ -2724,7 +2715,7 @@ async function ouvrirStats(c) {
       <button class="tc-fermer" title="Fermer sans rien changer (Échap)">✕</button></div>
     <div class="ms-corps"><div class="ms-gauche"></div><div class="ms-droite"></div></div>
     <div class="tc-aide"><span><i class="jm-touche">Échap</i> Fermer</span><span class="ms-aide-txt"></span>
-      <button class="ms-original">Garder celles de l'original</button><button class="tc-enregistrer ms-garder">Enregistrer et mettre dans le jeu</button></div>`;
+      <button class="ms-original">Garder celles de l'original</button><button class="tc-enregistrer ms-garder">Enregistrer</button></div>`;
   f.querySelector('.tc-plaque-nom').textContent = c.nom;
   f.querySelector('.tc-fermer').onclick = () => f.close();
   if (!f.open) f.showModal();
@@ -2827,7 +2818,7 @@ async function ouvrirStats(c) {
     try { const q = await api('/api/stats', { mod: c.mod, code, stats });
       if (!q.ok) { e.textContent = q.erreur; return; }
       f.close(); majRapport(q.rapport.join('\n'));
-      await installer(c.mod); $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub();
+      $('hub-etat').textContent = 'Stats enregistrées. Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.'; chargerHub();
     } catch (x) { e.textContent = x.message; } };
   f.querySelector('.ms-original').onclick = () => envoyer({});
   f.querySelector('.ms-garder').onclick = () => {
@@ -2847,7 +2838,10 @@ async function lierProjetCreation(mod, code) {
 for (const [nom, mod] of [['exporter', 'MesTechniques'], ['exporterPerso', 'MesEsprits'], ['cpExporter', 'MesPersonnages'], ['ctExporter', 'MesPersonnages'],
   ['coExporter', 'MesPersonnages'], ['cuExporter', 'MesTenues'], ['ojExporter', 'MesObjets'], ['caExporter', 'MesEsprits']]) {
   const f0 = window[nom]; if (typeof f0 !== 'function') continue;
-  window[nom] = async function (...a) { const r = await f0.apply(this, a); if (r && r.ok && (r.code || r.key)) await lierProjetCreation(mod, r.code || r.key); return r; };
+  window[nom] = async function (...a) { if ($('suite-creation')) $('suite-creation').remove();
+    const r = await f0.apply(this, a); if (r && r.ok && (r.code || r.key)) { await lierProjetCreation(mod, r.code || r.key); await proposerSuite(mod, r.code); }
+    if (r && r.ok && $('page-hub') && typeof chargerHub === 'function') chargerHub();
+    return r; };
 }
 function projetDe(c) {
   const lie = HUB.projets.find(p => p.cree && p.cree.mod === c.mod && p.cree.code === String(c.code));
@@ -2874,15 +2868,15 @@ async function ouvrirTechniqueLiee(c) {
     <p class="fc-note">✦ = ${echapper(c.nom)} apparaît dans la cinématique de la technique (en haut de la liste).</p>
     <div class="fc-ligne"><span class="fc-case">Technique</span><input class="fc-nom" list="fc-liees" placeholder="Tape pour chercher" value="${echapper(act ? lib(act) : '')}"></div>
     <div class="fc-repris fc-scene">${echapper(etat(act))}</div>
-    <div class="fc-boutons"><button data-f="origine">Remettre celle d’origine</button><button class="primaire" data-f="garder">Enregistrer et mettre dans le jeu</button></div><div class="fc-etat"></div></div>`;
+    <div class="fc-boutons"><button data-f="origine">Remettre celle d’origine</button><button class="primaire" data-f="garder">Enregistrer</button></div><div class="fc-etat"></div></div>`;
   f.querySelector('.fc-nom').oninput = e => { f.querySelector('.fc-scene').textContent = etat(parLib.get(e.target.value.trim())); };
   const envoyer = async t => {
     const e = f.querySelector('.fc-etat'); e.textContent = 'Écriture…';
     try { const q = await api('/api/technique_liee', { code: c.code, technique: t });
       if (!q.ok) { e.textContent = q.erreur; return; }
       f.close();
-      // (22/11, parcours plus simple) enregistrée ET remise dans le jeu tout de suite (avant : penser à « Installer » ensuite)
-      await installer('MesEsprits'); $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub();
+      // (22/11, « on n'a besoin que de créer ») enregistrée dans la création ; « Installer » sur sa carte pour le jeu
+      $('hub-etat').textContent = 'Technique liée enregistrée. Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.'; chargerHub();
     } catch (x) { e.textContent = x.message; } };
   f.querySelector('[data-f="origine"]').onclick = () => envoyer(null);
   f.querySelector('[data-f="garder"]').onclick = () => {

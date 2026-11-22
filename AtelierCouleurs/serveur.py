@@ -1254,6 +1254,70 @@ def mod_a_jour(mod, _memo={}):
     return True
 
 
+# ------------------------------------------------------------------ (22/11) STATS : réglées après le visuel (moteur/stats.py)
+def _creation_stats(mod, code):
+    """-> (genre, registre, clé dans le registre, entrée, valeurs du jeu, sauver()) ; None si inconnue"""
+    from moteur import stats as st
+    if mod == 'MesTechniques':
+        f = os.path.join(ICI, 'sortie', 'MesTechniques', 'outil_techniques.json')
+        reg = json.load(open(f, encoding='utf-8')) if os.path.isfile(f) else {}
+        k = next((n for n, e in reg.items() if e.get('key') == code), None)
+        if k is None:
+            return None
+        jeu = st.jeu_technique(CFG['data_dir'], reg[k]['base'])
+
+        def sauver():
+            json.dump(reg, open(f, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+            toml = os.path.join(ICI, 'sortie', 'MesTechniques', 'content', 'techniques', k + '.toml')
+            st.appliquer_technique(toml, st.lignes_technique(reg[k].get('stats'), jeu))
+        return 'technique', reg, k, reg[k], jeu, sauver
+    if mod == 'MesEsprits':
+        sortie = os.path.join(ICI, 'sortie', 'MesEsprits')
+        reg = esprits.registre(sortie)
+        if code not in reg:
+            return None
+
+        def sauver():
+            esprits.ecrire_vrfw(CFG, sortie, reg)
+            json.dump(reg, open(os.path.join(sortie, 'outil_esprits.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        return 'esprit', reg, code, reg[code], st.jeu_esprit(CFG['data_dir'], reg[code].get('technique')), sauver
+    if mod == 'MesPersonnages':
+        reg = copies_persos.registre(CFG)
+        if code not in reg:
+            return None
+
+        def sauver():
+            copies_persos._sauver(CFG, reg)
+            copies_persos._ecrire_contenu(CFG, reg)
+        return 'personnages', reg, code, reg[code], {}, sauver
+    return None
+
+
+def stats_creation(mod, code):
+    from moteur import stats as st
+    c = _creation_stats(mod, code)
+    if not c:
+        return {'ok': False, 'erreur': 'création inconnue'}
+    genre, _, _, e, jeu, _ = c
+    return {'ok': True, 'genre': genre, 'nom': e.get('nom'), 'champs': st.CHAMPS[genre], 'jeu': jeu, 'stats': e.get('stats')}
+
+
+def regler_stats(mod, code, brut):
+    from moteur import stats as st
+    c = _creation_stats(mod, code)
+    if not c:
+        return {'ok': False, 'erreur': 'création inconnue'}
+    genre, reg, k, e, jeu, sauver = c
+    try:
+        reg[k]['stats'] = st.nettoyer(genre, brut)
+    except ValueError as ex:
+        return {'ok': False, 'erreur': str(ex)}
+    sauver()
+    ch = st._changes(reg[k]['stats'], jeu) if genre != 'personnages' else reg[k]['stats']
+    return {'ok': True, 'mod': mod, 'rapport': ['%s : %s' % (e.get('nom'), ', '.join('%s = %s' % (x, y) for x, y in ch.items()) if ch
+                                                         else "valeurs de l'original gardées")]}
+
+
 def liste_creations():
     """(15/11/2026) hub : mods faits avec « Créer le mod » (AtelierCouleurs/sortie), installés ou non dans <jeu>/mods"""
     import re, tomllib
@@ -1262,6 +1326,8 @@ def liste_creations():
     a_jour = lambda m: _aj.setdefault(m, mod_a_jour(m))     # (15/11/2026) une fois par mod et par lecture du hub
     jeu = os.path.join(CFG.get('jeu_dir') or '', 'mods')
     dos = os.path.join(ICI, 'sortie', 'MesTechniques', 'content', 'techniques')
+    f_t = os.path.join(ICI, 'sortie', 'MesTechniques', 'outil_techniques.json')      # (22/11) stats réglées ?
+    reg_t = json.load(open(f_t, encoding='utf-8')) if os.path.isfile(f_t) else {}
     for f in sorted(glob.glob(os.path.join(dos, '*.toml'))):
         try:
             t = tomllib.load(open(f, 'rb'))
@@ -1272,6 +1338,7 @@ def liste_creations():
         for x in t.get('technique') or []:
             out.append({'genre': 'technique', 'mod': 'MesTechniques', 'nom': ((x.get('text') or {}).get(langue.code()) or (x.get('text') or {}).get('fr') or {}).get('name') or x.get('name'),
                         'code': x.get('key'), 'base': x.get('base'), 'onglet': 'techniques', 'installe': installe,
+                        'attente': 'stats' not in (next((e for e in reg_t.values() if e.get('key') == x.get('key')), None) or {'stats': 1}),
                         'date': os.path.getmtime(f)})
     # dans le jeu seulement (installées avant, plus dans sortie : « Installer » les remplacerait)
     noms_sortie = {os.path.basename(x) for x in glob.glob(os.path.join(dos, '*.toml'))}
@@ -1297,13 +1364,14 @@ def liste_creations():
                         'code': m.group(4), 'base': m.group(3), 'nom_base': m.group(2),
                         'onglet': 'totems' if m.group(4).startswith('a') else 'esprits', 'installe': txt_inst == txt_sortie and a_jour('MesEsprits'),     # (15/11) fichier identique : une technique liée changée = à réinstaller
                         'liee': ((reg_e.get(m.group(4)) or {}).get('technique_liee') or {}).get('nom'),
+                        'attente': m.group(4) in reg_e and 'stats' not in reg_e[m.group(4)],
                         'date': os.path.getmtime(f)})
     for e in copies_persos.contenu(CFG):         # (15/11/2026) copies de personnages
         f_j = os.path.join(jeu, 'MesPersonnages', 'content', 'characters', 'mes_personnages.toml')
         f_s = os.path.join(ICI, 'sortie', 'MesPersonnages', 'content', 'characters', 'mes_personnages.toml')
         # (21/11) copies de TENUE aussi rangées ici : pas de « tete_origine », leur « base » (avant : accueil planté)
         out.append({'genre': 'personnages', 'mod': 'MesPersonnages', 'nom': e['nom'], 'code': e['code'], 'base': e.get('tete_origine') or e.get('base'), 'nom_base': e.get('nom_origine'),
-                    'cle': e['cle'], 'nb_coups': len(e.get('coups') or []),
+                    'cle': e['cle'], 'nb_coups': len(e.get('coups') or []), 'attente': 'stats' not in e and bool(e.get('tete_origine')),
                     'onglet': 'personnages', 'installe': os.path.isfile(f_j) and os.path.isfile(f_s) and open(f_j, 'rb').read() == open(f_s, 'rb').read() and a_jour('MesPersonnages'),
                     'date': datetime.datetime.fromisoformat(e['date']).timestamp() if e.get('date') else 0})
     # (21/11) tenues à équiper, objets et armures : créés et installables, mais absents de « Mes créations » (avant : une
@@ -1577,6 +1645,8 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, {'pret': PREPA['pret'], 'fait': _mj.PROGRES['fait'], 'total': _mj.PROGRES['total']})
             if u.path == '/api/langue':                    # FR / EN
                 return self._envoyer(200, {'langue': langue.code()})
+            if u.path == '/api/stats':                     # (22/11) « En attente de stats » : champs, valeurs du jeu, valeurs réglées
+                return self._envoyer(200, stats_creation(q.get('mod', [''])[0], q.get('code', [''])[0]))
             if u.path == '/api/parametres':                # (22/11) ⚙ Paramètres (palette, musique) : gardés dans config.json
                 return self._envoyer(200, parametres())
             if u.path in ('/api/musique', '/api/musique.ogg'):   # (22/11) musique de fond : thème de l'écran titre du jeu
@@ -1748,6 +1818,8 @@ class Gestion(BaseHTTPRequestHandler):
                 # (17/11/2026) contenu des mods : aperçu et recoloration seulement (les copies lisent les fichiers du jeu)
                 return self._envoyer(200, {'ok': False, 'erreur': 'Cet élément vient d’un mod : la copie n’est pas encore possible '
                                                                   '(aperçu et recoloration seulement).'})
+            if u.path == '/api/stats':                     # (22/11) régler les stats d'une création (ou garder celles de l'original)
+                return self._envoyer(200, regler_stats(demande.get('mod'), demande.get('code'), demande.get('stats') or {}))
             if u.path == '/api/police_importer':          # (22/11) police .ttf / .otf importée (fichier en data URL)
                 return self._envoyer(200, importer_police(demande.get('nom'), demande.get('data')))
             if u.path == '/api/police_retirer':

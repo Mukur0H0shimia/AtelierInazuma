@@ -265,6 +265,10 @@ def ecrire_vrfw(cfg, sortie, registre):
         # sans choix, celle de l'esprit d'origine (aura_skill_config colonne 6, reprise par « from »)
         lie = c.get('technique_liee')
         cel_lie = ', linked_skill = 0x%08X' % lie['id'] if lie else ''
+        # (22/11) stats réglées dans « En attente de stats » : colonnes power_min / power_max / element de AURA_CMD_INFO
+        if c.get('stats'):
+            from . import stats as _st
+            cel_lie += _st.cellules_esprit(c['stats'], _st.jeu_esprit(cfg['data_dir'], c['technique']))
         tech += ['# %s : copie de %s (%s), code %s' % (c['nom'], c['nom_base'], anc, neuf),
                  '[[aura_command]]', 'key = %s' % _q(c['key']), 'id = 0x%08X                                  # crc32(key)' % zlib.crc32(c['key'].encode()),
                  'from = %s' % _q(c['technique']), 'manual = true',

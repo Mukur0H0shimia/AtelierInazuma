@@ -245,6 +245,11 @@ def exporter(cfg, demande, infos_technique):
               'event = %s' % _q('%s.%s' % (MOD_ID, nom))]
     if demande.get('couleur_tir') is not None:
         lignes.append('color = %d' % int(demande['couleur_tir']))
+    # (22/11) stats réglées plus tard (« En attente de stats ») : gardées quand la technique est refaite
+    _stats_avant = (_deja_dans_le_mod(sortie).get(nom) or {}).get('stats')
+    if _stats_avant:
+        from . import stats as _st
+        lignes += _st.lignes_technique(_stats_avant, _st.jeu_technique(cfg['data_dir'], code))
     for lg in ('fr', 'en', 'es', 'de', 'it', 'pt'):
         lignes += ['  [technique.text.%s]' % lg, '  name = %s' % _q(demande['nom'])]
         if desc:
@@ -378,7 +383,8 @@ def exporter(cfg, demande, infos_technique):
         rapport.append('boutique : %d jetons' % int(demande['prix']))
 
     deja = _deja_dans_le_mod(sortie)
-    deja[nom] = {'key': key, 'id': ev, 'base': code, 'nom': demande['nom'], 'date': datetime.datetime.now().isoformat(timespec='seconds')}
+    deja[nom] = dict({'key': key, 'id': ev, 'base': code, 'nom': demande['nom'], 'date': datetime.datetime.now().isoformat(timespec='seconds')},
+                     **({'stats': _stats_avant} if _stats_avant is not None else {}))
     json.dump(deja, open(os.path.join(sortie, 'outil_techniques.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     # (16/11/2026) PAR DÉFAUT : cinématique livrée en fichiers (scene_en_fichiers ; VÉRIFIÉ EN JEU le 16/11 par muku :
     # Feinte angélique (couleurs), l'adversaire garde son visage). Si la scène ne s'y prête pas, la copie automatique de

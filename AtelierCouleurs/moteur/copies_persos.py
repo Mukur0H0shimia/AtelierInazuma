@@ -220,13 +220,15 @@ def _ecrire_contenu(cfg, reg):
         for lang in ('en', 'fr'):
             txt += ['  [character.text.%s]' % lang, '  name = %s' % _q(e['nom']), '  short = %s' % _q(e['nom']),
                     '  description = %s' % _q(e.get('description') or ''), '']
-        ch += ['[[character]]', 'name = "%s"                # copie de %s' % (cle, e.get('nom_origine', '')), 'based_on = "%s"' % e['base'], '',
+        from . import stats as _st                   # (22/11) stats réglées dans « En attente de stats » (comme le mod Mukuro)
+        st_perso, st_carte = _st.lignes_joueur(e.get('stats'))
+        ch += ['[[character]]', 'name = "%s"                # copie de %s' % (cle, e.get('nom_origine', '')), 'based_on = "%s"' % e['base']] + st_perso + ['',
                '  [character.base]', '  id = 0x%08X' % e['id'], '  name = "%s"' % e['code'],
                '  name_text = 0x%08X' % e['nom_txt'], '  short_name_text = 0x%08X' % e['court_txt'], '  upper_name_text = 0x%08X' % e['nom_txt'],
                '  description_text = 0x%08X' % e['desc_txt'], '',
                '  [character.new_model]', '  id = 0x%08X' % e['modele'], '  from = "%s"' % e['base'],
                '  [character.new_model.cells]'] + cellules + [''] + txt + [
-               '  [[character.cards]]', '  id = 0x%08X' % e['carte'], '  from = 0x%08X' % e['carte_origine']] + _lignes_coups(e) + ['']
+               '  [[character.cards]]', '  id = 0x%08X' % e['carte'], '  from = 0x%08X' % e['carte_origine']] + st_carte + _lignes_coups(e) + ['']
         cartes.append('"0x%08X"' % e['carte'])
     _ecrire(os.path.join(sortie, 'content', 'characters', 'mes_personnages.toml'), 'schema = "VRFW.character/2"\n' + entete + 'default_lang = "en"\n\n' + '\n'.join(ch))
     f_look = os.path.join(sortie, 'content', 'looks', 'mes_personnages.toml')

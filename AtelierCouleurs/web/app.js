@@ -1389,9 +1389,10 @@ function dessinerHub() {
   };
   dessinerMenuJeu();                // (15/11/2026) en-tête, bannières, tuiles et filtres façon menus du jeu
   // chiffres
-  $('hub-stats').innerHTML = [[HUB.projets.length, 'à continuer'], [HUB.creations.length, 'terminées'], [PREREG.length, 'préréglages']]
+  const nAttente = HUB.creations.filter(c => c.attente).length, nFinies = HUB.creations.length - nAttente;    // (22/11)
+  $('hub-stats').innerHTML = [[HUB.projets.length, 'à continuer'], [nAttente, 'en attente de stats'], [nFinies, 'terminées'], [PREREG.length, 'préréglages']]
     .map(([n, t]) => `<div class="hub-stat"><b>${n}</b><span>${t}</span></div>`).join('');
-  $('hub-n-projets').textContent = HUB.projets.length; $('hub-n-creations').textContent = HUB.creations.length; $('hub-n-prereglages').textContent = PREREG.length;
+  $('hub-n-projets').textContent = HUB.projets.length; $('hub-n-creations').textContent = nFinies; $('hub-n-prereglages').textContent = PREREG.length;
   // à continuer
   const g = $('hub-projets'); g.innerHTML = '';
   const pl = HUB.projets.filter(p => ok(p.titre, p.base, p.code) && (!HUB.filtre || p.onglet === HUB.filtre));
@@ -1412,6 +1413,8 @@ function dessinerHub() {
     g.appendChild(d); }
   // terminées
   const l = $('hub-creations'); l.innerHTML = '';
+  const la = $('hub-attente'); la.innerHTML = '';          // (22/11) en attente de stats
+  $('jm-s-attente').style.display = la.style.display = HUB.creations.some(c => c.attente) ? '' : 'none';
   const cr = HUB.creations.filter(c => ok(c.nom, c.base, c.code, c.nom_base) && (!HUB.filtre || c.onglet === HUB.filtre));
   if (!cr.length) l.innerHTML = `<div class="hub-vide"><b>${HUB.creations.length ? 'Aucune création ne correspond' : 'Aucun mod créé pour l’instant'}</b>${HUB.creations.length ? 'Essaie un autre mot.' : 'Quand une technique te plaît : « Créer le mod » dans le panneau de droite.'}</div>`;
   for (const c of cr) {
@@ -1421,11 +1424,14 @@ function dessinerHub() {
     const d = carte({ onglet: c.onglet, vignette: vign, estTexture: !c.vignette && proj && proj.vignetteTexture, badge: st[0], badgeCl: st[1], titre: c.nom, couleurs: proj && proj.couleurs, lecture: true,
       sousImg: `${genre(c.genre)} · copie de ${echapper(c.nom_base || c.base)}`,
       sous: `<span class="avance">Code ${echapper(c.code)} · </span>${dateCourte(c.date)}${c.jeuSeul ? '<br>Plus dans la sortie de l’Atelier, mais toujours dans le jeu.' : ''}`,
-      boutons: `<button class="primaire" data-a="modifier" title="${proj ? 'Reprendre le projet qui a servi à la créer' : 'Projet d’origine introuvable : rouvre la technique de départ'}">Modifier</button>`
+      boutons: (c.attente ? '<button class="primaire" data-a="stats" title="Puissance, PT, élément… (ou garder ceux de l’original)">Régler les stats</button>' : '')
+        + `<button${c.attente ? '' : ' class="primaire"'} data-a="modifier" title="${proj ? 'Reprendre le projet qui a servi à la créer' : 'Projet d’origine introuvable : rouvre la technique de départ'}">Modifier</button>`
+        + (!c.attente && aDesStats(c) ? '<button data-a="stats" title="Changer ses valeurs (puissance, PT, élément…)">Stats</button>' : '')
         + (c.mod === 'MesPersonnages' && c.cle ? `<button data-a="coups" title="Choisir ses techniques et son esprit guerrier">Techniques${c.nb_coups ? ' (' + c.nb_coups + ')' : ''}</button>` : '')
         + (c.mod === 'MesEsprits' && c.genre === 'esprit' ? `<button data-a="liee" title="${c.liee ? 'Technique liée : ' + echapper(c.liee) : 'Choisir la technique de cet esprit guerrier'}">Technique liée${c.liee ? ' ✓' : ''}</button>` : '')
         + (c.installe ? '' : '<button data-a="installer" title="Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)">Installer</button>') });
     const bc = d.querySelector('[data-a="coups"]'); if (bc) bc.onclick = () => ouvrirCoups(c);
+    const bs = d.querySelector('[data-a="stats"]'); if (bs) bs.onclick = () => ouvrirStats(c);
     const bl = d.querySelector('[data-a="liee"]'); if (bl) bl.onclick = () => ouvrirTechniqueLiee(c);
     const ouvrirC = c.mod === 'MesMaillots' && c.maillot ? async () => { window.changerOnglet('maillots'); await mmOuvrir(c.maillot); }   // (15/11) un de mes maillots
       : () => proj ? reprendreDepuisHub(proj) : ouvrirDepuisHub(c.onglet, c.base, false);
@@ -1434,7 +1440,7 @@ function dessinerHub() {
     if (bi) bi.onclick = async () => {
       await installer(c.mod);              // (21/11) créations du jeu qui seraient retirées : demandé par installer()
       $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub(); };
-    l.appendChild(d); }
+    (c.attente ? la : l).appendChild(d); }
   // préréglages
   const pr = $('hub-prereglages'); pr.innerHTML = '';
   if (!PREREG.length) pr.innerHTML = '<div class="hub-vide"><b>Aucun préréglage</b>Fais un remplacement de couleur dans une technique, puis « Garder ».</div>';
@@ -2688,6 +2694,46 @@ async function apercuJoueur(r, cle, f) {
   } catch (e) { msg.textContent = 'Aperçu indisponible : ' + e.message; }
 }
 
+// (22/11, idée de muku : « d'abord le visuel, ensuite les stats dans un menu à part ») fenêtre des valeurs d'une création :
+// champs donnés par le serveur (moteur/stats.py : clés VRFW lues dans des mods qui marchent), partis des valeurs de l'original
+function aDesStats(c) { return !c.jeuSeul && (c.mod === 'MesTechniques' || (c.mod === 'MesEsprits' && c.genre === 'esprit') || (c.mod === 'MesPersonnages' && c.cle)); }
+async function ouvrirStats(c) {
+  const code = c.mod === 'MesPersonnages' ? c.cle : c.code;
+  const f = fenetreCoups('Stats de ' + c.nom, '<div class="fc-corps">Lecture…</div>');
+  let r; try { r = await api('/api/stats?mod=' + encodeURIComponent(c.mod) + '&code=' + encodeURIComponent(code)); } catch (e) { f.querySelector('.fc-corps').textContent = e.message; return; }
+  if (!r.ok) { f.querySelector('.fc-corps').textContent = r.erreur; return; }
+  const s = r.stats || {}, jeu = r.jeu || {};
+  const valeur = ch => { const k = ch.cle, v = k.startsWith('stats.') ? (s.stats || {})[k.slice(6)] : s[k];
+    return v !== undefined ? v : (jeu[k] !== undefined ? jeu[k] : ''); };
+  const libJeu = ch => jeu[ch.cle] === undefined || jeu[ch.cle] === '' ? '' : ch.type === 'choix' ? ((ch.choix.find(x => x[0] === jeu[ch.cle]) || [0, jeu[ch.cle]])[1]) : jeu[ch.cle];
+  let h = `<p class="fc-note">Le visuel est fait : ici ses valeurs. Elles partent de celles de l'original (${echapper(c.nom_base || c.base || '')}) ; seules celles que tu changes sont écrites dans le mod.</p>`;
+  let groupe = false;
+  for (const ch of r.champs) {
+    if (ch.groupe === 'stats' && !groupe) { groupe = true;
+      h += `<p class="fc-note">Les 8 statistiques vont ensemble : toutes remplies, ou toutes vides (= celles de l'original).</p>`; }
+    const v = valeur(ch), orig = libJeu(ch);
+    const champ = ch.type === 'choix'
+      ? `<select data-k="${ch.cle}">${ch.vide ? '<option value="">comme l’original</option>' : ''}${ch.choix.map(([x, n]) => `<option value="${x}"${x === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`
+      : `<input type="number" data-k="${ch.cle}" min="${ch.min}" max="${ch.max}" value="${echapper(String(v))}"${ch.vide ? ' placeholder="comme l’original"' : ''}>`;
+    h += `<div class="fc-ligne"><span class="fc-case">${echapper(ch.nom)}</span>${champ}${orig !== '' ? `<small class="fc-orig">original : ${echapper(String(orig))}</small>` : ''}${ch.aide ? `<small class="fc-orig">${echapper(ch.aide)}</small>` : ''}</div>`;
+  }
+  h += `<div class="fc-boutons"><button data-f="original">Garder celles de l'original</button><button class="primaire" data-f="garder">Enregistrer et mettre dans le jeu</button></div><div class="fc-etat"></div>`;
+  f.querySelector('.fc-corps').outerHTML = `<div class="fc-corps fc-stats">${h}</div>`;
+  const envoyer = async stats => {
+    const e = f.querySelector('.fc-etat'); e.textContent = 'Écriture…';
+    try { const q = await api('/api/stats', { mod: c.mod, code, stats });
+      if (!q.ok) { e.textContent = q.erreur; return; }
+      f.close(); majRapport(q.rapport.join('\n'));
+      await installer(c.mod); $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub();
+    } catch (x) { e.textContent = x.message; } };
+  f.querySelector('[data-f="original"]').onclick = () => envoyer({});
+  f.querySelector('[data-f="garder"]').onclick = () => {
+    const out = {};
+    f.querySelectorAll('[data-k]').forEach(el => { const k = el.dataset.k, v = el.value; if (v === '') return;
+      const ch = r.champs.find(x => x.cle === k), val = ch.type === 'nombre' ? +v : v;
+      if (k.startsWith('stats.')) (out.stats = out.stats || {})[k.slice(6)] = val; else out[k] = val; });
+    envoyer(out); };
+}
 async function ouvrirTechniqueLiee(c) {
   const f = fenetreCoups('Technique de ' + c.nom, '<div class="fc-corps">Lecture…</div>');
   let r; try { r = await api('/api/technique_liee?code=' + encodeURIComponent(c.code)); } catch (e) { f.querySelector('.fc-corps').textContent = e.message; return; }

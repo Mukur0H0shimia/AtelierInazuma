@@ -27,6 +27,14 @@
     'Crée ta copie puis la met dans le jeu (le jeu doit être fermé)': 'Creates your copy then puts it in the game (the game must be closed)',
     'Avancé': 'Advanced', 'Revenir au mode simple': 'Back to simple mode',
     'Enregistrer sans construire': 'Save without building',
+    'En attente de stats': 'Waiting for stats', 'en attente de stats': 'waiting for stats', 'Régler les stats': 'Set the stats', 'Stats': 'Stats',
+    "le visuel est fait : règle ses valeurs (puissance, PT, élément…) ou garde celles de l'original": "the look is done: set its values (power, TP, element…) or keep the original's",
+    "Garder celles de l'original": "Keep the original's", 'comme l’original': 'like the original',
+    'Puissance au niveau 1': 'Power at level 1', 'Puissance au niveau max': 'Power at max level', 'Coût en PT': 'TP cost', 'Élément': 'Element',
+    'Joueurs pour la lancer': 'Players needed', "Plus de 1 : n'importe quels coéquipiers": 'More than 1: any team mates', 'Courbe de progression (0-7)': 'Growth curve (0-7)',
+    'Poste': 'Position', 'Poste secondaire': 'Secondary position', 'Attaquant': 'Forward', 'Milieu': 'Midfielder', 'Défenseur': 'Defender', 'Gardien': 'Goalkeeper',
+    'Frappe': 'Kick', 'Contrôle': 'Control', 'Pression': 'Pressure', 'Physique': 'Physical', 'Agilité': 'Agility', 'Liberté': 'Freedom',
+    "Les 8 statistiques vont ensemble : toutes remplies, ou toutes vides (= celles de l'original).": "The 8 stats go together: all filled, or all empty (= the original's).",
     'Mes polices': 'My fonts', '➕ Importer une police (.ttf / .otf)': '➕ Import a font (.ttf / .otf)', '➕ Importer une police…': '➕ Import a font…',
     "Proposées dans les bannières, les numéros et noms des maillots et l'outil Texte du mode dessin.": 'Offered in banners, kit numbers and names, and the drawing mode Text tool.',
     "Aucune pour l'instant.": 'None yet.', 'Retirer cette police': 'Remove this font',
@@ -76,6 +84,7 @@
 
   // (21/11) textes avec des données : [modèle sur le texte aux espaces réduits, remplacement]
   var MOTIFS = [
+    [/^Stats de (.+)$/, 'Stats of $1'], [/^original : (.+)$/, 'original: $1'],
     [/^📋 Coller ici : (.+)$/, '📋 Paste here: $1'],
     [/^Image de (\S+) copiée \((\d+) × (\d+)\)\. Ouvre une autre technique, clic droit sur une texture : « Coller ici »\.$/, 'Image of $1 copied ($2 × $3). Open another technique, right-click a texture: “Paste here”.'],
     [/^(\S+) \((\d+) pièces?\)$/, '$1  ($2 parts)'],

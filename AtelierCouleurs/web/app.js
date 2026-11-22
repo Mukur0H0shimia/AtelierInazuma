@@ -1437,7 +1437,7 @@ function dessinerHub() {
         + `<button${c.attente ? '' : ' class="primaire"'} data-a="modifier" title="${proj ? 'Reprendre le projet qui a servi à la créer' : 'Projet d’origine introuvable : rouvre la technique de départ'}">Modifier</button>`
         + (!c.attente && aDesStats(c) ? '<button data-a="stats" title="Changer ses valeurs (puissance, PT, élément…)">Stats</button>' : '')
         + (c.mod === 'MesPersonnages' && c.cle ? `<button data-a="coups" title="Choisir ses techniques et son esprit guerrier">Techniques${c.nb_coups ? ' (' + c.nb_coups + ')' : ''}</button>` : '')
-        + (c.mod === 'MesEsprits' && c.genre === 'esprit' ? `<button data-a="liee" title="${c.liee ? 'Technique liée : ' + echapper(c.liee) : 'Choisir la technique de cet esprit guerrier'}">Technique liée${c.liee ? ' ✓' : ''}</button>` : '')
+        + (c.mod === 'MesEsprits' && (c.genre === 'esprit' || c.genre === 'totem') ? `<button data-a="liee" title="${c.liee ? 'Technique liée : ' + echapper(c.liee) : 'Choisir la technique de cet esprit guerrier'}">Technique liée${c.liee ? ' ✓' : ''}</button>` : '')
         // (22/11, demande de muku) « Installer » seulement dans Terminées (pas en attente de stats) ; « Supprimer » dans Terminées
         + (c.installe || c.attente ? '' : '<button data-a="installer" title="Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)">Installer</button>')
         + (c.attente ? '' : '<button data-a="supprimer" class="supprimer" title="Retirer cette création (ses fichiers sont rangés à part, récupérables)">Supprimer</button>') });
@@ -1517,6 +1517,7 @@ async function proposerSuite(mod, code) {
   const ajout = (txt, f) => { const b = document.createElement('button'); b.textContent = txt; b.onclick = f; d.appendChild(b); };
   if (mod === 'MesPersonnages' && c.cle) ajout('Choisir ses techniques', () => ouvrirCoups(c));
   if (mod === 'MesEsprits' && c.genre === 'esprit') { ajout('Choisir sa technique liée', () => ouvrirTechniqueLiee(c)); ajout('Lui faire une armure', () => window.changerOnglet('armures')); }
+  if (mod === 'MesEsprits' && c.genre === 'totem') ajout('Choisir sa technique liée', () => ouvrirTechniqueLiee(c));   // (22/11) totems aussi
   if (!d.children.length) return;
   const t = document.createElement('span'); t.className = 'aide'; t.textContent = 'Et maintenant :'; d.prepend(t);
   $('rapport').after(d);
@@ -2062,6 +2063,7 @@ async function installer(mod) {
     // (21/11) 1re ligne : où la trouver en jeu (textes de l'Atelier : OU_EN_JEU) ; le reste = détails (repliés en mode simple)
     majRapport(r.ok ? 'C’est dans le jeu ! ' + (OU_EN_JEU[mod || 'MesTechniques'] || '') + ' (Relance le jeu s’il était ouvert.)'
                       + (r.avertissement ? '\n⚠ ' + r.avertissement : '')
+                      + (r.repares ? '\nRéparé (totem / esprit qui n’apparaissait pas dans la cinématique) : ' + r.repares.join(', ') : '')   // (22/11)
                       + '\nInstallé dans ' + r.dossier + '\nSauvegarde : ' + r.sauvegarde + '\nLance le jeu, puis regarde le journal de VRFW (aucune ligne ERROR).'
                     : 'Pas installé : ' + r.erreur);
     return r;

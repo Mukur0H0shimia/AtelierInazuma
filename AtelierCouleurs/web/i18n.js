@@ -124,6 +124,7 @@
     [/^(Mod|Objet) créé \(pas encore installé\) : (.+)$/, function (_, q, d) { return (q === 'Mod' ? 'Mod' : 'Item') + ' created (not installed yet): ' + d; }],
     [/^Installé dans (.+)$/, 'Installed in $1'],
     [/^Sauvegarde : (.+)$/, 'Backup: $1'],
+    [/^Réparé \(totem \/ esprit qui n’apparaissait pas dans la cinématique\) : (.+)$/, 'Repaired (totem / Keshin missing from the cutscene): $1'],
     [/^Pas installé : (.+)$/, function (_, e) { return 'Not installed: ' + trad(e); }],
     [/^Erreur : (.+)$/, function (_, e) { return 'Error: ' + trad(e); }],
     [/^Lance le jeu, puis regarde le journal de VRFW \(aucune ligne ERROR\)\.$/, 'Start the game, then check the VRFW log (no ERROR line).'],

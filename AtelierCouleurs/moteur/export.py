@@ -117,6 +117,30 @@ def assurer_esprit(cfg, key):
     return []
 
 
+def reparer_assignes(cfg, sortie):
+    """(22/11, Frappe du loup d'un ami : pas de loup en jeu) avant le 22/11, seuls les esprits (k…) d'une cinématique étaient
+    vus : une copie d'une technique à TOTEM (loup a000020 dans ev60_02700) ne livrait pas ses animations sous l'id neuf, et
+    VRFW cache alors <ASSIGN>. Réparé à l'installation : paquets livrés + `assigned` (cinématique VRFW ou livrée en fichiers)."""
+    from .coups import esprits_de_scene
+    faits = []
+    for f in glob.glob(os.path.join(sortie, 'content', 'anims', '*.toml')) + glob.glob(os.path.join(sortie, 'content', 'anims', '*.toml.retire')):
+        try:
+            x = tomllib.load(open(f, 'rb'))['event'][0]
+            ev0, ev = x['from'], x['id']
+        except (OSError, ValueError, KeyError, IndexError):
+            continue
+        ks = esprits_de_scene(cfg['data_dir'], ev0)
+        manque = [k for k in ks if not glob.glob(os.path.join(sortie, 'assets', 'event', ev[:4], ev, '%s_%s_*.g4pk' % (ev, k)))]
+        if not manque and (f.endswith('.retire') or set(ks) <= set(x.get('assigned') or [])):
+            continue
+        assigne = esprit_assigne(cfg, sortie, ev0, ev)
+        if assigne and f.endswith('.toml'):
+            ecrire_anim(sortie, os.path.basename(f)[:-5], ev0, ev, x.get('telop') or x.get('name'), assigne)
+        if assigne:
+            faits.append('%s (%s)' % (x.get('name'), ', '.join(assigne)))
+    return faits
+
+
 def copie_objet(nom_objet, id_neuf):
     """ev60102000 + ev60_89010 -> ev60890100 (même longueur : 4 premiers caractères, 4 chiffres de l'id, 2 derniers)"""
     return nom_objet[:4] + id_neuf[5:9] + nom_objet[-2:]
@@ -491,6 +515,7 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
     src = os.path.join(cfg['outil_dir'], 'sortie', mod_id)
     if not os.path.isfile(os.path.join(src, 'mod.toml')):
         return {'ok': False, 'erreur': 'Rien à installer : crée d\'abord le mod.'}
+    repares = reparer_assignes(cfg, src) if mod_id == 'MesTechniques' else []      # (22/11) copies à totem faites avant
     for p in glob.glob(os.path.join(src, '**', '*.toml'), recursive=True):
         tomllib.load(open(p, 'rb'))
     mods = os.path.join(cfg['jeu_dir'], 'mods')
@@ -519,6 +544,8 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
             os.remove(vieux)
     activer_mod(en, mod_id)
     r = {'ok': True, 'dossier': dst, 'sauvegarde': sauv}
+    if repares:
+        r['repares'] = repares
     if not os.path.isdir(os.path.join(mods, 'VRFW')):   # (21/11) sans le chargeur de mods, rien ne se charge en jeu
         r['avertissement'] = ('VRFW n’est pas dans le dossier mods du jeu : installe-le (avec Inazuma Fantasy), sinon le mod '
                               'ne se chargera pas.')
@@ -636,28 +663,12 @@ def scene_en_fichiers(cfg, nom):
         assert not autres, 'texte %s partagé par une autre commande' % anc[1]
         remplacer[liste][anc[1]] = c['set'][1]
         rapport.append('%s : %s -> %s' % (liste, anc[1], c['set'][1]))
-    # (22/11, retour d'un joueur : « une variante de la Frappe du loup : en jeu le loup n'apparaissait pas ») <ASSIGN> = le
-    # totem / l'esprit DU JOUEUR qui lance la technique (nie.exe 0x140f3e0xx : remplacement des balises <TYPE> <NO>
-    # <VARIATION> <ASSIGN> ; table GDSEventTagWordReplaceConfig ; InazumaFantasy : « the cut-in's spirit is the performer's
-    # own »). L'original est la technique liée du totem (wss000020 -> whs02700) : son lanceur a toujours le loup ; une copie
-    # n'a personne -> rien. Le totem de la scène est donc écrit À LA PLACE de <ASSIGN> (même chaîne, un octet nul de plus) :
-    # seulement les totems (a000000), seul modèle animé à ce siège dans la scène d'origine ; les esprits gardent <ASSIGN>.
-    from .coups import dossier_scene
-    d_o = dossier_scene(ev_o)
-    totems = {}
-    for f_ in glob.glob(os.path.join(cfg['data_dir'], 'common', 'event', d_o[:4], d_o, d_o + '_*_s*_*.g4pk')):
-        m_ = re.match(re.escape(d_o) + r'_([a-z]+\d{6})_s(\d\d)_', os.path.basename(f_))
-        if m_ and not m_.group(1).startswith(('c', 'b')):
-            totems.setdefault(m_.group(2), set()).add(m_.group(1))
-    totems = {s_: next(iter(c_)) for s_, c_ in totems.items() if len(c_) == 1 and next(iter(c_))[0] == 'a'}
-
-    def totem_fixe(b):
-        def r_(m):
-            s_ = m.group(0)
-            for siege, code_t in totems.items():
-                s_ = s_.replace(b'<ASSIGN>_s' + siege.encode(), code_t.encode() + b'_s' + siege.encode())
-            return s_ + b'\0' * (len(m.group(0)) - len(s_))
-        return re.sub(rb'[^\0]*<ASSIGN>_s\d\d[^\0]*', r_, b) if totems else b
+    # (22/11, Frappe du loup) <ASSIGN> = le totem / l'esprit DU JOUEUR qui lance (nie.exe : remplacement des balises ; table
+    # GDSEventTagWordReplaceConfig). ESSAYÉ EN JEU le 22/11 : écrire le totem (a000020) à sa place NE MARCHE PAS (ses paquets
+    # ne sont jamais ouverts : un acteur « a000020_s00 » n'est pas un modèle à charger) -> retiré, <ASSIGN> gardé.
+    # Bannière « soccer10_01_<base>_<CHARA_ID> » (une par lanceur) : l'objet de menu « soccer10_01_<clé>_<CHARA_ID> »
+    # n'existe pas (VRFW : « banner object … not found: the move shows no banner ») ; VRFW fait « soccer10_01_<clé> » :
+    # la chaîne entière devient « soccer10_01_<clé> » (suffixe retiré, complété d'octets nuls : même longueur).
     # fichiers livrés
     for liste, suf in (('evt', ''), ('eff', '_eff'), ('snd', '_snd')):
         f = os.path.join(src, liste, ev_o + suf + '.cfg.bin')
@@ -665,18 +676,14 @@ def scene_en_fichiers(cfg, nom):
             continue
         b = open(f, 'rb').read()
         for a, n in remplacer[liste].items():          # chaînes entières seulement (deux pareilles côte à côte : toutes)
-            # (22/11) bannière : aussi « soccer10_01_<base>_<CHARA_ID> » (Frappe du loup ; avant : échec -> copie de VRFW,
-            # qui CACHE les modèles <ASSIGN>) ; même longueur (clé et base de même longueur, vérifié plus haut)
-            fin_ = rb'(?=\0|_<)' if a.startswith('soccer10_01_') else rb'(?=\0)'
-            motif = rb'(?<=\0)' + re.escape(a.encode()) + fin_
+            if a.startswith('soccer10_01_'):
+                motif = rb'(?<=\0)' + re.escape(a.encode()) + rb'(?:_<[^\0>]*>)?(?=\0)'
+                assert re.search(motif, b), (liste, a)
+                b = re.sub(motif, lambda m_: n.encode() + b'\0' * (len(m_.group(0)) - len(n)), b)
+                continue
+            motif = rb'(?<=\0)' + re.escape(a.encode()) + rb'(?=\0)'
             assert re.search(motif, b), (liste, a)
             b = re.sub(motif, n.encode(), b)
-        b2 = totem_fixe(b)
-        if b2 != b:
-            assert len(b2) == len(b)
-            rapport.append('%s : totem %s fixé à la place de <ASSIGN> (il apparaît quel que soit le joueur)'
-                           % (liste, ', '.join(sorted(set(totems.values())))))
-            b = b2
         cfgbin.lire(b)                                 # relu : le fichier reste lisible
         _ecrire_octets(os.path.join(sortie, 'assets', 'event_cfg', liste, ev + suf + '.cfg.bin'), b)
     # technique : la scène livrée + event_env (comme Zan) ; plus de copie automatique ni de commandes

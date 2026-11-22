@@ -168,7 +168,8 @@ def coups_des_mods(cfg, code_perso, id_carte):
 #   « ships no packs of the assigned model(s) … hidden there » : le mod doit livrer <id>_<esprit>_*.g4pk et `assigned`
 #   (Mukuro : ev60_88200_k002090_*, nom de la scène et crc32 du nom de section changés, assigned = ["k002090"]).
 CIBLE_COMMUNE = 2181537457
-RE_ESPRIT = re.compile(r'_(k\d{6})_s\d\d_p\d\d_c\d+\.g4pk$')
+# (22/11, Frappe du loup) les TOTEMS aussi (a000020 = loup) : avant, seuls les esprits (k…) étaient vus dans une scène
+RE_ESPRIT = re.compile(r'_([ak]\d{6})_s\d\d_p\d\d_c\d+\.g4pk$')
 
 
 def dossier_scene(ev):
@@ -178,7 +179,7 @@ def dossier_scene(ev):
 
 def esprits_de_scene(data_dir, ev):
     d = dossier_scene(ev)
-    return sorted({m.group(1) for f in glob.glob(os.path.join(data_dir, 'common', 'event', d[:4], d, '%s_k*.g4pk' % d))
+    return sorted({m.group(1) for f in glob.glob(os.path.join(data_dir, 'common', 'event', d[:4], d, '%s_[ak]*.g4pk' % d))
                    for m in [RE_ESPRIT.search(os.path.basename(f))] if m})
 
 
@@ -202,7 +203,7 @@ def os_animes(data_dir, ev, code):
 
 def techniques_d_esprit(data_dir, cache_dir):
     """{code de technique: (dossier de scène, esprit animé)} pour les techniques dont la cinématique a un esprit"""
-    f = os.path.join(cache_dir, 'index_techniques_esprit.json')
+    f = os.path.join(cache_dir, 'index_techniques_esprit_2.json')      # (22/11) _2 : totems compris
     if os.path.exists(f):
         return json.load(open(f, encoding='utf-8'))
     from .techniques import construire_index
@@ -217,7 +218,7 @@ def techniques_d_esprit(data_dir, cache_dir):
 
 def compatibles(data_dir, cache_dir, esprit):
     """{code de technique: True / False} : tous les os animés de son esprit existent dans le squelette de « esprit »"""
-    f = os.path.join(cache_dir, 'compat_esprits.json')
+    f = os.path.join(cache_dir, 'compat_esprits_2.json')               # (22/11) _2 : totems compris
     tout = json.load(open(f, encoding='utf-8')) if os.path.exists(f) else {}
     if esprit not in tout:
         sq = os_squelette(data_dir, esprit)

@@ -1433,9 +1433,12 @@ function dessinerHub() {
         + (!c.attente && aDesStats(c) ? '<button data-a="stats" title="Changer ses valeurs (puissance, PT, élément…)">Stats</button>' : '')
         + (c.mod === 'MesPersonnages' && c.cle ? `<button data-a="coups" title="Choisir ses techniques et son esprit guerrier">Techniques${c.nb_coups ? ' (' + c.nb_coups + ')' : ''}</button>` : '')
         + (c.mod === 'MesEsprits' && c.genre === 'esprit' ? `<button data-a="liee" title="${c.liee ? 'Technique liée : ' + echapper(c.liee) : 'Choisir la technique de cet esprit guerrier'}">Technique liée${c.liee ? ' ✓' : ''}</button>` : '')
-        + (c.installe ? '' : '<button data-a="installer" title="Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)">Installer</button>') });
+        // (22/11, demande de muku) « Installer » seulement dans Terminées (pas en attente de stats) ; « Supprimer » dans Terminées
+        + (c.installe || c.attente ? '' : '<button data-a="installer" title="Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)">Installer</button>')
+        + (c.attente ? '' : '<button data-a="supprimer" class="supprimer" title="Retirer cette création (ses fichiers sont rangés à part, récupérables)">Supprimer</button>') });
     const bc = d.querySelector('[data-a="coups"]'); if (bc) bc.onclick = () => ouvrirCoups(c);
     const bs = d.querySelector('[data-a="stats"]'); if (bs) bs.onclick = () => ouvrirStats(c);
+    const bx = d.querySelector('[data-a="supprimer"]'); if (bx) bx.onclick = () => supprimerCreation(c);
     const bl = d.querySelector('[data-a="liee"]'); if (bl) bl.onclick = () => ouvrirTechniqueLiee(c);
     const ouvrirC = c.mod === 'MesMaillots' && c.maillot ? async () => { window.changerOnglet('maillots'); await mmOuvrir(c.maillot); }   // (15/11) un de mes maillots
       : () => proj ? reprendreDepuisHub(proj) : ouvrirDepuisHub(c.onglet, c.base, false);
@@ -2692,6 +2695,25 @@ async function apercuJoueur(r, cle, f) {
 
 // (22/11, idée de muku : « d'abord le visuel, ensuite les stats dans un menu à part ») fenêtre des valeurs d'une création :
 // champs donnés par le serveur (moteur/stats.py : clés VRFW lues dans des mods qui marchent), partis des valeurs de l'original
+// (22/11, demande de muku) SUPPRIMER une création de Terminées : ses fichiers sont rangés dans sortie/<mod>/_retires
+// (récupérables) ; refusé si elle sert encore (techniques d'un joueur, technique liée d'un esprit…)
+async function supprimerCreation(c) {
+  const dansJeu = c.installe || c.jeuSeul;
+  const suite = c.mod === 'MesTechniques' ? (dansJeu ? '\nElle est aussi retirée du jeu (le jeu doit être fermé).' : '')
+    : dansJeu ? '\nElle reste dans le jeu jusqu’au prochain « Installer » de ce genre de créations.' : '';
+  if (!confirm(`Supprimer « ${c.nom} » ?\nSes fichiers sont rangés à part dans l’Atelier (sortie/${c.mod}/_retires), pas effacés.${suite}`)) return;
+  let r;
+  try {
+    if (c.mod === 'MesMaillots' && c.maillot) {
+      await api('/api/maillot', { action: 'supprimer', id: c.maillot });
+      r = await api('/api/maillot', { action: 'construire' });          // le mod « Mes maillots » refait sans lui
+      r = r.ok ? { ok: true, rapport: ['maillot supprimé ; le mod « Mes maillots » est refait sans lui'] } : r;
+    } else r = await api('/api/supprimer_creation', { mod: c.mod, code: c.mod === 'MesPersonnages' ? c.cle : c.code, genre: c.genre });
+  } catch (e) { r = { ok: false, erreur: e.message }; }
+  $('hub-etat').textContent = r.ok ? `« ${c.nom} » supprimé.` : 'Pas supprimé : ' + r.erreur;
+  if (r.ok) majRapport(r.rapport.join('\n'));
+  chargerHub();
+}
 function aDesStats(c) { return !c.jeuSeul && (c.mod === 'MesTechniques' || (c.mod === 'MesEsprits' && c.genre === 'esprit') || (c.mod === 'MesPersonnages' && c.cle)); }
 // (22/11, « fais un beau menu pour les stats ») MENU DES STATS façon menus du jeu, comme le Tableau des compétences :
 // en-tête orange + plaque du nom, à gauche la carte et l'aperçu (barre de technique ou d'esprit comme en jeu, PT en jauge

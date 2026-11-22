@@ -896,3 +896,7 @@ canvas, #atelier-dessin, #centre { touch-action: none; }
 #menu-stats .ms-garder { font-size: 21px; padding: 10px 26px; clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); }
 @media (max-width: 1200px) { .ms-stats { grid-template-columns: 1fr; } .ms-ligne { grid-template-columns: 170px 1fr; } }
 .ms-gauche .tc-tension, .ms-gauche .ms-infos, .ms-gauche .tc-barre { flex: none; }
+
+/* (22/11) bouton « Supprimer » des cartes terminées */
+#page-hub .hub-boutons button.supprimer { background: #4a2e2e; color: #ffd6d0; }
+#page-hub .hub-boutons button.supprimer:hover { background: #7a3434; }

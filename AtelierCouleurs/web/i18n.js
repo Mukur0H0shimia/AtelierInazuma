@@ -26,7 +26,7 @@
     'Créer et mettre dans le jeu': 'Create and put in the game',
     'Crée ta copie puis la met dans le jeu (le jeu doit être fermé)': 'Creates your copy then puts it in the game (the game must be closed)',
     'Avancé': 'Advanced', 'Revenir au mode simple': 'Back to simple mode',
-    'Enregistrer sans construire': 'Save without building', 'Créer la tenue': 'Create the outfit', 'Créer le joueur': 'Create the player', 'faites avec « Créer »': 'made with “Create”', 'Créer': 'Create',
+    'Enregistrer sans construire': 'Save without building', 'Supprimer': 'Delete', 'Retirer cette création (ses fichiers sont rangés à part, récupérables)': 'Remove this creation (its files are put aside, recoverable)', 'Créer la tenue': 'Create the outfit', 'Créer le joueur': 'Create the player', 'faites avec « Créer »': 'made with “Create”', 'Créer': 'Create',
     '« Créer » enregistre le maillot et refait le mod « Mes maillots » avec tous tes maillots, sans toucher au jeu. Pour le mettre dans le jeu : « Installer » dans Mes créations.': '“Create” saves the kit and rebuilds the “My kits” mod with all your kits, without touching the game. To put it in the game: “Install” in My creations.',
     'Comme en jeu': 'As in the game', 'Original': 'Original', 'Puissance': 'Power', 'Au niveau 1': 'At level 1', 'Au niveau max': 'At max level',
     'Utilisation': 'Use', 'Coût en PT (tension)': 'TP cost (tension)', 'Nature': 'Nature', 'Solo': 'Solo', '2 joueurs': '2 players', '3 joueurs': '3 players',

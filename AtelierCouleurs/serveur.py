@@ -1318,6 +1318,149 @@ def regler_stats(mod, code, brut):
                                                          else "valeurs de l'original gardées")]}
 
 
+# ------------------------------------------------------------------ (22/11, demande de muku) SUPPRIMER une création
+def _ranger(racine, motifs, garde):
+    """déplace dans <garde> les fichiers de <racine> dont le chemin contient un des motifs (nom, codes de la création) ;
+    -> nombre de fichiers rangés (récupérables : rien n'est effacé)"""
+    import re, shutil
+    motifs = [m for m in motifs if m and len(m) >= 4]
+    if not motifs or not os.path.isdir(racine):
+        return 0
+    rx = re.compile(r'(?<![0-9A-Za-z])(' + '|'.join(re.escape(m) for m in motifs) + r')(?![0-9])')
+    n = 0
+    for dossier in ('assets', 'content', 'addons', 'text'):
+        for d, _, fs in os.walk(os.path.join(racine, dossier)):
+            for f in fs:
+                p = os.path.join(d, f)
+                rel = os.path.relpath(p, racine)
+                if rx.search(rel.replace(os.sep, '/')):
+                    dst = os.path.join(garde, rel)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.move(p, dst)
+                    n += 1
+    for dossier in ('assets', 'content', 'addons', 'text'):            # dossiers restés vides
+        for d, _, _ in sorted(os.walk(os.path.join(racine, dossier)), key=lambda x: -len(x[0])):
+            try:
+                if d != os.path.join(racine, dossier) and not os.listdir(d):
+                    os.rmdir(d)
+            except OSError:
+                pass
+    return n
+
+
+def _retirer_bannieres(f, key):
+    """enlève le [[telop]] id = key du fichier des bannières (partagé par toutes les techniques)"""
+    if not os.path.isfile(f):
+        return
+    blocs = open(f, encoding='utf-8').read().split('\n[[telop]]')
+    garde = [blocs[0]] + [b for b in blocs[1:] if ('id = "%s"' % key) not in b]
+    open(f, 'w', encoding='utf-8').write('\n[[telop]]'.join(garde))
+
+
+def supprimer_creation(mod, code, genre=None):
+    from moteur import armures_copies, copies_outfits, objets_jeu
+    sortie = os.path.join(ICI, 'sortie', mod or '')
+    garde = os.path.join(sortie, '_retires', datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+    # utilisée ailleurs ? (techniques d'un joueur, technique liée d'un esprit) : on refuse, sinon le jeu chercherait un vide
+    def utilisateurs(cle_mod, cle):
+        u = ['%s (techniques du joueur)' % e.get('nom') for e in copies_persos.registre(CFG).values()
+             if any(c.get('mod') == cle_mod and c.get('code') == cle for c in e.get('coups') or [])]
+        if cle_mod == 'MesTechniques':
+            u += ['%s (technique liée)' % e.get('nom') for e in esprits.contenu(CFG).values()
+                  if ((e.get('technique_liee') or {}).get('code')) == cle]
+        return u
+    if mod == 'MesTechniques':
+        f = os.path.join(sortie, 'outil_techniques.json')
+        reg = json.load(open(f, encoding='utf-8')) if os.path.isfile(f) else {}
+        nom = next((n for n, e in reg.items() if e.get('key') == code), None)
+        u = utilisateurs('MesTechniques', code)
+        if u:
+            return {'ok': False, 'erreur': 'Utilisée par : ' + ', '.join(u) + '. Change-la d\'abord là-bas.'}
+        if export.jeu_ouvert():
+            return {'ok': False, 'erreur': 'Le jeu est ouvert : ferme-le d\'abord (la technique est aussi retirée du jeu).'}
+        e = reg.get(nom) or {}
+        if nom is None:                     # seulement dans le jeu : son nom et sa scène dans le registre ou les fichiers du mod du jeu
+            jeu_ = os.path.join(CFG.get('jeu_dir') or '', 'mods', 'MesTechniques')
+            fj_ = os.path.join(jeu_, 'outil_techniques.json')
+            rj_ = json.load(open(fj_, encoding='utf-8')) if os.path.isfile(fj_) else {}
+            nom = next((n for n, x in rj_.items() if x.get('key') == code), None)
+            e = rj_.get(nom) or {}
+            if nom is None:
+                for t_ in glob.glob(os.path.join(jeu_, 'content', 'techniques', '*.toml')):
+                    if ('key = "%s"' % code) in open(t_, encoding='utf-8').read():
+                        nom = os.path.basename(t_)[:-5]
+                        break
+        fm = os.path.join(sortie, 'outil_modeles.json')
+        modeles = json.load(open(fm, encoding='utf-8')) if os.path.isfile(fm) else {}
+        codes_mod = [v for k, v in modeles.items() if nom and k.startswith(nom + '|')]
+        motifs = [nom, code, e.get('id')] + codes_mod
+        n = _ranger(sortie, motifs, garde) if nom else 0
+        _retirer_bannieres(os.path.join(sortie, 'content', 'telops', 'any', 'telops.toml'), code)
+        # « Installer » ne fait qu'AJOUTER des techniques au jeu : celle-ci est donc aussi retirée du mod du jeu (rangée à part)
+        jeu = os.path.join(CFG.get('jeu_dir') or '', 'mods', 'MesTechniques')
+        nj = _ranger(jeu, motifs if nom else [code], os.path.join(garde, '_jeu'))
+        _retirer_bannieres(os.path.join(jeu, 'content', 'telops', 'any', 'telops.toml'), code)
+        if nom:
+            reg.pop(nom, None)
+            json.dump(reg, open(f, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+            for k in [k for k in modeles if k.startswith(nom + '|')]:
+                modeles.pop(k)
+            json.dump(modeles, open(fm, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        fj = os.path.join(jeu, 'outil_techniques.json')
+        if os.path.isfile(fj):
+            rj = json.load(open(fj, encoding='utf-8'))
+            if nom in rj or any(x.get('key') == code for x in rj.values()):
+                rj = {k: x for k, x in rj.items() if k != nom and x.get('key') != code}
+                json.dump(rj, open(fj, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        return {'ok': True, 'rapport': ['technique supprimée : %d fichiers de l\'Atelier et %d du jeu rangés dans %s' % (n, nj, garde)]}
+    if mod == 'MesEsprits' and genre == 'armures':
+        reg = armures_copies.registre(CFG)
+        k = next((k for k, e in reg.items() if e.get('modele') == code), None)
+        if k is None:
+            return {'ok': False, 'erreur': 'armure inconnue'}
+        e = reg.pop(k)
+        n = _ranger(sortie, [e.get('modele'), e.get('key')], garde)
+        json.dump(reg, open(os.path.join(sortie, 'outil_armures.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        armures_copies.ecrire_vrfw(CFG, reg)
+        return {'ok': True, 'rapport': ['armure supprimée (%d fichiers rangés dans %s)' % (n, garde)]}
+    if mod == 'MesEsprits':
+        reg = esprits.registre(sortie)
+        if code not in reg:
+            return {'ok': False, 'erreur': 'esprit inconnu'}
+        u = utilisateurs('MesEsprits', reg[code].get('key'))
+        u += ['armure %s' % (a.get('nom') or k) for k, a in armures_copies.registre(CFG).items() if k == code]
+        if u:
+            return {'ok': False, 'erreur': 'Utilisé par : ' + ', '.join(u) + '. Change-le d\'abord là-bas.'}
+        e = reg.pop(code)
+        n = _ranger(sortie, [code, e.get('key'), e.get('slug') and 'mesesprits_' + e['slug']], garde)
+        esprits.ecrire_vrfw(CFG, sortie, reg)
+        json.dump(reg, open(os.path.join(sortie, 'outil_esprits.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        return {'ok': True, 'rapport': ['esprit guerrier supprimé (%d fichiers rangés dans %s)' % (n, garde)]}
+    if mod == 'MesPersonnages':
+        r = copies_persos.retirer(CFG, code)
+        return dict(r, rapport=['personnage supprimé (fichiers rangés dans sortie/MesPersonnages/_retires)']) if r.get('ok') else r
+    if mod == 'MesTenues':
+        reg = copies_outfits.registre(CFG)
+        k = next((k for k, e in reg.items() if e.get('modele') == code), None)
+        if k is None:
+            return {'ok': False, 'erreur': 'tenue inconnue'}
+        e = reg.pop(k)
+        n = _ranger(sortie, [e.get('modele'), k], garde)
+        json.dump(reg, open(os.path.join(sortie, 'outil_tenues.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        copies_outfits.ecrire(CFG, reg)
+        return {'ok': True, 'rapport': ['tenue supprimée (%d fichiers rangés dans %s)' % (n, garde)]}
+    if mod == 'MesObjets':
+        reg = objets_jeu.registre(CFG)
+        if code not in reg:
+            return {'ok': False, 'erreur': 'objet inconnu'}
+        reg.pop(code)
+        n = _ranger(sortie, [code], garde)
+        json.dump(reg, open(os.path.join(sortie, 'outil_objets.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        objets_jeu.ecrire(CFG, reg)
+        return {'ok': True, 'rapport': ['objet supprimé (%d fichiers rangés dans %s)' % (n, garde)]}
+    return {'ok': False, 'erreur': 'suppression pas prévue pour ce genre'}
+
+
 def liste_creations():
     """(15/11/2026) hub : mods faits avec « Créer le mod » (AtelierCouleurs/sortie), installés ou non dans <jeu>/mods"""
     import re, tomllib
@@ -1820,6 +1963,8 @@ class Gestion(BaseHTTPRequestHandler):
                                                                   '(aperçu et recoloration seulement).'})
             if u.path == '/api/stats':                     # (22/11) régler les stats d'une création (ou garder celles de l'original)
                 return self._envoyer(200, regler_stats(demande.get('mod'), demande.get('code'), demande.get('stats') or {}))
+            if u.path == '/api/supprimer_creation':        # (22/11) « Supprimer » d'une carte de Terminées
+                return self._envoyer(200, supprimer_creation(demande.get('mod'), str(demande.get('code') or ''), demande.get('genre')))
             if u.path == '/api/police_importer':          # (22/11) police .ttf / .otf importée (fichier en data URL)
                 return self._envoyer(200, importer_police(demande.get('nom'), demande.get('data')))
             if u.path == '/api/police_retirer':

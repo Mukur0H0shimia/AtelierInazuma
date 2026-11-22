@@ -2728,7 +2728,7 @@ async function supprimerCreation(c) {
   if (r.ok) majRapport(r.rapport.join('\n'));
   chargerHub();
 }
-function aDesStats(c) { return !c.jeuSeul && (c.mod === 'MesTechniques' || (c.mod === 'MesEsprits' && c.genre === 'esprit') || (c.mod === 'MesPersonnages' && c.cle)); }
+function aDesStats(c) { return !c.jeuSeul && (c.mod === 'MesTechniques' || c.mod === 'MesEsprits' || (c.mod === 'MesPersonnages' && c.cle)); }   // (22/11) totems aussi (comme « En attente de stats »)
 // (22/11, « fais un beau menu pour les stats ») MENU DES STATS façon menus du jeu, comme le Tableau des compétences :
 // en-tête orange + plaque du nom, à gauche la carte et l'aperçu (barre de technique ou d'esprit comme en jeu, PT en jauge
 // « TENSION »), à droite les réglages ; joueur : panneau de statistiques d'après references_menus/equipement.webp
@@ -2851,7 +2851,10 @@ async function ouvrirStats(c) {
   f.querySelector('.ms-aide-txt').textContent = joueur ? 'Vide ou « comme l’original » : rien ne change' : 'Partie des valeurs de l’original : seules celles que tu changes sont écrites';
   const envoyer = async stats => {
     const e = f.querySelector('.ms-etat'); e.textContent = 'Écriture…';
-    try { const q = await api('/api/stats', { mod: c.mod, code, stats });
+    const bs = [f.querySelector('.ms-garder'), f.querySelector('.ms-original')].filter(Boolean);   // (22/11) pas de double clic
+    if (bs.some(b => b.disabled)) return;
+    bs.forEach(b => { b.disabled = true; });
+    try { const q = await api('/api/stats', { mod: c.mod, code, stats }).finally(() => bs.forEach(b => { b.disabled = false; }));
       if (!q.ok) { e.textContent = q.erreur; return; }
       f.close(); majRapport(q.rapport.join('\n'));
       $('hub-etat').textContent = 'Stats enregistrées. Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.'; chargerHub();

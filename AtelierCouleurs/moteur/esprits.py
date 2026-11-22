@@ -226,11 +226,28 @@ def _codes_sons(cfg):
     """(14/11/2026) tous les esprits / armures du jeu et des mods installés. Une scène qui a une liste de sons (snd_tag_words)
     ne joue QUE les sons des codes qu'elle cite (LU dans event_tag_word_replace_config : 142 entrées sur 143 du jeu sont
     « code = code ») : chacun y est donc gardé sur ses propres sons, sinon l'esprit d'origine perd sa voix."""
-    codes = set()
-    for base in (os.path.join(cfg['data_dir'], 'common', 'chr'), os.path.join(cfg['jeu_dir'], 'mods')):
+    # (22/11, muku : « le bouton Enregistrer » des stats restait 10 s sur « Écriture… ») ce parcours de TOUS les dossiers du
+    # jeu était refait une fois par scène (7 × 1,4 s) : le jeu ne change pas pendant la séance -> gardé ; les mods (qui
+    # changent à l'installation) gardés 30 s seulement
+    import time
+    cle = (cfg['data_dir'], cfg['jeu_dir'])
+    deja = _CODES_SONS.get(cle)
+    if deja and time.time() - deja[0] < 30:
+        return set(deja[1])
+
+    def parcourir(base):
+        codes = set()
         for r, ds, fs in os.walk(base):
             codes.update(d for d in ds if re.fullmatch(r'(k|a|kx|me|mx)\d{6}', d))
-    return codes
+        return codes
+    if cfg['data_dir'] not in _CODES_JEU:
+        _CODES_JEU[cfg['data_dir']] = parcourir(os.path.join(cfg['data_dir'], 'common', 'chr'))
+    codes = _CODES_JEU[cfg['data_dir']] | parcourir(os.path.join(cfg['jeu_dir'], 'mods'))
+    _CODES_SONS[cle] = (time.time(), codes)
+    return set(codes)
+
+
+_CODES_JEU, _CODES_SONS = {}, {}
 
 
 _GROUPES = {}

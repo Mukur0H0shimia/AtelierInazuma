@@ -504,7 +504,8 @@ async function ouvrir_(code) {
   const perso = estPerso();
   const t = await api(perso ? '/api/personnage?code=' + encodeURIComponent(code) + (ONGLETS_JEU.includes(E.onglet) ? '&cat=' + E.onglet + (E.onglet === 'maillots' ? '&cote=' + (MM.cote || '10') : '') : '') : '/api/technique?code=' + code);
   E.tech = t; E.tech.perso = perso; E.tech.onglet = E.onglet; E.objets = t.objets_details; E.textures = {}; E.coulMat = {}; E.teinteSom = {}; E.teintePtl = {}; E.selPieces.clear(); E.selTex.clear();
-  E.cree = null; E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
+  if (!(E.repriseAuto && E.repriseAuto === E.projet)) E.cree = null;   // (22/11) même projet (côté du maillot) : lien gardé
+  E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
   if (perso) { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}`;
     $('p-nom').value = t.nom + ' (couleurs)'; $('p-desc').value = ''; if ($('rt-nom')) $('rt-nom').value = t.nom + ' (couleurs)'; if ($('cp-nom')) { $('cp-nom').value = ''; $('cp-nom').placeholder = t.nom + ' bis'; } }
   else { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}${t.element ? ' · ' + libElement(t.element) : ''}  ·  cinématique ${t.cinematique}`;
@@ -533,7 +534,10 @@ async function ouvrir_(code) {
   const geantes = perso ? [] : E.vue.cacherGeantes(); E.vue.recadrer(true); teintesPieces(); dessinerPieces(); dessinerTextures(); dessinerAuras(); dessinerMateriaux(); dessinerTeintes(); majCompteurs();
   if (!perso) chargerAnimation(t).catch(e => majRapport('Animation non lue : ' + e.message));
   majRapport(geantes.length ? geantes.length + ' pièce(s) géante(s) cachée(s) au départ (fonds, flashs) : coche-les à gauche pour les voir.' : '');
-  dessinerRecette(); paletteTech(); E.sigProjet = signatureProjet(); E.chargement = false; verifierProjet(); proposerReprise();
+  dessinerRecette(); paletteTech(); E.sigProjet = signatureProjet(); E.chargement = false; verifierProjet();
+  if (E.modifie) { const m = E.modifie; E.modifie = null; E.cree = { mod: m.mod, code: m.code };   // (22/11) « Modifier » d'une création
+    if (m.champ && $(m.champ)) $(m.champ).value = m.nom; }
+  else proposerReprise();
   if (window.zonesPreparer) try { zonesPreparer(); } catch (e) { console.error('zones', e); }   // (15/11/2026) esprits / totems
   if (E.onglet === 'tenues' && window.ctPreparer) ctPreparer().catch(() => {});   // (15/11/2026) copies
   if (E.onglet === 'objets' && window.ojPreparer) ojPreparer();
@@ -1392,12 +1396,13 @@ function dessinerHub() {
   dessinerMenuJeu();                // (15/11/2026) en-tête, bannières, tuiles et filtres façon menus du jeu
   // chiffres
   const nAttente = HUB.creations.filter(c => c.attente).length, nFinies = HUB.creations.length - nAttente;    // (22/11)
-  $('hub-stats').innerHTML = [[HUB.projets.length, 'à continuer'], [nAttente, 'en attente de stats'], [nFinies, 'terminées'], [PREREG.length, 'préréglages']]
+  const nProjets = HUB.projets.filter(p => !projetLieExistant(p)).length;   // (22/11) sans les projets des créations
+  $('hub-stats').innerHTML = [[nProjets, 'à continuer'], [nAttente, 'en attente de stats'], [nFinies, 'terminées'], [PREREG.length, 'préréglages']]
     .map(([n, t]) => `<div class="hub-stat"><b>${n}</b><span>${t}</span></div>`).join('');
-  $('hub-n-projets').textContent = HUB.projets.length; $('hub-n-creations').textContent = nFinies; $('hub-n-prereglages').textContent = PREREG.length;
+  $('hub-n-projets').textContent = nProjets; $('hub-n-creations').textContent = nFinies; $('hub-n-prereglages').textContent = PREREG.length;
   // à continuer
   const g = $('hub-projets'); g.innerHTML = '';
-  const pl = HUB.projets.filter(p => ok(p.titre, p.base, p.code) && (!HUB.filtre || p.onglet === HUB.filtre));
+  const pl = HUB.projets.filter(p => !projetLieExistant(p) && ok(p.titre, p.base, p.code) && (!HUB.filtre || p.onglet === HUB.filtre));
   if (!pl.length) g.innerHTML = `<div class="hub-vide"><b>${HUB.projets.length ? 'Aucun projet ne correspond' : 'Rien en cours'}</b>${HUB.projets.length ? 'Essaie un autre mot.' : 'Ouvre une technique et change ses couleurs : ton travail apparaîtra ici tout seul.'}</div>`;
   for (const p of pl) {
     const tags = [[p.textures, 'texture'], [p.materiaux, 'matériau'], [p.teintes, 'teinte'], [p.remplacements, 'remplacement']].filter(x => x[0])
@@ -1441,7 +1446,7 @@ function dessinerHub() {
     const bx = d.querySelector('[data-a="supprimer"]'); if (bx) bx.onclick = () => supprimerCreation(c);
     const bl = d.querySelector('[data-a="liee"]'); if (bl) bl.onclick = () => ouvrirTechniqueLiee(c);
     const ouvrirC = c.mod === 'MesMaillots' && c.maillot ? async () => { window.changerOnglet('maillots'); await mmOuvrir(c.maillot); }   // (15/11) un de mes maillots
-      : () => proj ? reprendreDepuisHub(proj) : ouvrirDepuisHub(c.onglet, c.base, false);
+      : () => modifierCreation(c);   // (22/11) rouvre LA création (voir modifierCreation)
     d.querySelector('.hub-image').onclick = ouvrirC; d.querySelector('[data-a="modifier"]').onclick = ouvrirC;
     const bi = d.querySelector('[data-a="installer"]');
     if (bi) bi.onclick = async () => {
@@ -1743,7 +1748,9 @@ async function mmOuvrir(m) {
   const a = m.accessoires || {}, im = m.images || {};
   MM.base = { '10': { haut: im.haut_dom, short: im.short_dom, chaussures: a.chaussures_dom && a.chaussures_dom.png, gants: a.gants_dom && a.gants_dom.png },
               '20': { haut: im.haut_ext, short: im.short_ext, chaussures: a.chaussures_ext && a.chaussures_ext.png, gants: a.gants_ext && a.gants_ext.png } };
-  await ouvrir(m.code); await mmPoser(); mmFormulaire(m); mmListe(); mmMajCotes();
+  await ouvrir(m.code);
+  E.projet = ('cree_MesMaillots_' + m.id).replace(/[^\w.-]/g, '_'); E.repriseCle = null; E.cree = { mod: 'MesMaillots', code: m.id };   // (22/11) pas de nouveau projet
+  await mmPoser(); mmFormulaire(m); mmListe(); mmMajCotes();
   majRapport('Maillot « ' + m.nom + ' » repris : ses images sont sur la coupe (domicile). Bouton « Extérieur » pour l’autre côté.');
 }
 function mmNumero() { const h = id => $(id).value.replace('#', '').toUpperCase(), v = $('mm-num-police').value, ordi = v.startsWith('f:');
@@ -1853,7 +1860,8 @@ async function mmEnregistrer() {
   // ce qui vient d'être envoyé devient « enregistré » (plus renvoyé tant qu'on n'y touche pas)
   for (const c of ['10', '20']) { for (const [role, v] of Object.entries(MM.edits[c] || {})) MM.base[c][role] = v.png; MM.edits[c] = {}; }
   for (const v of Object.values(mmRoles())) v.x.mmCharge = v.x.moyenne.join();
-  MM.id = r.id; MM.icone = MM.embleme = null; await mmListe(); $('mm-en-cours').textContent = 'Maillot : ' + $('mm-nom').value;
+  MM.id = r.id; MM.icone = MM.embleme = null; E.cree = { mod: 'MesMaillots', code: r.id };   // (22/11) projet lié au maillot
+  await mmListe(); $('mm-en-cours').textContent = 'Maillot : ' + $('mm-nom').value;
   majRapport('Maillot enregistré (domicile, extérieur, chaussures et gants changés). « Ajouter au mod » pour le mettre dans le mod.');
 }
 // (15/11/2026) « Ajouter au mod » : comme les autres créations, le maillot est enregistré puis le mod MesMaillots est écrit
@@ -2864,6 +2872,24 @@ for (const [nom, mod] of [['exporter', 'MesTechniques'], ['exporterPerso', 'MesE
     const r = await f0.apply(this, a); if (r && r.ok && (r.code || r.key)) { await lierProjetCreation(mod, r.code || r.key); await proposerSuite(mod, r.code); }
     if (r && r.ok && $('page-hub') && typeof chargerHub === 'function') chargerHub();
     return r; };
+}
+// (22/11, retour de muku : « Modifier crée un nouveau dans À continuer alors que ça devrait modifier celui qui existe »)
+// « Modifier » rouvre LA création : son projet lié, sinon un projet lié à elle (clé fixe « cree_<mod>_<code> ») avec son
+// nom dans le champ du nom -> « Créer » met à jour la même création (même nom = même code, partout dans l'Atelier).
+// Un projet lié à une création qui existe n'est pas dans « À continuer ».
+function champNomCreation(c) {
+  return c.mod === 'MesTechniques' ? 'f-nom' : c.mod === 'MesEsprits' ? (c.genre === 'armures' ? 'ca-nom' : 'p-nom')
+    : c.mod === 'MesPersonnages' ? (c.onglet === 'tenues' ? 'ct-nom' : 'cp-nom') : c.mod === 'MesTenues' ? 'cu-nom' : c.mod === 'MesObjets' ? 'oj-nom-copie' : null;
+}
+const cleCreation = c => ('cree_' + c.mod + '_' + c.code).replace(/[^\w.-]/g, '_');
+async function modifierCreation(c) {
+  const proj = projetDe(c);
+  if (proj) return reprendreDepuisHub(proj);
+  E.modifie = { mod: c.mod, code: String(c.code), nom: c.nom, champ: champNomCreation(c) };
+  await ouvrirDepuisHub(c.onglet, c.base, cleCreation(c));
+}
+function projetLieExistant(p) {
+  return !!(p.cree && HUB.creations.some(c => c.mod === p.cree.mod && String(c.code) === String(p.cree.code)));
 }
 function projetDe(c) {
   const lie = HUB.projets.find(p => p.cree && p.cree.mod === c.mod && p.cree.code === String(c.code));

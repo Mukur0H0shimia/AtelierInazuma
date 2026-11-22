@@ -744,8 +744,31 @@ function menuTexture(ev, cle) {
   const cibles = peutDessiner && !carteTech(x.nom) ? Object.entries(E.textures).filter(([k, y]) => k !== cle && y.obj === x.obj && y.cur && !y.info.donnees && !carteTech(y.nom)
       && y.cur.width === x.cur.width && y.cur.height === x.cur.height)
     .sort((a, b) => (texturePasMontree(a[0]) ? 1 : 0) - (texturePasMontree(b[0]) ? 1 : 0)).slice(0, 8) : [];
+  // (22/11, demande d'un joueur : « mettre des textures de Kabuki Smash sur le Triangle ZZ ») presse-papiers de l'Atelier :
+  // il garde l'image quand on ouvre une autre technique
+  const presse = peutDessiner ? [['📄 Copier l’image (pour une autre technique)', () => copierPresse(cle)]]
+    .concat(PRESSE.img ? [[`📋 Coller ici : ${PRESSE.nom}${PRESSE.tech ? ' (' + PRESSE.tech + ')' : ''}`, () => collerPresse(cle)]] : []) : [];
   menuContexte(ev, x ? x.nom : cle, [['◎ Localiser la texture', () => allerVersTexture(cle, true)]].concat(peutDessiner ? [['✎ Dessiner', () => ouvrirEditeur(cle)]] : [])
-    .concat(cibles.map(([k, y]) => [`⧉ Copier cette image sur ${y.nom}${!texturePasMontree(k) && texturePasMontree(cle) ? ' (version montrée)' : ''}`, () => copierTexture(cle, k)])));
+    .concat(cibles.map(([k, y]) => [`⧉ Copier cette image sur ${y.nom}${!texturePasMontree(k) && texturePasMontree(cle) ? ' (version montrée)' : ''}`, () => copierTexture(cle, k)]))
+    .concat(presse));
+}
+const PRESSE = { img: null, nom: '', tech: '' };
+function copierPresse(cle) {
+  const a = E.textures[cle]; if (!a || !a.cur) return;
+  const c = document.createElement('canvas'); c.width = a.cur.width; c.height = a.cur.height; c.getContext('2d').drawImage(a.cur, 0, 0);
+  PRESSE.img = c; PRESSE.nom = a.nom; PRESSE.tech = E.tech ? E.tech.nom : '';
+  majRapport(`Image de ${a.nom} copiée (${c.width} × ${c.height}). Ouvre une autre technique, clic droit sur une texture : « Coller ici ».`);
+}
+function collerPresse(vers) {
+  const a = PRESSE.img, b = E.textures[vers]; if (!a || !b || !b.cur) return;
+  quitterAvant(); E.pileRc.push(photoEtat()); if (E.pileRc.length > 8) E.pileRc.shift();
+  const w = b.cur.width, h = b.cur.height, cx = b.cur.getContext('2d');
+  cx.clearRect(0, 0, w, h); cx.imageSmoothingQuality = 'high'; cx.drawImage(a, 0, 0, w, h);
+  b.base = cx.getImageData(0, 0, w, h); b.modif = true; b.moyenne = moyenne(b.base); b.donneesCur = null;
+  apresRetouche(); paletteTech();
+  majRapport(`Image de ${PRESSE.nom} collée sur ${b.nom}` + (a.width !== w || a.height !== h ? ` (mise à sa taille : ${a.width} × ${a.height} → ${w} × ${h})` : '')
+    + '. La forme des pièces reste celle de cette technique : une image faite pour une autre forme peut tomber autrement.'
+    + ' Pour revenir en arrière : « Annuler le dernier » (bloc Remplacer une couleur partout).');
 }
 // (15/11/2026) texture d'une version d'objet qu'AUCUN acteur de la cinématique ne montre (voir chargerPeau)
 function texturePasMontree(cle) { return !!(E.texturesCachees && E.texturesCachees.has(cle) && !(E.texturesMontrees && E.texturesMontrees.has(cle))); }
@@ -1701,7 +1724,10 @@ function mmFormulaire(m) {
   $('mm-nom').value = m ? m.nom : (E.tech ? E.tech.nom + ' (perso)' : ''); $('mm-prix').value = m ? m.prix || 1 : 1; $('mm-plis').value = (m && m.plis) || 'simples';
   $('mm-num-perso').checked = !!n.perso; $('mm-num-c1').value = '#' + (n.remplissage || 'FFFFFF'); $('mm-num-c2').value = '#' + (n.contour || '000000');
   $('mm-num-police').value = n.chiffres ? 'f:' + n.chiffres : String(n.police || 1); $('mm-num-taille').value = Math.round((n.taille || 1) * 100); $('mm-num-hauteur').value = n.hauteur || 0;
-  $('mm-num-nom').checked = !!n.nom; $('mm-num-lettres').value = n.lettres || ''; mmApercuNumero();
+  $('mm-num-nom').checked = !!n.nom; $('mm-num-lettres').value = n.lettres || '';
+  // (22/11) police importée pas encore chargée : choisie dès qu'elle arrive (parametres.js : brancherPolices)
+  for (const [id, v] of [['mm-num-police', n.chiffres ? 'f:' + n.chiffres : null], ['mm-num-lettres', n.lettres || null]]) if (v && $(id).value !== v) $(id).dataset.voulue = v;
+  mmApercuNumero();
   $('mm-icone-img').src = (m && m.icone) || ''; $('mm-embleme-img').src = (m && m.embleme) || ''; MM.icone = MM.embleme = null;
   $('mm-en-cours').textContent = m ? 'Maillot : ' + m.nom : 'Nouveau maillot' + (E.tech ? ' (coupe : ' + E.tech.nom + ')' : '');
 }
@@ -1847,6 +1873,8 @@ window.addEventListener('load', () => { if (!$('mm-enregistrer')) return;
   $('mm-nouveau').onclick = mmNouveau; document.querySelectorAll('[data-mm-cote]').forEach(b => b.onclick = () => mmCote(b.dataset.mmCote).catch(e => majRapport('Erreur : ' + e.message))); $('mm-construire').onclick = () => mmConstruire().catch(e => majRapport('Erreur : ' + e.message));
   mmFichier($('mm-icone'), 'icone', 'mm-icone-img'); mmFichier($('mm-embleme'), 'embleme', 'mm-embleme-img');
   // (16/11/2026) aperçu du numéro : redessiné à chaque réglage
+  // (22/11) polices importées (⚙ Paramètres) dans les deux listes, + « Importer une police… »
+  if (window.brancherPolices) { brancherPolices($('mm-num-police'), p => 'f:' + p.nom); brancherPolices($('mm-num-lettres'), p => p.nom); }
   for (const id of ['mm-num-perso', 'mm-num-c1', 'mm-num-c2', 'mm-num-police', 'mm-num-taille', 'mm-num-hauteur', 'mm-num-nom', 'mm-num-lettres', 'mm-num-essai', 'mm-nom'])
     if ($(id)) { $(id).addEventListener('input', () => mmApercuNumero()); $(id).addEventListener('change', () => mmApercuNumero()); }
   mmApercuNumero(); });
@@ -2260,6 +2288,7 @@ async function ouvrirBannieres() {
     for (const [f, n] of EditeurBanniere.polices()) {
       if (dispo && !dispo.has(f.toLowerCase())) continue;
       const o = document.createElement('option'); o.value = f; o.textContent = n; $('b-police').appendChild(o); }
+    if (window.brancherPolices) brancherPolices($('b-police'), p => p.fichier);       // (22/11) polices importées
     for (const [n, st] of Object.entries(EditeurBanniere.styles())) { const b = document.createElement('button'); b.textContent = n;
       b.onclick = () => { Object.assign(B.ed.p, st); reglagesBanniere(); dessinerBanniere(); }; $('b-styles').appendChild(b); }
     const num = { penche: v => v / 100, ombreA: v => v / 100 };

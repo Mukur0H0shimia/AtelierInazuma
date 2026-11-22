@@ -102,6 +102,10 @@
       + '<div class="p-ligne"><label>Volume <input type="range" id="p-volume" min="0" max="1" step="0.05"></label></div>'
       + '<p class="p-note">Elle se coupe toute seule pendant la lecture d\'une technique. Lue dans ton jeu, rien n\'est copié.</p>'
       + '<p class="p-note" id="p-musique-etat"></p>'
+      + '<h3>Mes polices</h3>'
+      + '<div class="p-ligne"><button id="p-police-importer">➕ Importer une police (.ttf / .otf)</button></div>'
+      + '<div id="p-polices"></div>'
+      + '<p class="p-note">Proposées dans les bannières, les numéros et noms des maillots et l\'outil Texte du mode dessin.</p>'
       + '<div class="p-bas"><button id="p-ok" class="primaire">OK</button></div></div>';
     document.body.appendChild(f);
     var L = f.querySelector('#p-palettes');
@@ -117,6 +121,7 @@
       if (this.checked) { demarrer(); } else { arreter(); }
     };
     f.querySelector('#p-volume').oninput = function () { garder({ volume: +this.value }); };
+    f.querySelector('#p-police-importer').onclick = function () { window.importerPolice().then(majFenetre); };
     var fermer = function () { f.classList.remove('ouvert'); natif(); };
     f.querySelector('#p-fermer').onclick = fermer; f.querySelector('#p-ok').onclick = fermer;
     f.addEventListener('pointerdown', function (ev) { if (ev.target === f) { fermer(); } });
@@ -129,7 +134,96 @@
     f.querySelector('#p-musique').checked = !!P.musique;
     f.querySelector('#p-volume').value = P.volume;
     etatMusique(M.etat);
+    var L = f.querySelector('#p-polices'); L.innerHTML = '';
+    if (!PP.length) { L.innerHTML = '<p class="p-note">Aucune pour l\'instant.</p>'; }
+    PP.forEach(function (p) {
+      var d = document.createElement('div'); d.className = 'p-ligne p-police';
+      var n = document.createElement('span'); n.textContent = p.nom; n.style.fontFamily = '"' + p.nom + '", sans-serif'; n.style.fontSize = '20px';
+      var x = document.createElement('button'); x.textContent = '🗑'; x.title = 'Retirer cette police';
+      x.onclick = function () {
+        if (!confirm('Retirer la police « ' + p.nom + ' » de l\'Atelier ? (ce qui est déjà fait avec ne change pas)')) { return; }
+        fetch('/api/police_retirer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fichier: p.fichier }) })
+          .then(function () { return chargerPolicesPerso(); }).then(majFenetre);
+      };
+      d.appendChild(n); d.appendChild(x); L.appendChild(d);
+    });
   }
+
+  // ------------------------------------------------------------------ (22/11, demande d'un joueur) polices importées
+  // fichier .ttf / .otf -> AtelierCouleurs/polices (serveur), chargé ici sous son nom (FontFace) : utilisable partout dans la page
+  var PP = [];
+  function enregistrerPolice(p) {
+    try {
+      var ff = new FontFace(p.nom, 'url(/police/' + encodeURIComponent(p.fichier) + ')');
+      document.fonts.add(ff); return ff.load().catch(function () { });
+    } catch (e) { return Promise.resolve(); }
+  }
+  function chargerPolicesPerso() {
+    return fetch('/api/polices_perso').then(function (r) { return r.json(); }).then(function (L) {
+      var neuves = (L || []).filter(function (p) { return !PP.some(function (q) { return q.fichier === p.fichier; }); });
+      PP = L || [];
+      return Promise.all(neuves.map(enregistrerPolice));
+    }).catch(function () { }).then(function () { document.dispatchEvent(new Event('polices-perso')); return PP; });
+  }
+  window.policesPerso = function () { return PP; };
+  window.importerPolice = function () {
+    return new Promise(function (fini) {
+      var i = document.createElement('input'); i.type = 'file'; i.accept = '.ttf,.otf';
+      i.onchange = function () {
+        var f = i.files && i.files[0]; if (!f) { return fini(null); }
+        var rd = new FileReader();
+        rd.onload = function () {
+          fetch('/api/police_importer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nom: f.name, data: rd.result }) })
+            .then(function (r) { return r.json(); }).then(function (r) {
+              if (!r.ok) { alert('Police refusée : ' + r.erreur); return fini(null); }
+              chargerPolicesPerso().then(function () { fini(PP.filter(function (p) { return p.fichier === r.fichier; })[0] || null); });
+            }).catch(function () { fini(null); });
+        };
+        rd.readAsDataURL(f);
+      };
+      i.click();
+    });
+  };
+  // une liste de polices de la page : groupe « Mes polices » + « ➕ Importer une police… » (choisie tout de suite après)
+  // valeur(p) : ce que la liste attend (nom de fichier pour les bannières, nom de la police ailleurs)
+  window.brancherPolices = function (sel, valeur) {
+    if (!sel) { return; }
+    var remplir = function () {
+      var garde = sel.value;
+      Array.prototype.slice.call(sel.querySelectorAll('.mes-polices')).forEach(function (o) { o.remove(); });
+      var g = document.createElement('optgroup'); g.label = 'Mes polices'; g.className = 'mes-polices';
+      PP.forEach(function (p) { g.appendChild(new Option(p.nom, valeur(p))); });
+      g.appendChild(new Option('➕ Importer une police…', '__importer__'));
+      sel.appendChild(g);
+      if (garde && garde !== '__importer__') { sel.value = garde; }
+      if (sel.dataset.voulue && Array.prototype.some.call(sel.options, function (o) { return o.value === sel.dataset.voulue; })) { sel.value = sel.dataset.voulue; delete sel.dataset.voulue; }
+    };
+    remplir();
+    if (sel.__polices) { return; }
+    sel.__polices = true;
+    var avant = sel.value;
+    sel.addEventListener('focus', function () { avant = sel.value; });
+    sel.addEventListener('pointerdown', function () { if (sel.value !== '__importer__') { avant = sel.value; } });
+    // une liste envoie « input » puis « change » : l'import part au premier, le second est tu
+    var enCours = false, taire = false;
+    var choix = function (ev) {
+      if (taire) { ev.stopImmediatePropagation(); return; }
+      if (sel.value !== '__importer__') { avant = sel.value; return; }
+      ev.stopImmediatePropagation(); sel.value = avant;
+      taire = true; setTimeout(function () { taire = false; }, 0);
+      if (enCours) { return; }
+      enCours = true;
+      window.importerPolice().then(function (p) {
+        enCours = false; taire = false;            // (réponse rapide : le « silence » du 2e événement ne doit pas taire le choix)
+        if (!p) { return; }
+        sel.value = valeur(p);
+        sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    };
+    sel.addEventListener('input', choix, true); sel.addEventListener('change', choix, true);
+    document.addEventListener('polices-perso', remplir);
+  };
+  chargerPolicesPerso();
   // le lecteur natif (vraie fenêtre devant la page) se cache tant que la fenêtre est ouverte (app.js : majCacheNatif)
   function natif() { try { if (typeof majCacheNatif === 'function') { majCacheNatif(); } } catch (e) { } }
   window.ouvrirParametres = function () { majFenetre(); fenetre().classList.add('ouvert'); natif(); };

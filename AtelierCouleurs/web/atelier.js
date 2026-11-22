@@ -208,7 +208,8 @@ function atTraitDebut(d, px, py, zone, ev) {
 }
 function atTraitPoint(px, py, miroir) {
   const t = A.trait; if (!t) return; const d = t.d, W = d.W, H = d.H, o = A.outil;
-  const rr = +$('at-taille').value, dur = +$('at-durete').value / 100, opa = +$('at-opacite').value / 100, flux = +$('at-flux').value / 100;
+  // (22/11) stylet : la pression règle la taille (de 20 % à 100 % de la taille choisie) ; souris : taille choisie
+  const rr = Math.max(0.5, +$('at-taille').value * (A.pression != null ? 0.2 + 0.8 * A.pression : 1)), dur = +$('at-durete').value / 100, opa = +$('at-opacite').value / 100, flux = +$('at-flux').value / 100;
   const px0 = atPixels(d), src = t.src, cov = t.cov, m = atMasque(d), T = Z.tex[d.cle], C = t.C;
   const cle = miroir ? 'dernierM' : 'dernier', pts = [];
   if (t[cle]) { const dd = Math.hypot(px - t[cle][0], py - t[cle][1]), n = Math.min(80, Math.ceil(dd / Math.max(1, rr * 0.25)));
@@ -570,8 +571,11 @@ function atBrancherPlat() {
   cv.addEventListener('wheel', ev => { ev.preventDefault(); const r = cv.getBoundingClientRect(), sx = (ev.clientX - r.left) * cv.width / r.width, sy = (ev.clientY - r.top) * cv.height / r.height;
     const z0 = A.vue.zoom, z1 = Math.max(1, Math.min(16, z0 * Math.exp(-ev.deltaY * 0.0015))); A.vue.ox = sx - (sx - A.vue.ox) * z1 / z0; A.vue.oy = sy - (sy - A.vue.oy) * z1 / z0; A.vue.zoom = z1;
     if (z1 === 1) { A.vue.ox = 0; A.vue.oy = 0; } atPlat(); }, { passive: false });
-  cv.addEventListener('mousedown', ev => {
-    const d = A.doc; if (!d) return; ev.preventDefault();
+  // (22/11, retour d'un joueur : « avec le stylet de ma tablette, ça fait glisser l'écran ») événements « pointer » (souris,
+  // stylet, doigt : mêmes champs que la souris) + touch-action: none (style.css) ; pression du stylet -> taille du pinceau
+  const pression = ev => { A.pression = ev.pointerType === 'pen' && ev.pressure > 0 ? ev.pressure : null; };
+  cv.addEventListener('pointerdown', ev => {
+    const d = A.doc; if (!d) return; ev.preventDefault(); pression(ev);
     if (ev.button === 1 || ev.button === 2 || (ev.button === 0 && (A.espace || A.outil === 'main'))) { pan = [ev.clientX, ev.clientY, A.vue.ox, A.vue.oy]; return; }
     if (ev.button !== 0) return; const [tx, ty] = atVersTexture(cv, ev), T = Z.tex[d.cle], zone = T ? T.label[Math.max(0, Math.min(d.H - 1, ty | 0)) * d.W + Math.max(0, Math.min(d.W - 1, tx | 0))] : -1;
     if (window.edSouris && edSouris('debut', d, tx, ty, ev)) { geste = 'ed'; return; }
@@ -580,7 +584,8 @@ function atBrancherPlat() {
     if (A.outil === 'degrade') { A.degrade = [[tx, ty], [tx, ty]]; geste = 'degrade'; return; }
     if (PINCEAUX.includes(A.outil)) { geste = 'pinceau'; atGeste('debut', d, tx, ty, zone, ev); return; }
     atGeste('clic', d, tx, ty, zone, ev); });
-  window.addEventListener('mousemove', ev => {
+  window.addEventListener('pointermove', ev => {
+    if (geste) pression(ev);
     if (pan) { const r = cv.getBoundingClientRect(), k = cv.width / r.width; A.vue.ox = pan[2] + (ev.clientX - pan[0]) * k; A.vue.oy = pan[3] + (ev.clientY - pan[1]) * k; atPlat(); return; }
     const d = A.doc; if (!d) return;
     if (ev.target === cv || geste) { const t = atVersTexture(cv, ev); A.curseur = t; if (!geste) atPlat(); }
@@ -588,7 +593,8 @@ function atBrancherPlat() {
     if (geste === 'lasso') { A.lasso.push([tx, ty]); atPlat(); } else if (geste === 'rect') { A.rect[2] = tx; A.rect[3] = ty; atPlat(); }
     else if (geste === 'degrade') { A.degrade[1] = [tx, ty]; atPlat(); } else if (geste === 'pinceau') atGeste('bouger', d, tx, ty, undefined, ev);
     else if (geste === 'ed') edSouris('bouger', d, tx, ty, ev); });
-  window.addEventListener('mouseup', ev => {
+  window.addEventListener('pointerup', ev => {
+    A.pression = null;
     if (pan) { pan = null; return; } if (!geste) return; const g = geste, d = A.doc; geste = null;
     if (g === 'lasso') { const pts = A.lasso; A.lasso = null; if (pts.length > 2) atPolygone(d, pts, ev); else atSelRien(); }
     else if (g === 'rect') { const [a, b, c, e] = A.rect; A.rect = null; if (Math.abs(c - a) > 1 && Math.abs(e - b) > 1) atPolygone(d, [[a, b], [c, b], [c, e], [a, e]], ev); else atSelRien(); }
@@ -596,7 +602,7 @@ function atBrancherPlat() {
     else if (g === 'pinceau') atGeste('fin');
     else if (g === 'ed') edSouris('fin', d, 0, 0, ev);
     atPlat(); });
-  cv.addEventListener('mouseleave', () => { A.curseur = null; atPlat(); });
+  cv.addEventListener('pointerleave', () => { A.curseur = null; atPlat(); });
 }
 
 // ---------------------------------------------------------------------- branchements, raccourcis

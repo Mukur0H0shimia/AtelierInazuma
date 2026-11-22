@@ -181,6 +181,7 @@ function edCarte() {
     i.oninput = () => { ED.texte = i.value; edMemo(); }; aj(t);
     const p = document.createElement('label'); p.className = 'ed-ligne'; p.innerHTML = '<span>Police</span><select></select>'; const s = p.querySelector('select');
     for (const f of ['Arial Black', 'Impact', 'Bahnschrift', 'Segoe UI Black', 'Georgia', 'Trebuchet MS', 'Verdana', 'Courier New', 'Comic Sans MS', 'Times New Roman']) s.add(new Option(f, f, false, f === ED.police));
+    if (window.brancherPolices) brancherPolices(s, q => q.nom);                    // (22/11) polices importées
     s.onchange = () => { ED.police = s.value; edMemo(); }; aj(p);
     aj(edCurseur('Taille', 'tTaille', 4, W, ' px')); aj(edCurseur('Contour', 'tContour', 0, Math.round(W / 20), ' px')); aj(edCurseur('Rotation', 'rotation', -180, 180, '°'));
     aj(aide('Couleur 1 = lettres, couleur 2 = contour.')); }

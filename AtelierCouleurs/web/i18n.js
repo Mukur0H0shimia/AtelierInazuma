@@ -27,6 +27,10 @@
     'Crée ta copie puis la met dans le jeu (le jeu doit être fermé)': 'Creates your copy then puts it in the game (the game must be closed)',
     'Avancé': 'Advanced', 'Revenir au mode simple': 'Back to simple mode',
     'Enregistrer sans construire': 'Save without building',
+    'Mes polices': 'My fonts', '➕ Importer une police (.ttf / .otf)': '➕ Import a font (.ttf / .otf)', '➕ Importer une police…': '➕ Import a font…',
+    "Proposées dans les bannières, les numéros et noms des maillots et l'outil Texte du mode dessin.": 'Offered in banners, kit numbers and names, and the drawing mode Text tool.',
+    "Aucune pour l'instant.": 'None yet.', 'Retirer cette police': 'Remove this font',
+    '📄 Copier l’image (pour une autre technique)': '📄 Copy the image (for another technique)',
     '⚙ Paramètres': '⚙ Settings', 'Paramètres : couleurs, musique': 'Settings: colours, music', "Couleurs de l'écran": 'Screen colours',
     "L'accueil (Mes créations) garde les couleurs du menu du jeu.": 'The home screen (My creations) keeps the game menu colours.',
     'Musique de fond': 'Background music', "Thème de l'écran titre du jeu": "The game's title screen theme", 'Volume': 'Volume',
@@ -72,6 +76,8 @@
 
   // (21/11) textes avec des données : [modèle sur le texte aux espaces réduits, remplacement]
   var MOTIFS = [
+    [/^📋 Coller ici : (.+)$/, '📋 Paste here: $1'],
+    [/^Image de (\S+) copiée \((\d+) × (\d+)\)\. Ouvre une autre technique, clic droit sur une texture : « Coller ici »\.$/, 'Image of $1 copied ($2 × $3). Open another technique, right-click a texture: “Paste here”.'],
     [/^(\S+) \((\d+) pièces?\)$/, '$1  ($2 parts)'],
     [/^(\S+) \(modèle de personnage : textures seulement\)$/, '$1  (character model: textures only)'],
     [/^(#[0-9a-f]{6}) · (\d+) % · ([a-zé, ]+) \(clic : remplacer cette couleur\)$/i, function (_, c, p, src) {

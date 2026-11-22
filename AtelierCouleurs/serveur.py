@@ -188,12 +188,43 @@ MODS = {'liste': [], 'quand': 0}
 MOD_CODE = {}                         # code -> entrée (tout ce qui vient des mods, tous onglets)
 
 
+# (22/11, demande d'un joueur : « importer sa propre police d'écriture ») polices importées dans l'Atelier : dossier à soi
+# (jamais copié dans le partage), servies comme celles de Windows (/police/<fichier>) ; fichier « perso_<nom>.ttf|otf »
+POLICES_PERSO = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polices')
+
+
+def polices_perso():
+    try:
+        fs = sorted(f for f in os.listdir(POLICES_PERSO) if f.lower().endswith(('.ttf', '.otf')) and f.startswith('perso_'))
+    except OSError:
+        return []
+    return [{'fichier': f, 'nom': os.path.splitext(f)[0][6:]} for f in fs]
+
+
+def importer_police(nom, data_url):
+    import base64, re
+    ext = os.path.splitext(str(nom or ''))[1].lower()
+    if ext not in ('.ttf', '.otf'):
+        return {'ok': False, 'erreur': 'il faut un fichier .ttf ou .otf'}
+    try:
+        b = base64.b64decode(str(data_url).split(',', 1)[-1])
+    except (ValueError, TypeError):
+        return {'ok': False, 'erreur': 'fichier illisible'}
+    if b[:4] not in (b'\x00\x01\x00\x00', b'OTTO', b'true') or len(b) > 30 * 1024 * 1024:
+        return {'ok': False, 'erreur': "ce n'est pas une police TrueType / OpenType (ou plus de 30 Mo)"}
+    tige = re.sub(r'[^\w\- ]', '', os.path.splitext(os.path.basename(str(nom)))[0]).strip()[:60] or 'police'
+    os.makedirs(POLICES_PERSO, exist_ok=True)
+    f = 'perso_' + tige + ext
+    open(os.path.join(POLICES_PERSO, f), 'wb').write(b)
+    return {'ok': True, 'fichier': f, 'nom': tige}
+
+
 def polices_du_pc():
     """{nom du fichier en minuscules: chemin} des polices .ttf / .otf de Windows ET de celles installées pour l'utilisateur
     seul (%LOCALAPPDATA%\\Microsoft\\Windows\\Fonts) ; les polices d'Office (Cooper Black, Jokerman…) ne sont pas partout"""
     out = {}
     for d in (os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'Fonts'),
-              os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Windows', 'Fonts')):
+              os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Windows', 'Fonts'), POLICES_PERSO):
         try:
             for f in os.listdir(d):
                 if f.lower().endswith(('.ttf', '.otf')):
@@ -1676,6 +1707,8 @@ class Gestion(BaseHTTPRequestHandler):
                 if obj.startswith('copies_persos__'):    # (15/11/2026) tête recolorée d'une copie (cache/copies_persos/<code>/)
                     return self._fichier(os.path.join(CACHE, 'copies_persos', os.path.basename(obj[15:]), os.path.basename(unquote(nom))))
                 return self._fichier(os.path.join(CACHE, os.path.basename(obj), os.path.basename(unquote(nom))))
+            if u.path == '/api/polices_perso':            # (22/11) polices importées dans l'Atelier
+                return self._envoyer(200, polices_perso())
             if u.path == '/api/polices':                  # polices présentes sur CE PC (bannières : les autres sont cachées)
                 return self._envoyer(200, sorted(polices_du_pc()))
             if u.path.startswith('/police/'):
@@ -1715,6 +1748,16 @@ class Gestion(BaseHTTPRequestHandler):
                 # (17/11/2026) contenu des mods : aperçu et recoloration seulement (les copies lisent les fichiers du jeu)
                 return self._envoyer(200, {'ok': False, 'erreur': 'Cet élément vient d’un mod : la copie n’est pas encore possible '
                                                                   '(aperçu et recoloration seulement).'})
+            if u.path == '/api/police_importer':          # (22/11) police .ttf / .otf importée (fichier en data URL)
+                return self._envoyer(200, importer_police(demande.get('nom'), demande.get('data')))
+            if u.path == '/api/police_retirer':
+                f_ = os.path.basename(str(demande.get('fichier') or ''))
+                if f_.startswith('perso_') and f_.lower().endswith(('.ttf', '.otf')):
+                    try:
+                        os.remove(os.path.join(POLICES_PERSO, f_))
+                    except OSError:
+                        pass
+                return self._envoyer(200, {'ok': True, 'polices': polices_perso()})
             if u.path == '/api/parametres':                # (22/11) ⚙ Paramètres
                 p_ = parametres()
                 for k_, ok_ in (('theme', lambda v: v in THEMES), ('musique', lambda v: isinstance(v, bool)),

@@ -368,12 +368,9 @@ def exporter(cfg, demande, infos_technique):
             ecrire_png_banniere(b['image'], png)
         else:
             banniere(b['texte'], b.get('couleur', '#f5c842'), b.get('contour', '#0d1a4a'), png)
-        f = os.path.join(sortie, 'content', 'telops', 'any', 'telops.toml')
-        t = open(f, encoding='utf-8').read() if os.path.exists(f) else 'schema = "VRFW.telop_list/2"\n'
-        t = re.sub(r'\n\[\[telop\]\]\nid = "%s"\nfrom = "[^"]*"\n' % key, '\n', t)
-        t += '\n[[telop]]\nid = "%s"\nfrom = "%s"\n' % (key, infos_technique['telop'])
-        _ecrire(f, t)
-        rapport.append('bannière ' + ('de l\'éditeur' if b.get('image') else '« %s »' % b['texte']))
+        var_ = ecrire_telops(cfg, sortie, key, infos_technique['telop'])
+        rapport.append('bannière ' + ('de l\'éditeur' if b.get('image') else '« %s »' % b['texte'])
+                       + (' (aussi sous ses variantes %s)' % ', '.join(var_) if var_ else ''))
 
     # --- boutique d'Inazuma Fantasy
     if demande.get('prix'):
@@ -410,6 +407,28 @@ def ecrire_png_banniere(data_url, png):
     open(png, 'wb').write(brut)
 
 
+def ecrire_telops(cfg, sortie, key, telop_origine):
+    """(22/11, retour d'un joueur : la bannière d'une copie de Frappe du loup n'apparaissait pas ; VRFW : « the game has no
+    telop whs96010 … retail telop kept ») la scène nomme sa bannière « soccer10_01_<base>_<CHARA_ID> » : le jeu a une bannière
+    par lanceur (whs02700.g4tx + whs02700_a000020 / _a000350 / _a000390 .g4tx, LU dans dx11/menu/220_img/telop_waza). On
+    déclare donc la bannière de la copie sous <clé> (from = <base>) ET sous chaque variante <clé>_<suffixe> (même image)."""
+    base = re.sub(r'_<[^>]+>$', '', str(telop_origine))
+    d = os.path.join(sortie, 'content', 'telops', 'any')
+    png = os.path.join(d, key + '.png')
+    variantes = sorted({os.path.basename(p)[len(base):-5] for p in glob.glob(os.path.join(
+        cfg['data_dir'], 'dx11', 'menu', '220_img', 'telop_waza', 'fr', base + '_*.g4tx'))})
+    f = os.path.join(d, 'telops.toml')
+    t = open(f, encoding='utf-8').read() if os.path.exists(f) else 'schema = "VRFW.telop_list/2"\n'
+    t = re.sub(r'\n\[\[telop\]\]\nid = "%s(?:_[^"]*)?"\nfrom = "[^"]*"\n' % re.escape(key), '\n', t)
+    t += '\n[[telop]]\nid = "%s"\nfrom = "%s"\n' % (key, base)
+    for v in variantes:
+        t += '\n[[telop]]\nid = "%s%s"\nfrom = "%s%s"\n' % (key, v, base, v)
+        if os.path.exists(png):
+            shutil.copyfile(png, os.path.join(d, key + v + '.png'))
+    _ecrire(f, t)
+    return variantes
+
+
 def enregistrer_banniere(cfg, nom, image, telop_origine):
     """remplace la bannière d'une technique déjà créée par l'outil (sortie/MesTechniques), sans refaire le reste"""
     sortie = os.path.join(cfg['outil_dir'], 'sortie', MOD_ID)
@@ -418,11 +437,7 @@ def enregistrer_banniere(cfg, nom, image, telop_origine):
         return {'ok': False, 'erreur': 'Technique « %s » introuvable dans MesTechniques.' % nom}
     key = deja[nom]['key']
     ecrire_png_banniere(image, os.path.join(sortie, 'content', 'telops', 'any', key + '.png'))
-    f = os.path.join(sortie, 'content', 'telops', 'any', 'telops.toml')
-    t = open(f, encoding='utf-8').read() if os.path.exists(f) else 'schema = "VRFW.telop_list/2"\n'
-    if 'id = "%s"' % key not in t:
-        t += '\n[[telop]]\nid = "%s"\nfrom = "%s"\n' % (key, telop_origine)
-        _ecrire(f, t)
+    ecrire_telops(cfg, sortie, key, telop_origine)      # (22/11) + variantes par lanceur, images refaites
     return {'ok': True, 'dossier': sortie, 'rapport': ['bannière de %s (%s) remplacée' % (deja[nom]['nom'], key),
                                                        'pas encore dans le jeu : « Installer dans le jeu » (onglet Techniques)']}
 
@@ -621,6 +636,28 @@ def scene_en_fichiers(cfg, nom):
         assert not autres, 'texte %s partagé par une autre commande' % anc[1]
         remplacer[liste][anc[1]] = c['set'][1]
         rapport.append('%s : %s -> %s' % (liste, anc[1], c['set'][1]))
+    # (22/11, retour d'un joueur : « une variante de la Frappe du loup : en jeu le loup n'apparaissait pas ») <ASSIGN> = le
+    # totem / l'esprit DU JOUEUR qui lance la technique (nie.exe 0x140f3e0xx : remplacement des balises <TYPE> <NO>
+    # <VARIATION> <ASSIGN> ; table GDSEventTagWordReplaceConfig ; InazumaFantasy : « the cut-in's spirit is the performer's
+    # own »). L'original est la technique liée du totem (wss000020 -> whs02700) : son lanceur a toujours le loup ; une copie
+    # n'a personne -> rien. Le totem de la scène est donc écrit À LA PLACE de <ASSIGN> (même chaîne, un octet nul de plus) :
+    # seulement les totems (a000000), seul modèle animé à ce siège dans la scène d'origine ; les esprits gardent <ASSIGN>.
+    from .coups import dossier_scene
+    d_o = dossier_scene(ev_o)
+    totems = {}
+    for f_ in glob.glob(os.path.join(cfg['data_dir'], 'common', 'event', d_o[:4], d_o, d_o + '_*_s*_*.g4pk')):
+        m_ = re.match(re.escape(d_o) + r'_([a-z]+\d{6})_s(\d\d)_', os.path.basename(f_))
+        if m_ and not m_.group(1).startswith(('c', 'b')):
+            totems.setdefault(m_.group(2), set()).add(m_.group(1))
+    totems = {s_: next(iter(c_)) for s_, c_ in totems.items() if len(c_) == 1 and next(iter(c_))[0] == 'a'}
+
+    def totem_fixe(b):
+        def r_(m):
+            s_ = m.group(0)
+            for siege, code_t in totems.items():
+                s_ = s_.replace(b'<ASSIGN>_s' + siege.encode(), code_t.encode() + b'_s' + siege.encode())
+            return s_ + b'\0' * (len(m.group(0)) - len(s_))
+        return re.sub(rb'[^\0]*<ASSIGN>_s\d\d[^\0]*', r_, b) if totems else b
     # fichiers livrés
     for liste, suf in (('evt', ''), ('eff', '_eff'), ('snd', '_snd')):
         f = os.path.join(src, liste, ev_o + suf + '.cfg.bin')
@@ -628,9 +665,18 @@ def scene_en_fichiers(cfg, nom):
             continue
         b = open(f, 'rb').read()
         for a, n in remplacer[liste].items():          # chaînes entières seulement (deux pareilles côte à côte : toutes)
-            motif = rb'(?<=\0)' + re.escape(a.encode()) + rb'(?=\0)'
+            # (22/11) bannière : aussi « soccer10_01_<base>_<CHARA_ID> » (Frappe du loup ; avant : échec -> copie de VRFW,
+            # qui CACHE les modèles <ASSIGN>) ; même longueur (clé et base de même longueur, vérifié plus haut)
+            fin_ = rb'(?=\0|_<)' if a.startswith('soccer10_01_') else rb'(?=\0)'
+            motif = rb'(?<=\0)' + re.escape(a.encode()) + fin_
             assert re.search(motif, b), (liste, a)
             b = re.sub(motif, n.encode(), b)
+        b2 = totem_fixe(b)
+        if b2 != b:
+            assert len(b2) == len(b)
+            rapport.append('%s : totem %s fixé à la place de <ASSIGN> (il apparaît quel que soit le joueur)'
+                           % (liste, ', '.join(sorted(set(totems.values())))))
+            b = b2
         cfgbin.lire(b)                                 # relu : le fichier reste lisible
         _ecrire_octets(os.path.join(sortie, 'assets', 'event_cfg', liste, ev + suf + '.cfg.bin'), b)
     # technique : la scène livrée + event_env (comme Zan) ; plus de copie automatique ni de commandes

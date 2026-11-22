@@ -1353,7 +1353,7 @@ def _retirer_bannieres(f, key):
     if not os.path.isfile(f):
         return
     blocs = open(f, encoding='utf-8').read().split('\n[[telop]]')
-    garde = [blocs[0]] + [b for b in blocs[1:] if ('id = "%s"' % key) not in b]
+    garde = [blocs[0]] + [b for b in blocs[1:] if ('id = "%s"' % key) not in b and ('id = "%s_' % key) not in b]   # + variantes
     open(f, 'w', encoding='utf-8').write('\n[[telop]]'.join(garde))
 
 

@@ -3,6 +3,7 @@
 *English below.*
 
 ## 2.0.4
+- **Aucun mod ne se charge, « requires `VRFW`, which is not enabled » dans le journal de VRFW** : si VRFW est installé mais absent de la liste des mods activés (ton gestionnaire a pu rallumer tes mods sans lui après le bug de la 2.0.2), l'Atelier le remet au démarrage.
 - Installer un **maillot** ne crée plus non plus le fichier des mods activés du jeu (même bug que la 2.0.3).
 - **Jeu sans fichier des mods activés** (VRFW active alors tous les mods) : l'Atelier croyait tous les mods éteints. Il lit maintenant les mods activés comme VRFW : stats d'origine (CharacterReforged), puissances (HissatsuReforged), techniques données par les mods.
 
@@ -116,6 +117,7 @@
 # Update log — Atelier Inazuma
 
 ## 2.0.4
+- **No mod loads, "requires `VRFW`, which is not enabled" in the VRFW log**: if VRFW is installed but missing from the enabled-mods list (your mod manager may have switched your mods back on without it after the 2.0.2 bug), the Atelier puts it back on start.
 - Installing a **kit** no longer creates the game's enabled-mods file either (same bug as 2.0.3).
 - **Game without an enabled-mods file** (VRFW then enables every mod): the Atelier thought every mod was off. It now reads the enabled mods like VRFW does: original stats (CharacterReforged), powers (HissatsuReforged), moves given by mods.
 

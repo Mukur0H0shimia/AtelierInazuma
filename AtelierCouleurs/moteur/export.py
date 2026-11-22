@@ -756,8 +756,9 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
             vieux = os.path.join(dst, 'content', 'anims', os.path.basename(a_) + '.retire')
             if os.path.isfile(vieux):
                 os.remove(vieux)
-    if reparer_enabled(en, sauv):                        # (22/11) enabled.toml créé par un Atelier d'avant : tous les mods éteints
-        repares.append('enabled.toml (créé par une version précédente de l’Atelier, il éteignait VRFW et tes autres mods) retiré')
+    r_en = reparer_enabled(en, sauv)                     # (22/11) enabled.toml créé par un Atelier d'avant / VRFW absent
+    if r_en:
+        repares.append(r_en)
     activer_mod(en, mod_id)
     r = {'ok': True, 'dossier': dst, 'sauvegarde': sauv}
     if repares:
@@ -783,22 +784,41 @@ MES_MODS = ('MesTechniques', 'MesEsprits', 'MesPersonnages', 'MesTenues', 'MesOb
 def reparer_enabled(en, sauv=None):
     """(22/11) enabled.toml CRÉÉ par un Atelier d'avant le 22/11 (le jeu n'en avait pas) : il ne liste que nos mods, donc VRFW et
     tous les autres mods sont éteints. Reconnu ainsi (que des Mes*, pas VRFW, d'autres mods installés) -> retiré (copie dans la
-    sauvegarde) : VRFW recharge alors tous les mods, comme avant. Renvoie True si retiré."""
+    sauvegarde) : VRFW recharge alors tous les mods, comme avant. Renvoie la ligne de rapport, ou None."""
     if not os.path.isfile(en):
-        return False
+        return None
     try:
         ids = tomllib.load(open(en, 'rb')).get('enabled')
     except (OSError, ValueError):
-        return False
+        return None
     d = os.path.dirname(en)
     autres = [x for x in os.listdir(d) if os.path.isfile(os.path.join(d, x, 'mod.toml')) and x not in MES_MODS]
-    if not isinstance(ids, list) or not ids or not set(ids) <= set(MES_MODS) or not autres:
-        return False
-    if sauv:
-        os.makedirs(sauv, exist_ok=True)
-        shutil.copy(en, os.path.join(sauv, 'enabled.toml.cree_par_l_atelier'))
-    os.remove(en)
-    return True
+    if not isinstance(ids, list) or not ids:
+        return None
+    if set(ids) <= set(MES_MODS) and autres:
+        if sauv:
+            os.makedirs(sauv, exist_ok=True)
+            shutil.copy(en, os.path.join(sauv, 'enabled.toml.cree_par_l_atelier'))
+        os.remove(en)
+        return 'enabled.toml (créé par une version précédente de l’Atelier, il éteignait VRFW et tes autres mods) retiré'
+    # (22/11, 2.0.4, loader.log du même joueur : « mods: 0 enabled », « X skipped: requires `VRFW`, which is not enabled ») son
+    # gestionnaire de mods a ensuite rallumé ses mods dans ce fichier, mais pas VRFW (qu'il ne montre pas) : plus rien ne charge.
+    # VRFW installé mais absent de la liste, avec d'autres mods listés -> remis en tête (« VRFW first: the base, always loads
+    # before every other mod (pinned) », load_order.toml de VRFW)
+    if 'VRFW' not in ids and os.path.isfile(os.path.join(d, 'VRFW', 'mod.toml')) and any(x != 'VRFW' for x in ids):
+        t = open(en, encoding='utf-8').read()
+        m = re.search(r'enabled\s*=\s*\[', t)
+        if not m:
+            return None
+        t2 = t[:m.end()] + '"VRFW", ' + t[m.end():]
+        if tomllib.loads(t2).get('enabled', [None])[0] != 'VRFW':
+            return None
+        if sauv:
+            os.makedirs(sauv, exist_ok=True)
+            shutil.copy(en, os.path.join(sauv, 'enabled.toml.sans_vrfw'))
+        open(en, 'w', encoding='utf-8').write(t2)
+        return 'VRFW remis dans enabled.toml (il en manquait : aucun mod ne se chargeait)'
+    return None
 
 
 def activer_mod(en, mod_id):

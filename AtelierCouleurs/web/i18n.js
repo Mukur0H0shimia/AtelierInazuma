@@ -145,6 +145,7 @@
     [/^technique (\S+) : (event|fail_event) = (\S+) introuvable \(ni scène livrée, ni copie active, ni scène du jeu\)$/,
      'technique $1: $2 = $3 not found (no delivered scene, no active copy, no game scene)'],
     [/^TOML illisible : (.+)$/, 'unreadable TOML: $1'],
+    [/^VRFW remis dans enabled\.toml \(il en manquait : aucun mod ne se chargeait\)$/, 'VRFW put back in enabled.toml (it was missing: no mod was loading)'],
     [/^enabled\.toml \(créé par une version précédente de l’Atelier, il éteignait VRFW et tes autres mods\) retiré$/,
      'enabled.toml (made by an older version of the Atelier, it switched VRFW and your other mods off) removed'],
     [/^⚠ VRFW n’est pas dans le dossier mods de ce jeu \((.+)\) : le mod ne se chargera pas\. Si ton gestionnaire de mods utilise une autre installation du jeu, choisis-la dans ⚙ Paramètres > Dossier du jeu, puis installe à nouveau\. Sinon, installe VRFW \(avec Inazuma Fantasy\)\.$/,

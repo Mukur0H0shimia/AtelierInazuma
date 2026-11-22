@@ -504,6 +504,7 @@ async function ouvrir_(code) {
   const perso = estPerso();
   const t = await api(perso ? '/api/personnage?code=' + encodeURIComponent(code) + (ONGLETS_JEU.includes(E.onglet) ? '&cat=' + E.onglet + (E.onglet === 'maillots' ? '&cote=' + (MM.cote || '10') : '') : '') : '/api/technique?code=' + code);
   E.tech = t; E.tech.perso = perso; E.tech.onglet = E.onglet; E.objets = t.objets_details; E.textures = {}; E.coulMat = {}; E.teinteSom = {}; E.teintePtl = {}; E.selPieces.clear(); E.selTex.clear();
+  retirerSuite();                                   // (22/11) les suites d'une création précédente ne concernent pas celle-ci
   if (!(E.repriseAuto && E.repriseAuto === E.projet)) E.cree = null;   // (22/11) même projet (côté du maillot) : lien gardé
   E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
   if (perso) { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}`;
@@ -1517,10 +1518,17 @@ function appliquerMode(avance) {
 }
 // (22/11, retour de muku : parcours pas intuitifs) APRÈS UNE CRÉATION, LA SUITE LOGIQUE en boutons, sous le rapport (avant : cachée
 // dans « Mes créations ») : nouveau joueur -> ses techniques ; esprit -> sa technique liée, une armure
+// (22/11, retour de muku : deux « What next » avec les suites d'un ESPRIT sous la création d'un nouveau joueur) deux appels
+// en même temps ajoutaient chacun leur bloc (le retrait avant l'attente ne voyait pas l'autre), et le bloc restait en
+// changeant d'élément : tous les blocs retirés, seul le dernier appel ajoute le sien, retiré à l'ouverture d'un élément
+let SUITE_N = 0;
+function retirerSuite() { document.querySelectorAll('#suite-creation').forEach(x => x.remove()); }
 async function proposerSuite(mod, code) {
-  if ($('suite-creation')) $('suite-creation').remove();
+  const n = ++SUITE_N; retirerSuite();
   if (!code || !['MesPersonnages', 'MesEsprits'].includes(mod)) return;
   let L = []; try { L = (await api('/api/projets')).creations || []; } catch (e) { return; }
+  if (n !== SUITE_N) return;
+  retirerSuite();
   const c = L.find(x => x.mod === mod && String(x.code) === String(code)); if (!c) return;
   const d = document.createElement('div'); d.id = 'suite-creation'; d.className = 'ensuite';
   const ajout = (txt, f) => { const b = document.createElement('button'); b.textContent = txt; b.onclick = f; d.appendChild(b); };
@@ -2961,7 +2969,7 @@ async function lierProjetCreation(mod, code) {
 for (const [nom, mod] of [['exporter', 'MesTechniques'], ['exporterPerso', 'MesEsprits'], ['cpExporter', 'MesPersonnages'], ['ctExporter', 'MesPersonnages'],
   ['coExporter', 'MesPersonnages'], ['cuExporter', 'MesTenues'], ['ojExporter', 'MesObjets'], ['caExporter', 'MesEsprits']]) {
   const f0 = window[nom]; if (typeof f0 !== 'function') continue;
-  window[nom] = async function (...a) { if ($('suite-creation')) $('suite-creation').remove();
+  window[nom] = async function (...a) { retirerSuite(); SUITE_N++;
     const r = await f0.apply(this, a); if (r && r.ok && (r.code || r.key)) { await lierProjetCreation(mod, r.code || r.key); await proposerSuite(mod, r.code); }
     if (r && r.ok && $('page-hub') && typeof chargerHub === 'function') chargerHub();
     return r; };
@@ -3089,7 +3097,6 @@ document.addEventListener('keydown', ev => {        // X : chercher par nom (com
 (async () => { try {
   const e = await api('/api/etat');
   if (e.catalogues_en_erreur && e.catalogues_en_erreur.length)
-    alert("Certains fichiers du jeu sont illisibles (sans doute modifiés par un autre outil de mod) : ces parties de l'Atelier restent vides.\n"
-          + 'Some game files cannot be read (probably changed by another mod tool): these parts of the Atelier stay empty.\n\n'
+    alert("Certains fichiers du jeu sont illisibles (sans doute modifiés par un autre outil de mod) : ces parties de l'Atelier restent vides.\n\n"
           + e.catalogues_en_erreur.join('\n') + '\n\nJournal / log : AtelierCouleurs\\cache\\serveur.log');
 } catch (_) {} })();

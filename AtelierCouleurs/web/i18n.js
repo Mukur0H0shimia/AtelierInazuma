@@ -100,6 +100,17 @@
 
   // (21/11) textes avec des données : [modèle sur le texte aux espaces réduits, remplacement]
   var MOTIFS = [
+    // (22/11, 2.0.2) textes ajoutés après la traduction : copier / coller une texture, polices importées, Mes créations
+    [/^Image de (.+) collée sur (\S+)(?: \(mise à sa taille : (.+?)\))?\. La forme des pièces reste celle de cette technique : une image faite pour une autre forme peut tomber autrement\. Pour revenir en arrière : « Annuler le dernier » \(bloc Remplacer une couleur partout\)\.$/,
+     function (_, a, b, taille) { return 'Picture of ' + a + ' pasted on ' + b + (taille ? ' (resized: ' + taille + ')' : '')
+       + '. The shape of the parts stays that of this technique: a picture made for another shape may land differently. To go back: “Undo last” (Replace a colour everywhere block).'; }],
+    [/^Image de (.+) copiée sur (\S+)\. Pour revenir en arrière : « Annuler le dernier » \(bloc Remplacer une couleur partout\)\.$/,
+     'Picture of $1 copied on $2. To go back: “Undo last” (Replace a colour everywhere block).'],
+    [/^Retirer la police « (.+) » de l'Atelier \? \(ce qui est déjà fait avec ne change pas\)$/,
+     'Remove the font “$1” from the Atelier? (what was already made with it does not change)'],
+    [/^Police refusée : (.+)$/, function (_, e) { return 'Font refused: ' + trad(e); }],
+    [/^Pas supprimé : (.+)$/, function (_, e) { return 'Not deleted: ' + trad(e); }],
+    [/^« (.+) » supprimé\.$/, '“$1” deleted.'],
     [/^Copie de (.+?)( · code (\S+))?$/, function (_, n, x, c) { return 'Copy of ' + n + (c ? ' · code ' + c : ''); }],
     [/^Stats de (.+)$/, 'Stats of $1'], [/^original : (.+)$/, 'original: $1'],
     [/^📋 Coller ici : (.+)$/, '📋 Paste here: $1'],

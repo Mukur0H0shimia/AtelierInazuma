@@ -1604,7 +1604,9 @@ window.addEventListener('load', () => {
     // onglet Tenues : deux créations différentes (tenue de boutique / nouveau joueur qui la porte) -> nommées
     b.textContent = { 'cu-exporter': 'Créer la tenue', 'ct-exporter': 'Créer le joueur' }[id] || 'Créer'; b.title = 'Crée ta copie, sans toucher au jeu. Pour la mettre dans le jeu : « Installer » sur sa carte dans Mes créations.';
     b.classList.add('primaire', 'creer-jeu'); b.classList.remove('avance');
-    if ($(idInst)) $(idInst).remove();
+    // (22/11) CACHÉ, pas retiré : d'autres blocs branchent encore $(idInst).onclick ; retiré = null -> erreur qui arrêtait le
+    // bloc avant d'autres boutons (le « Créer » des totems ne faisait plus rien)
+    if ($(idInst)) { $(idInst).hidden = true; $(idInst).style.display = 'none'; }
   }
 });
 async function exporter() {
@@ -2518,11 +2520,13 @@ if ($('l-particules')) $('l-particules').onchange = () => { for (const p of E.vu
     $('bloc-remplacer').addEventListener('toggle', () => { if ($('bloc-remplacer').open) paletteTech(); }); }
   if ($('pr-garder')) { $('pr-garder').onclick = garderPrereglage; $('pr-appliquer').onclick = appliquerPrereglage; $('pr-suppr').onclick = supprimerPrereglage; chargerPrereglages(); }
   setInterval(sauverProjet, 2000);
+  // (22/11, muku : « le bouton créer marche pas avec mon loup ») les boutons « Installer » des panneaux sont RETIRÉS (un seul
+  // bouton Créer) : $('installer') = null faisait planter ce bloc avant de brancher le « Créer » des esprits et totems
   $('exporter').onclick = exporter;
-  $('installer').onclick = () => installer('MesTechniques');
   $('exporter-perso').onclick = exporterPerso;
-  $('installer-perso').onclick = () => installer('MesEsprits');
-  $('ouvrir-maillots').onclick = async () => { const r = await api('/api/ouvrir_maillots', {});
+  if ($('installer')) $('installer').onclick = () => installer('MesTechniques');
+  if ($('installer-perso')) $('installer-perso').onclick = () => installer('MesEsprits');
+  if ($('ouvrir-maillots')) $('ouvrir-maillots').onclick = async () => { const r = await api('/api/ouvrir_maillots', {});
     $('rapport-maillots').textContent = r.ok ? "L'Atelier Maillots s'ouvre dans sa fenêtre." : r.erreur; };
 });
 

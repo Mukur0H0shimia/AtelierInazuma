@@ -67,12 +67,27 @@ def nouveaux_numeros(cfg, code, cinematique, sortie, nom):
     raise RuntimeError('plus de numéro libre')
 
 
-def ecrire_anim(sortie, nom, ev0, ev, key, assigne):
-    _ecrire(os.path.join(sortie, 'content', 'anims', nom + '.toml'), '\n'.join([
-        'schema = "VRFW.anim/2"', 'owner = "match"', '', '[[event]]', 'name = %s' % _q(nom), 'from = %s' % _q(ev0),
-        'id = %s' % _q(ev), 'telop = %s' % _q(key)]
-        + (['# esprit invoqué (<ASSIGN>, choisi pendant le match) : ses animations sont livrées sous %s (comme Mukuro)' % ev,
-            'assigned = [%s]' % ', '.join(_q(k) for k in assigne)] if assigne else []) + ['']))
+def id_echec(ev):
+    """(22/11) id de la cinématique d'ÉCHEC de la copie : <id>_2 (le jeu nomme ses deux parties <dossier>_1 / <dossier>_2,
+    qui partagent le dossier d'animation <dossier> ; IECross : event = "ev62_95120_1", fail_event = "ev62_95120_2")"""
+    return ev + '_2'
+
+
+def ecrire_anim(sortie, nom, ev0, ev, key, assigne, echec=None):
+    """echec = cinématique d'échec d'origine (<scène>_2) ou None ; None garde celle déjà écrite (réparations)"""
+    f = os.path.join(sortie, 'content', 'anims', nom + '.toml')
+    if echec is None and os.path.exists(f):
+        try:
+            echec = next((x['from'] for x in tomllib.load(open(f, 'rb'))['event'][1:] if x.get('name') == nom + '_echec'), None)
+        except (OSError, ValueError, KeyError):
+            echec = None
+    def bloc(n, de, id_):
+        return (['[[event]]', 'name = %s' % _q(n), 'from = %s' % _q(de), 'id = %s' % _q(id_), 'telop = %s' % _q(key)]
+                + (['# esprit invoqué (<ASSIGN>, choisi pendant le match) : ses animations sont livrées sous %s (comme Mukuro)' % ev,
+                    'assigned = [%s]' % ', '.join(_q(k) for k in assigne)] if assigne else []))
+    _ecrire(f, '\n'.join(['schema = "VRFW.anim/2"', 'owner = "match"', ''] + bloc(nom, ev0, ev)
+                         + (['', '# (22/11) cinématique d\'échec (fail_event de la technique)'] + bloc(nom + '_echec', echec, id_echec(ev)) if echec else [])
+                         + ['']))
 
 
 def esprit_assigne(cfg, sortie, ev0, ev):
@@ -128,6 +143,136 @@ def nom_copie_aura(nom, aura, k):
         return '%s_%s_%d' % (MOD_ID.lower(), nom, k)
     tete = 'mt%08x_' % zlib.crc32(('%s|%s|%d' % (nom, aura, k)).encode())
     return tete + aura[len(tete):]
+
+
+def _commandes_echec(cfg, e, ev, ev0_2, ev_2):
+    """(22/11) copie automatique de VRFW (scène qui ne passe pas en fichiers) : les [[event_command]] de la copie, refaites
+    pour la cinématique d'échec, seulement pour les acteurs que la scène d'échec charge par la même commande"""
+    from .anim import _commandes
+    from . import cfgbin
+    src = os.path.join(cfg['data_dir'], 'common', 'event_cfg')
+    out = []
+    for c in tomllib.loads('\n'.join(e) + '\n').get('event_command', []):
+        if c.get('event') != ev:
+            continue
+        liste = c.get('list') or 'eff'
+        f = os.path.join(src, liste, ev0_2 + ('' if liste == 'evt' else '_' + liste) + '.cfg.bin')
+        if not any(c['command'] in (cfgbin.NOMS.get(cmd), 'CMD_%08X' % cmd) and a and list(a[:len(c['args'])]) == list(c['args'])
+                   for _, cmd, a in _commandes(f)):
+            continue
+        out += (['[[event_command]]', 'event = %s' % _q(ev_2)] + (['list = %s' % _q(c['list'])] if c.get('list') else [])
+                + ['command = %s' % _q(c['command']), 'args = [%s]' % ', '.join(_q(x) for x in c['args']),
+                   'set = [%s]' % ', '.join(_q(x) for x in c['set']), ''])
+    return out
+
+
+def _chaines_changees(a, b):
+    """(22/11) remplacements faits SUR PLACE dans une scène livrée en fichiers (fichier d'origine a, livré b, même longueur) :
+    {chaîne d'origine : chaîne livrée} ; la bannière « soccer10_01_<base>[_<CHARA_ID>] » est rendue sous sa forme courte"""
+    if len(a) != len(b):
+        return None
+    out, i, n = {}, 0, len(a)
+    while i < n:
+        if a[i] == b[i]:
+            i += 1
+            continue
+        g = a.rfind(b'\0', 0, i) + 1
+        d = a.find(b'\0', i)
+        d = n if d < 0 else d
+        o, v = a[g:d].decode('utf-8', 'replace'), b[g:d].split(b'\0')[0].decode('utf-8', 'replace')
+        if o.startswith('soccer10_01_'):
+            o = re.sub(r'_<[^>]*>$', '', o)
+        out[o] = v
+        i = d + 1
+    return out
+
+
+def _livrer_scene(src, sortie, ev_o, ev_n, remplacer, strict):
+    """fichiers {evt, eff, snd} de la scène ev_o livrés sous ev_n avec les remplacements (chaînes entières, même longueur ;
+    bannière complétée d'octets nuls). strict : chaque chaîne doit être trouvée. -> chaînes remplacées [(liste, a)]"""
+    from . import cfgbin
+    faits = []
+    for liste, suf in (('evt', ''), ('eff', '_eff'), ('snd', '_snd')):
+        f = os.path.join(src, liste, ev_o + suf + '.cfg.bin')
+        if not os.path.exists(f):
+            continue
+        b = open(f, 'rb').read()
+        for a, n in remplacer.get(liste, {}).items():          # chaînes entières seulement (deux pareilles côte à côte : toutes)
+            if a.startswith('soccer10_01_'):
+                motif = rb'(?<=\0)' + re.escape(a.encode()) + rb'(?:_<[^\0>]*>)?(?=\0)'
+                rempl = lambda m_, n=n: n.encode() + b'\0' * (len(m_.group(0)) - len(n))
+            else:
+                motif = rb'(?<=\0)' + re.escape(a.encode()) + rb'(?=\0)'
+                rempl = n.encode()
+            if not re.search(motif, b):
+                assert not strict, (liste, a)
+                continue
+            b = re.sub(motif, rempl, b)
+            faits.append((liste, a))
+        cfgbin.lire(b)                                 # relu : le fichier reste lisible
+        _ecrire_octets(os.path.join(sortie, 'assets', 'event_cfg', liste, ev_n + suf + '.cfg.bin'), b)
+    return faits
+
+
+def livrer_echec(cfg, sortie, nom, ev0_2=None):
+    """(22/11) CINÉMATIQUE D'ÉCHEC d'une copie livrée en fichiers : <scène>_2 livrée sous <id>_2 avec LES MÊMES remplacements
+    que la première partie (relus en comparant les fichiers déjà livrés à ceux du jeu : marche aussi pour les copies faites
+    avant le 22/11), technique : fail_event = <id>_2 + [[event_env]] from = <scène>_2. -> ligne de rapport, ou None (rien à faire)"""
+    e = _deja_dans_le_mod(sortie).get(nom)
+    if not e or not e.get('scene_fichiers'):
+        return None
+    f_tech = os.path.join(sortie, 'content', 'techniques', nom + '.toml')
+    f_anim = os.path.join(sortie, 'content', 'anims', nom + '.toml.retire')
+    if not os.path.exists(f_tech) or not os.path.exists(f_anim):
+        return None
+    evs = tomllib.load(open(f_anim, 'rb'))['event']
+    ev_o, ev = evs[0]['from'], e['id']
+    if ev0_2 is None:
+        ev0_2 = next((x['from'] for x in evs[1:] if x.get('name') == nom + '_echec'), None)
+    if ev0_2 is None:                                  # copie faite avant le 22/11 : 2e partie lue dans l'index du jeu
+        from .techniques import construire_index
+        t_ = next((t for t in construire_index(cfg['data_dir'], os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'cache'))
+                   if t['code'] == e['base']), None)
+        ev0_2 = (t_ or {}).get('cinematique_2') if (t_ or {}).get('cinematique') == ev_o else None
+    src = os.path.join(cfg['data_dir'], 'common', 'event_cfg')
+    if not ev0_2 or not os.path.exists(os.path.join(src, 'evt', ev0_2 + '.cfg.bin')):
+        return None
+    ev_2 = id_echec(ev)
+    remplacer = {}
+    for liste, suf in (('evt', ''), ('eff', '_eff'), ('snd', '_snd')):
+        a_, b_ = os.path.join(src, liste, ev_o + suf + '.cfg.bin'), os.path.join(sortie, 'assets', 'event_cfg', liste, ev + suf + '.cfg.bin')
+        if os.path.exists(a_) and os.path.exists(b_):
+            ch = _chaines_changees(open(a_, 'rb').read(), open(b_, 'rb').read())
+            if ch is None:
+                return 'cinématique d\'échec : première partie illisible (%s), échec d\'origine gardé' % (ev + suf)
+            remplacer[liste] = ch
+    faits = _livrer_scene(src, sortie, ev0_2, ev_2, remplacer, strict=False)
+    t = open(f_tech, encoding='utf-8').read()
+    t = re.sub(r'(?m)^fail_event = .*\n', '', t)
+    t = re.sub(r'(?m)^(event = .*)$', lambda m_: m_.group(1) + '\nfail_event = %s' % _q(ev_2), t, count=1)
+    if not re.search(r'(?m)^event = %s$' % re.escape(_q(ev_2)), t):
+        t += '\n# (22/11) cinématique d\'échec livrée en fichiers : sa ligne d\'environnement vient de %s\n' % ev0_2 \
+             + '[[event_env]]\nevent = %s\nfrom = %s\n' % (_q(ev_2), _q(ev0_2))
+    _ecrire(f_tech, t)
+    oublies = sorted({a for l_, d_ in remplacer.items() for a in d_} - {a for _, a in faits})
+    return ('cinématique d\'échec %s livrée en fichiers (copie de %s, %d changement(s) repris)' % (ev_2, ev0_2, len(faits))
+            + (' ; absents de l\'échec : %s' % ', '.join(oublies) if oublies else ''))
+
+
+def reparer_echecs(cfg, sortie):
+    """(22/11) copies livrées en fichiers avant le 22/11 sans leur cinématique d'échec : livrée à l'installation"""
+    faits = []
+    for nom, e in _deja_dans_le_mod(sortie).items():
+        f_tech = os.path.join(sortie, 'content', 'techniques', nom + '.toml')
+        if not e.get('scene_fichiers') or not os.path.exists(f_tech) or re.search(r'(?m)^fail_event = ', open(f_tech, encoding='utf-8').read()):
+            continue
+        try:
+            r = livrer_echec(cfg, sortie, nom)
+        except Exception as ex:
+            r = 'cinématique d\'échec de %s non livrée (%s)' % (nom, ex)
+        if r:
+            faits.append('%s : %s' % (e.get('nom') or nom, r))
+    return faits
 
 
 def reparer_assignes(cfg, sortie):
@@ -280,6 +425,15 @@ def exporter(cfg, demande, infos_technique):
               '# Créée par l\'Atelier Couleurs le %s : copie de %s (%s).' % (datetime.date.today().isoformat(), code, infos_technique.get('nom', '')),
               '', '[[technique]]', 'name = %s' % _q(nom), 'key = %s' % _q(key), 'base = %s' % _q(code), 'manual = true',
               'event = %s' % _q('%s.%s' % (MOD_ID, nom))]
+    # (22/11) CINÉMATIQUE D'ÉCHEC : LU dans skill_config, la fiche d'une technique porte après le crc32 de sa cinématique
+    # (r[4]) celui de sa 2e partie <scène>_2 (r[6]) : vrai pour les 227 techniques qui en ont une (gardiens, défenses). Sans
+    # fail_event, la copie jouait la scène d'échec de l'ORIGINAL (couleurs d'origine). Copiée comme la première.
+    ev0_2 = infos_technique.get('cinematique_2')
+    if ev0_2 and not os.path.exists(os.path.join(cfg['data_dir'], 'common', 'event_cfg', 'evt', ev0_2 + '.cfg.bin')):
+        ev0_2 = None
+    ev_2 = id_echec(ev) if ev0_2 else None
+    if ev0_2:
+        lignes.append('fail_event = %s' % _q('%s.%s_echec' % (MOD_ID, nom)))
     if demande.get('couleur_tir') is not None:
         lignes.append('color = %d' % int(demande['couleur_tir']))
     # (22/11) stats réglées plus tard (« En attente de stats ») : gardées quand la technique est refaite
@@ -295,7 +449,7 @@ def exporter(cfg, demande, infos_technique):
 
     # --- cinématique copiée (+ animations de l'esprit invoqué, sinon VRFW le cache : voir esprit_assigne)
     assigne = esprit_assigne(cfg, sortie, ev0, ev)
-    ecrire_anim(sortie, nom, ev0, ev, key, assigne)
+    ecrire_anim(sortie, nom, ev0, ev, key, assigne, echec=ev0_2 or '')
     if assigne:
         rapport.append('esprit dans la cinématique : animations de %s livrées sous %s' % (', '.join(assigne), ev))
 
@@ -408,6 +562,8 @@ def exporter(cfg, demande, infos_technique):
         e += ['[[shot_aura]]', 'name = %s' % _q(nom), 'when = { techniques = [%s] }' % _q(key),
               'aura = %s' % _q(tr['famille']), 'color = %s' % _q(tr.get('element') or 'void'), '']
         rapport.append('traînée : %s en %s' % (tr['famille'], tr.get('element')))
+    if ev_2:
+        e += _commandes_echec(cfg, e, ev, ev0_2, ev_2)
     _ecrire(os.path.join(sortie, 'content', 'effects', nom + '.toml'), '\n'.join(e) + '\n')
     f_perso = os.path.join(sortie, 'content', 'characters', nom + '.toml')
     if len(persos) > 4:
@@ -448,7 +604,7 @@ def exporter(cfg, demande, infos_technique):
     # (22/11) scène livrée en fichiers par une version précédente : retirée (si la nouvelle ne s'y prête pas, ces fichiers
     # restaient et VRFW refusait la copie automatique : « id ev60_89120 is already an event of … a mod's files »)
     for f_ in glob.glob(os.path.join(sortie, 'assets', 'event_cfg', '*', ev + '*.cfg.bin')):
-        if re.fullmatch(re.escape(ev) + r'(_eff|_snd)?\.cfg\.bin', os.path.basename(f_)):
+        if re.fullmatch(re.escape(ev) + r'(_2)?(_eff|_snd)?\.cfg\.bin', os.path.basename(f_)):
             os.remove(f_)
     try:
         r = scene_en_fichiers(cfg, nom)
@@ -553,6 +709,8 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
     if not os.path.isfile(os.path.join(src, 'mod.toml')):
         return {'ok': False, 'erreur': 'Rien à installer : crée d\'abord le mod.'}
     repares = reparer_assignes(cfg, src) if mod_id == 'MesTechniques' else []      # (22/11) copies à totem faites avant
+    if mod_id == 'MesTechniques':                       # (22/11) copies sans leur cinématique d'échec (fail_event)
+        repares += reparer_echecs(cfg, src)
     for p in glob.glob(os.path.join(src, '**', '*.toml'), recursive=True):
         tomllib.load(open(p, 'rb'))
     mods = os.path.join(cfg['jeu_dir'], 'mods')
@@ -588,7 +746,7 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
             except (OSError, ValueError, KeyError, IndexError):
                 continue
             for f_ in glob.glob(os.path.join(dst, 'assets', 'event_cfg', '*', ev_ + '*.cfg.bin')):
-                if re.fullmatch(re.escape(ev_) + r'(_eff|_snd)?\.cfg\.bin', os.path.basename(f_)) \
+                if re.fullmatch(re.escape(ev_) + r'(_2)?(_eff|_snd)?\.cfg\.bin', os.path.basename(f_)) \
                         and not os.path.exists(os.path.join(src, os.path.relpath(f_, dst))):
                     os.remove(f_)
             vieux = os.path.join(dst, 'content', 'anims', os.path.basename(a_) + '.retire')
@@ -713,7 +871,9 @@ def scene_en_fichiers(cfg, nom):
         liste = c.get('list') or 'eff'
         fichier = os.path.join(src, liste, ev_o + ('' if liste == 'evt' else '_' + liste) + '.cfg.bin')
         anc = next((a for _, cmd, a in _commandes(fichier) if cfgbin.NOMS.get(cmd, 'CMD_%08X' % cmd) == c['command'] or 'CMD_%08X' % cmd == c['command']
-                    if a and a[0] == c['args'][0]), None)
+                    if a and list(a[:len(c['args'])]) == list(c['args'])), None)
+        # (22/11, essai des 227 cinématiques d'échec : 3 retombaient ici) un acteur qui porte DEUX auras (ball_aura_out30_<BALL_AURA>
+        # et l'aura recolorée) : la commande est celle dont les arguments sont ceux du bloc (acteur, aura), pas la 1re de l'acteur
         if not anc or len(anc) < 2 or len(c['set']) < 2 or anc[1] == c['set'][1]:
             continue
         assert len(anc[1]) == len(c['set'][1]), (anc[1], c['set'][1])
@@ -733,39 +893,32 @@ def scene_en_fichiers(cfg, nom):
     # n'existe pas (VRFW : « banner object … not found: the move shows no banner ») ; VRFW fait « soccer10_01_<clé> » :
     # la chaîne entière devient « soccer10_01_<clé> » (suffixe retiré, complété d'octets nuls : même longueur).
     # fichiers livrés
-    for liste, suf in (('evt', ''), ('eff', '_eff'), ('snd', '_snd')):
-        f = os.path.join(src, liste, ev_o + suf + '.cfg.bin')
-        if not os.path.exists(f):
-            continue
-        b = open(f, 'rb').read()
-        for a, n in remplacer[liste].items():          # chaînes entières seulement (deux pareilles côte à côte : toutes)
-            if a.startswith('soccer10_01_'):
-                motif = rb'(?<=\0)' + re.escape(a.encode()) + rb'(?:_<[^\0>]*>)?(?=\0)'
-                assert re.search(motif, b), (liste, a)
-                b = re.sub(motif, lambda m_: n.encode() + b'\0' * (len(m_.group(0)) - len(n)), b)
-                continue
-            motif = rb'(?<=\0)' + re.escape(a.encode()) + rb'(?=\0)'
-            assert re.search(motif, b), (liste, a)
-            b = re.sub(motif, n.encode(), b)
-        cfgbin.lire(b)                                 # relu : le fichier reste lisible
-        _ecrire_octets(os.path.join(sortie, 'assets', 'event_cfg', liste, ev + suf + '.cfg.bin'), b)
+    _livrer_scene(src, sortie, ev_o, ev, remplacer, strict=True)
     # technique : la scène livrée + event_env (comme Zan) ; plus de copie automatique ni de commandes
     t = open(f_tech, encoding='utf-8').read()
     t = re.sub(r'(?m)^event = .*$', 'event = %s' % _q(ev), t, count=1)
+    t = re.sub(r'(?m)^fail_event = .*\n', '', t)       # (22/11) refaite ci-dessous (livrer_echec) pour la scène en fichiers
     if '[[event_env]]' not in t:
         t += '\n# (16/11/2026) cinématique livrée en fichiers (assets/event_cfg) : sa ligne d\'environnement vient de %s\n' % ev_o \
              + '[[event_env]]\nevent = %s\nfrom = %s\n' % (_q(ev), _q(ev_o))
     _ecrire(f_tech, t)
+    ev0_2 = next((x['from'] for x in tomllib.load(open(f_anim, 'rb'))['event'][1:] if x.get('name') == nom + '_echec'), '')
     os.replace(f_anim, f_anim + '.retire')
     if d_eff:
         x = open(f_eff, encoding='utf-8').read()
-        x = re.sub(r'\n\[\[event_command\]\]\nevent = "%s"\n(?:[^\[\n][^\n]*\n)*' % re.escape(ev), '\n', x + '\n')
+        x = re.sub(r'\n\[\[event_command\]\]\nevent = "%s(?:_2)?"\n(?:[^\[\n][^\n]*\n)*' % re.escape(ev), '\n', x + '\n')
         _ecrire(f_eff, x.rstrip() + '\n')
     deja = _deja_dans_le_mod(sortie)
     deja[nom]['scene_fichiers'] = True
     json.dump(deja, open(os.path.join(sortie, 'outil_techniques.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    echec = []
+    if ev0_2:
+        try:
+            echec = [livrer_echec(cfg, sortie, nom, ev0_2) or 'cinématique d\'échec : celle d\'origine']
+        except Exception as ex:
+            echec = ['cinématique d\'échec : celle d\'origine (%s)' % ex]
     return {'ok': True, 'dossier': sortie, 'rapport': ['%s : cinématique %s livrée en fichiers (copie de %s)' % (nom, ev, ev_o)] + rapport
-            + ['bannière : %s' % ('soccer10_01_' + e['key'] if remplacer['evt'] else 'celle d\'origine')]}
+            + ['bannière : %s' % ('soccer10_01_' + e['key'] if remplacer['evt'] else 'celle d\'origine')] + echec}
 
 
 def _ecrire_octets(chemin, b):

@@ -6,7 +6,8 @@
      texture) ») ;
   3. une cinématique n'est pas à la fois livrée en fichiers (assets/event_cfg) ET copiée par VRFW (content/anims actif)
      (« id `ev60_89120` is already an event of the game or of a mod's files ») ;
-  4. bannières : chaque [[telop]] a son image <id>.png.
+  4. bannières : chaque [[telop]] a son image <id>.png ;
+  5. (22/11) event / fail_event d'une technique désignent une scène qui existe (livrée, copie VRFW active, ou du jeu).
 Lecture seule. -> liste de problèmes [(gravité, fichier, texte)] ; `python -m moteur.verifier_mods` pour l'Atelier."""
 import glob, os, re, tomllib
 
@@ -25,7 +26,7 @@ def verifier(cfg, racine_sortie):
     mods = [m for m in ('MesTechniques', 'MesEsprits', 'MesPersonnages', 'MesTenues', 'MesObjets', 'MesMaillots')
             if os.path.isdir(os.path.join(racine_sortie, m))]
     # scènes livrées en fichiers / copiées par VRFW, dans tous nos mods
-    fichiers_scene, anims_actifs, env_avec_from = {}, {}, set()
+    fichiers_scene, anims_actifs, env_avec_from, noms_anims = {}, {}, set(), set()
     for m in mods:
         d = os.path.join(racine_sortie, m)
         for f in glob.glob(os.path.join(d, 'assets', 'event_cfg', 'evt', '*.cfg.bin')):
@@ -33,6 +34,7 @@ def verifier(cfg, racine_sortie):
         for f in glob.glob(os.path.join(d, 'content', 'anims', '*.toml')):
             for e in _toml(f).get('event') or []:
                 anims_actifs[e.get('id')] = os.path.relpath(f, racine_sortie)
+                noms_anims.add('%s.%s' % (m, e.get('name')))
         for f in glob.glob(os.path.join(d, 'content', '**', '*.toml'), recursive=True):
             for e in _toml(f).get('event_env') or []:
                 if e.get('from'):
@@ -70,6 +72,20 @@ def verifier(cfg, racine_sortie):
                 for n in noms:
                     if n not in dans:
                         pb.append(('avertissement', rel, '[[recolor]] %s : image %s absente de la planche de l\'objet (le jeu l\'ignore)' % (objet, n)))
+            # 5. (22/11) event / fail_event d'une technique : une scène livrée en fichiers, une copie VRFW active
+            # (« Mod.nom » = [[event]] name de content/anims) ou une scène du jeu
+            for x in t.get('technique') or []:
+                for cle in ('event', 'fail_event'):
+                    v = x.get(cle)
+                    if not isinstance(v, str):
+                        continue
+                    if '.' in v:
+                        ok = v in noms_anims
+                    else:
+                        ok = v in fichiers_scene or os.path.exists(os.path.join(cfg['data_dir'], 'common', 'event_cfg', 'evt', v + '.cfg.bin'))
+                    if not ok:
+                        pb.append(('erreur', rel, 'technique %s : %s = %s introuvable (ni scène livrée, ni copie active, ni scène du jeu)'
+                                   % (x.get('name'), cle, v)))
         # 4. bannières
         tt = os.path.join(d, 'content', 'telops', 'any', 'telops.toml')
         if os.path.exists(tt):

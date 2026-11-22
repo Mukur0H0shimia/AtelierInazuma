@@ -748,3 +748,63 @@ body:not(.mode-simple) .etape-simple { display: none; }
   box-shadow: 0 3px 10px rgba(0,0,0,.5); }
 #reprise-proposee button { font-family: inherit; border-radius: 0; border: 1px solid #4b5961; background: #2c363c; color: #e9eef0; padding: 5px 10px; cursor: pointer; }
 #reprise-proposee button.primaire { border: 0; background: linear-gradient(90deg, #6b5221, #b8903f 70%, #8a6a2c); color: #fff; }
+
+/* ===================================================================================================================================
+   (22/11, idée de muku : « des paramètres, les gens pourront choisir ») PALETTES de l'écran d'édition, choisies dans ⚙ Paramètres
+   (html[data-theme], gardé dans config.json). « or » = l'habillage ci-dessus tel quel. L'accueil garde les couleurs du menu du jeu.
+   =================================================================================================================================== */
+html[data-theme="sobre"], html[data-theme="bleu"], html[data-theme="turquoise"] { --jm-sel: #49e8d2; }
+html[data-theme="sobre"] .onglets, html[data-theme="bleu"] .onglets, html[data-theme="turquoise"] .onglets { background: #1c2226; border-color: #2c363c; }
+html[data-theme="sobre"] .onglets button, html[data-theme="bleu"] .onglets button, html[data-theme="turquoise"] .onglets button { color: #b9c6cc; }
+/* --- A : sobre comme les menus du jeu --- */
+html[data-theme="sobre"] .panneau details.bloc > summary, html[data-theme="sobre"] .panneau details.bloc:not([open]) > summary {
+  background: #2a353b; color: #fff; border-left: 4px solid #e9eef0; border-radius: 0; }
+html[data-theme="sobre"] .panneau details.bloc { border-radius: 0; }
+html[data-theme="sobre"] .panneau button.primaire:not(.creer-jeu), html[data-theme="sobre"] #page-bannieres button.primaire,
+html[data-theme="sobre"] #page-maillots button.primaire, html[data-theme="sobre"] #atelier-dessin button.primaire, html[data-theme="sobre"] #reprise-proposee button.primaire {
+  background: #34434a; border: 1px solid #6a7c84; }
+/* --- B : bleu Inazuma (barres des techniques du Tableau des compétences) --- */
+html[data-theme="bleu"] { --jm-turq: #2aa6f2; }
+html[data-theme="bleu"] .panneau details.bloc > summary { background: linear-gradient(90deg, #1561c9, #1f8fe8 70%, #2aa6f2); color: #fff; }
+html[data-theme="bleu"] .panneau details.bloc:not([open]) > summary { background: linear-gradient(90deg, #1d3550, #24425f); }
+html[data-theme="bleu"] .panneau button.primaire:not(.creer-jeu), html[data-theme="bleu"] .panneau button.primaire:not(.creer-jeu):hover, html[data-theme="bleu"] #at-entrer,
+html[data-theme="bleu"] #page-bannieres button.primaire, html[data-theme="bleu"] #page-maillots button.primaire, html[data-theme="bleu"] #atelier-dessin button.primaire,
+html[data-theme="bleu"] #reprise-proposee button.primaire { background: linear-gradient(90deg, #1561c9, #1f8fe8); }
+html[data-theme="bleu"] #cherche { color: #bfe3ff; }
+html[data-theme="bleu"] #cherche::placeholder { color: #7fb8e6; }
+html[data-theme="bleu"] .piece.sel { border-color: #2aa6f2; box-shadow: 0 0 10px rgba(42,166,242,.45); }
+/* --- C : ardoise + turquoise (une seule couleur d'accent : la sélection du jeu) --- */
+html[data-theme="turquoise"] .onglets button.actif, html[data-theme="turquoise"] #bouton-avance.actif, html[data-theme="turquoise"] .tc-genres button.sel,
+html[data-theme="turquoise"] .tc-maillot-choix button.sel { background: #1d6f66 !important; border-color: #2a9c8f !important; }
+html[data-theme="turquoise"] .panneau details.bloc > summary { background: linear-gradient(90deg, #17534d, #1f6e66); color: #fff; }
+html[data-theme="turquoise"] .panneau details.bloc:not([open]) > summary { background: #2a353b; }
+html[data-theme="turquoise"] .panneau button.primaire, html[data-theme="turquoise"] .panneau button.primaire:hover, html[data-theme="turquoise"] .panneau button.creer-jeu,
+html[data-theme="turquoise"] #at-entrer, html[data-theme="turquoise"] #page-bannieres button.primaire, html[data-theme="turquoise"] #page-maillots button.primaire,
+html[data-theme="turquoise"] #atelier-dessin button.primaire, html[data-theme="turquoise"] #reprise-proposee button.primaire {
+  background: linear-gradient(90deg, #17534d, #23a08f 70%, #3fe3c6); }
+
+/* --- ⚙ Paramètres : bouton de l'en-tête et fenêtre --- */
+#bouton-parametres { font-family: inherit; border-radius: 0; border: 1px solid #4b5961; background: #2c363c; color: #e9eef0; padding: 5px 10px; cursor: pointer; flex: none; margin-left: 6px; }
+#bouton-parametres:hover { background: #3f6fae; }
+#parametres { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.55); }
+#parametres.ouvert { display: flex; }
+#parametres .p-boite { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; background: rgba(20,26,30,.98); color: #e9eef0;
+  border-top: 4px solid #f26a17; box-shadow: 0 10px 40px rgba(0,0,0,.6); font-family: "Bahnschrift", "Segoe UI", system-ui, sans-serif; }
+#parametres .p-titre { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: linear-gradient(100deg, #ff8a24, #f26a17); color: #fff;
+  font-size: 20px; font-weight: 600; text-shadow: 0 2px 0 rgba(120,40,0,.55); }
+#parametres .p-titre button { background: none; border: 0; color: #fff; font-size: 22px; cursor: pointer; }
+#parametres h3 { margin: 16px 18px 8px; font-size: 15px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; padding-left: 10px; border-left: 4px solid #d9dde0; }
+#parametres .p-palettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; padding: 0 18px; }
+#parametres .p-palette { background: #1c2226; border: 2px solid transparent; color: #e9eef0; padding: 8px; cursor: pointer; font: inherit; text-align: left; }
+#parametres .p-palette:hover { border-color: #5a6a72; }
+#parametres .p-palette.sel { border-color: #49e8d2; box-shadow: 0 0 10px rgba(73,232,210,.45); }
+#parametres .p-nuancier { display: flex; height: 34px; margin-bottom: 6px; }
+#parametres .p-nuancier i { flex: 1; }
+#parametres .p-ligne { display: flex; align-items: center; gap: 12px; padding: 4px 18px; flex-wrap: wrap; }
+#parametres .p-ligne select, #parametres .p-ligne input[type=range] { accent-color: #3fe3c6; }
+#parametres .p-ligne select { background: rgba(0,0,0,.28); color: #e9f4f2; border: 0; border-bottom: 2px solid #4d6a72; font: inherit; padding: 4px; max-width: 100%; }
+#parametres .p-note { color: #9fb0b8; font-size: 13px; padding: 2px 18px 0; }
+#parametres .p-bas { padding: 16px 18px; }
+#parametres .p-bas button { font-family: inherit; font-size: 15px; border: 0; color: #fff; padding: 8px 28px; cursor: pointer;
+  background: linear-gradient(90deg, #6b5221, #b8903f 70%, #8a6a2c); }
+#parametres .p-ligne label { display: flex; align-items: center; gap: 8px; }

@@ -1546,6 +1546,16 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, {'pret': PREPA['pret'], 'fait': _mj.PROGRES['fait'], 'total': _mj.PROGRES['total']})
             if u.path == '/api/langue':                    # FR / EN
                 return self._envoyer(200, {'langue': langue.code()})
+            if u.path == '/api/parametres':                # (22/11) ⚙ Paramètres (palette, musique) : gardés dans config.json
+                return self._envoyer(200, parametres())
+            if u.path in ('/api/musique', '/api/musique.ogg'):   # (22/11) musique de fond : thème de l'écran titre du jeu
+                from moteur import musique as _mu_
+                f_, meta_ = _mu_.ogg(CFG['data_dir'], CACHE, (q.get('piste') or ['titre'])[0])
+                if not f_:
+                    return self._envoyer(200 if u.path == '/api/musique' else 404, {'ok': False, 'erreur': meta_})
+                if u.path == '/api/musique':
+                    return self._envoyer(200, dict(meta_, ok=True))
+                return self._envoyer(200, open(f_, 'rb').read(), 'audio/ogg')
             if u.path == '/api/identite':                  # (21/11) le lanceur vérifie que ce serveur est le SIEN
                 return self._envoyer(200, {'dossier': os.path.normpath(ICI), 'version': version_atelier()})
             if u.path == '/api/parent':                    # (21/11) une 2e fenêtre du même Atelier : surveillée aussi
@@ -1705,6 +1715,15 @@ class Gestion(BaseHTTPRequestHandler):
                 # (17/11/2026) contenu des mods : aperçu et recoloration seulement (les copies lisent les fichiers du jeu)
                 return self._envoyer(200, {'ok': False, 'erreur': 'Cet élément vient d’un mod : la copie n’est pas encore possible '
                                                                   '(aperçu et recoloration seulement).'})
+            if u.path == '/api/parametres':                # (22/11) ⚙ Paramètres
+                p_ = parametres()
+                for k_, ok_ in (('theme', lambda v: v in THEMES), ('musique', lambda v: isinstance(v, bool)),
+                                ('volume', lambda v: isinstance(v, (int, float)) and 0 <= v <= 1)):
+                    if k_ in demande and ok_(demande[k_]):
+                        p_[k_] = demande[k_]
+                CFG['parametres'] = p_
+                sauver_cfg()
+                return self._envoyer(200, dict(p_, ok=True))
             if u.path == '/api/langue':                    # FR / EN : noms du jeu dans l'autre langue, sans relancer
                 l_ = langue.regler(demande.get('langue'))
                 CFG['langue'] = l_
@@ -1900,6 +1919,17 @@ class Gestion(BaseHTTPRequestHandler):
 
 
 EDGE = [r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', r'C:\Program Files\Microsoft\Edge\Application\msedge.exe']
+
+
+THEMES = ('or', 'sobre', 'bleu', 'turquoise')
+
+
+def parametres():
+    """(22/11, idée de muku : « des paramètres, les gens pourront choisir ») réglages de l'interface, dans config.json
+    (pas dans le navigateur : sa mémoire change avec le port). Palette « or » = l'habillage d'origine ; musique coupée d'office."""
+    p = dict(CFG.get('parametres') or {})
+    return {'theme': p.get('theme') if p.get('theme') in THEMES else 'or', 'musique': p.get('musique') is True,
+            'volume': p['volume'] if isinstance(p.get('volume'), (int, float)) and 0 <= p['volume'] <= 1 else 0.35}
 
 
 def ouvrir_fenetre(url, port=None):

@@ -2,7 +2,7 @@
 
 *English below.*
 
-## Prochaine version (pas encore publiée)
+## 2.0
 
 ### Créer et installer, plus simple
 - **Un seul bouton « Créer »** dans chaque panneau (techniques, esprits, totems, joueurs, maillots…). Il crée la copie **sans toucher au jeu** ; on l'installe ensuite depuis sa carte dans **Mes créations**.
@@ -92,7 +92,7 @@
 
 # Update log — Atelier Inazuma
 
-## Next version (not released yet)
+## 2.0
 
 ### Creating and installing, simpler
 - **A single "Create" button** in every panel. It makes the copy **without touching the game**; install it afterwards from its card in **My creations**.

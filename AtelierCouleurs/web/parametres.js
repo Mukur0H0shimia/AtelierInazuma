@@ -117,7 +117,7 @@
       if (this.checked) { demarrer(); } else { arreter(); }
     };
     f.querySelector('#p-volume').oninput = function () { garder({ volume: +this.value }); };
-    var fermer = function () { f.classList.remove('ouvert'); };
+    var fermer = function () { f.classList.remove('ouvert'); natif(); };
     f.querySelector('#p-fermer').onclick = fermer; f.querySelector('#p-ok').onclick = fermer;
     f.addEventListener('pointerdown', function (ev) { if (ev.target === f) { fermer(); } });
     document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && f.classList.contains('ouvert')) { fermer(); } });
@@ -130,7 +130,9 @@
     f.querySelector('#p-volume').value = P.volume;
     etatMusique(M.etat);
   }
-  window.ouvrirParametres = function () { majFenetre(); fenetre().classList.add('ouvert'); };
+  // le lecteur natif (vraie fenêtre devant la page) se cache tant que la fenêtre est ouverte (app.js : majCacheNatif)
+  function natif() { try { if (typeof majCacheNatif === 'function') { majCacheNatif(); } } catch (e) { } }
+  window.ouvrirParametres = function () { majFenetre(); fenetre().classList.add('ouvert'); natif(); };
 
   window.addEventListener('load', function () {
     var h = document.querySelector('header');

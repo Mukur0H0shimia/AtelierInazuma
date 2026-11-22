@@ -347,10 +347,23 @@ function finNatif(envoyer) {
   NATIF.actif = false; NATIF.cle = null; clearInterval(NATIF.minuteur); NATIF.minuteur = null;
   if (E.vue) E.vue.cv.style.visibility = ''; $('l-jouer').textContent = '▶';
 }
+// (22/11, retour de muku : « les paramètres vont derrière aussi ») ce qui s'ouvre PAR-DESSUS la vue cache le lecteur natif
+// (une vraie fenêtre, toujours devant la page) : liste des résultats (17/11), fenêtre ⚙ Paramètres, fenêtres <dialog>
+// (Tableau des compétences, technique liée)
+function natifRecouvert() {
+  const res = $('resultats');
+  return (res && res.style.display === 'block') || !!document.querySelector('#parametres.ouvert, dialog[open]');
+}
+function majCacheNatif() {
+  if (!NATIF.actif) { NATIF.cacheListe = false; return; }
+  const c = natifRecouvert();
+  if (c !== !!NATIF.cacheListe) { NATIF.cacheListe = c; cmdNatif(c ? 'cacher' : 'montrer'); }
+}
 function suivreNatif() {                        // zone de la vue (la fenêtre la suit) + image en cours (curseur)
   clearInterval(NATIF.minuteur);
   NATIF.minuteur = setInterval(async () => {
     if (!NATIF.actif) return;
+    majCacheNatif();
     const r = rectNatif().join(' ');
     if (r !== NATIF.rect) { NATIF.rect = r; cmdNatif('rect ' + r); }
     optionsNatif();                              // (15/11/2026) pièces cachées / couleurs changées : envoyées sans relancer
@@ -2311,11 +2324,7 @@ window.addEventListener('load', async () => {
   // (17/11/2026, retour de muku : « quand il y a une technique devant on voit plus rien ») le lecteur natif est une vraie
   // fenêtre posée sur la vue : elle passe devant la liste des résultats -> cachée tant que la liste est ouverte
   // (commandes « cacher » / « montrer » du lecteur, AtelierNatif/src/incruste.h)
-  new MutationObserver(() => {
-    const ouverte = res.style.display === 'block';
-    if (!NATIF.actif) { NATIF.cacheListe = false; return; }
-    if (ouverte !== !!NATIF.cacheListe) { NATIF.cacheListe = ouverte; cmdNatif(ouverte ? 'cacher' : 'montrer'); }
-  }).observe(res, { attributes: true, attributeFilter: ['style'] });
+  new MutationObserver(majCacheNatif).observe(res, { attributes: true, attributeFilter: ['style'] });
   const changerOnglet = o => {
     if (E.onglet !== o) { E.filtreSource = null; E.filtreSerie = null; }   // (17/11/2026) filtres Jeu / Mods et série : par onglet
     E.onglet = o; const simple_ = document.body.classList.contains('mode-simple'); document.body.className = 'onglet-' + o + (simple_ ? ' mode-simple' : '');   // (21/11) garde le mode simple

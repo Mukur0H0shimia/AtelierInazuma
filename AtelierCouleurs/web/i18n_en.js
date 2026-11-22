@@ -803,5 +803,12 @@ window.I18N_EN = {
 "Arrêt": "Save",
 "Puissance, PT, élément… (ou garder ceux de l’original)": "Power, TP, element… (or keep the original's)",
 "Changer ses valeurs (puissance, PT, élément…)": "Change its values (power, TP, element…)",
+"« Technique ouverte » = celle de l'onglet Techniques (la bannière partira avec « Créer »). Les autres = tes copies déjà créées (MesTechniques).": "“Open technique” = the one from the Techniques tab (the banner goes with “Create”). The others = your copies already created (MesTechniques).",
+"Reprendre le projet qui a servi à la créer": "Reopen the project it was made from",
+"Projet d’origine introuvable : rouvre la technique de départ": "Original project not found: reopen the starting technique",
+"Choisir la technique de cet esprit guerrier": "Choose this Keshin's technique",
+"Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)": "Copy into the game's mod (backup first; what is already there stays)",
+"CharacterReforged : 6 techniques + 1 esprit (case 9) ; les niveaux peuvent être recalculés": "CharacterReforged: 6 techniques + 1 Keshin (slot 9); levels may be recalculated",
+"Esprit guerrier ou totem": "Keshin or totem",
 "Certains fichiers du jeu sont illisibles (sans doute modifiés par un autre outil de mod) : ces parties de l'Atelier restent vides.": "Some game files cannot be read (probably changed by another mod tool): these parts of the Atelier stay empty."
 };

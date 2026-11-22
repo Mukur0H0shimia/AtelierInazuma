@@ -660,8 +660,12 @@ def enregistrer_banniere(cfg, nom, image, telop_origine):
 
 
 def jeu_ouvert():
-    r = subprocess.run(['tasklist'], capture_output=True, text=True)
-    return 'nie.exe' in r.stdout.lower()
+    """(22/11, chasse aux bugs) sortie de tasklist lue en OCTETS : elle est dans la page de code de la console (cp850 en
+    français : « 12 345 Ko » avec l'octet 0xFF) ; lue en texte (mode UTF-8 de Python, ou un nom avec É / ü en cp1252), le
+    décodage échouait, stdout valait None et /api/etat comme « Installer » plantaient"""
+    r = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq nie.exe', '/NH'], capture_output=True,
+                       creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    return b'nie.exe' in (r.stdout or b'').lower()
 
 
 def perdus_a_l_installation(src, dst, mod_id):
@@ -885,7 +889,8 @@ def scene_en_fichiers(cfg, nom):
         if c['command'] != 'CMD_C3FB5CC5':
             assert not autres, 'texte %s partagé par une autre commande' % anc[1]
         remplacer[liste][anc[1]] = c['set'][1]
-        rapport.append('%s : %s -> %s' % (liste, anc[1], c['set'][1]))
+        if '%s : %s -> %s' % (liste, anc[1], c['set'][1]) not in rapport:     # (22/11) une aura à plusieurs acteurs : une ligne
+            rapport.append('%s : %s -> %s' % (liste, anc[1], c['set'][1]))
     # (22/11, Frappe du loup) <ASSIGN> = le totem / l'esprit DU JOUEUR qui lance (nie.exe : remplacement des balises ; table
     # GDSEventTagWordReplaceConfig). ESSAYÉ EN JEU le 22/11 : écrire le totem (a000020) à sa place NE MARCHE PAS (ses paquets
     # ne sont jamais ouverts : un acteur « a000020_s00 » n'est pas un modèle à charger) -> retiré, <ASSIGN> gardé.

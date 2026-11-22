@@ -4,7 +4,10 @@
 
 ## 2.0.2
 - **Anglais** : une vingtaine de textes récents restaient en français (portrait des cartes, stats, suppression, auras choisies par le match, polices, copier-coller de textures…). Ils sont traduits.
-- **« Et maintenant »** : ce bloc n'apparaît plus en double, et il disparaît quand on ouvre un autre élément. Avant, les suites d'un esprit restaient affichées sous un nouveau joueur.
+- **« Et maintenant »** : ce bloc n'apparaît plus en double, et il disparaît quand on ouvre un autre élément ou qu'on change d'onglet. Avant, les suites d'un esprit restaient affichées sous un nouveau joueur.
+- **Rapports de création en anglais** : lignes des techniques (objets, auras, bannière, cinématique d'échec, totem…), contrôle des mods, suppressions, menus Techniques du joueur et Technique liée.
+- Une ligne d'aura n'est plus répétée plusieurs fois dans le rapport.
+- « Le jeu est-il ouvert ? » ne peut plus planter sur un Windows dont la liste des programmes contient des caractères spéciaux (il bloquait l'onglet Bannières et « Installer »).
 
 ## 2.0.1
 - **L'Atelier démarre même si un fichier du jeu est illisible** (par exemple modifié par un autre outil de mod). Avant, il s'arrêtait sur « Le serveur de l'atelier n'a pas démarré ». Maintenant, seule la partie concernée reste vide, et un message dit laquelle.
@@ -103,7 +106,10 @@
 
 ## 2.0.2
 - **English**: about twenty recent texts were still in French (card portrait, stats, delete, auras picked by the match, fonts, texture copy-paste…). They are now translated.
-- **"What next"**: this block no longer shows twice, and it goes away when another item is opened. Before, a spirit's next steps stayed under a new player.
+- **"What next"**: this block no longer shows twice, and it goes away when another item is opened or the tab changes. Before, a spirit's next steps stayed under a new player.
+- **Creation reports in English**: technique lines (objects, auras, banner, failure cutscene, totem…), mod check, deletions, the player's Techniques and Linked technique menus.
+- An aura line is no longer repeated in the report.
+- "Is the game open?" can no longer crash on a Windows whose process list has special characters (it blocked the Banners tab and "Install").
 
 ## 2.0.1
 - **The Atelier starts even if a game file can't be read** (for example changed by another mod tool). Before, it stopped on "The Atelier server did not start". Now only that part stays empty, and a message says which one.

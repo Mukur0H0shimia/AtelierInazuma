@@ -2403,7 +2403,7 @@ window.addEventListener('load', async () => {
     // (21/11) liste des copies d'esprit de l'onglet Armures : remplie à CHAQUE arrivée sur l'onglet (avant : seulement au clic
     // sur l'onglet ; par l'accueil, « Continuer » / « Modifier », elle restait vide -> « Aucune copie d'esprit »)
     if (o === 'armures') caListe();
-    if (o !== 'bannieres' && o !== 'hub' && E.tech && E.tech.onglet !== o) { E.tech = null; E.objets = []; E.textures = {}; E.vue.vider(); E.vue.lecteur = null; E.lecteur = null;
+    if (o !== 'bannieres' && o !== 'hub' && E.tech && E.tech.onglet !== o) { retirerSuite(); E.tech = null; E.objets = []; E.textures = {}; E.vue.vider(); E.vue.lecteur = null; E.lecteur = null;
       dessinerPieces(); dessinerTextures(); $('titre-tech').textContent = "Rien d'ouvert"; majRapport(''); }
   };
   document.querySelectorAll('.onglets button').forEach(b => b.onclick = () => changerOnglet(b.dataset.onglet));

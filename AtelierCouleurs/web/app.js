@@ -1586,8 +1586,9 @@ window.addEventListener('load', () => {
   const PAIRES = [['exporter', () => exporter(), 'MesTechniques', 'installer'], ['exporter-perso', () => exporterPerso(), 'MesEsprits', 'installer-perso'],
     ['cp-exporter', () => cpExporter(), 'MesPersonnages', 'cp-installer'], ['ct-exporter', () => ctExporter(), 'MesPersonnages', 'ct-installer'],
     ['co-exporter', () => coExporter(), 'MesPersonnages', 'co-installer'], ['cu-exporter', () => cuExporter(), 'MesTenues', 'cu-installer'],
-    ['oj-exporter', () => ojExporter(), 'MesObjets', 'oj-installer'], ['ca-exporter', () => caExporter(), 'MesEsprits', 'ca-installer'],
-    ['mm-construire', () => mmConstruire(), 'MesMaillots', null]];
+    ['oj-exporter', () => ojExporter(), 'MesObjets', 'oj-installer'], ['ca-exporter', () => caExporter(), 'MesEsprits', 'ca-installer']];
+  // (22/11, retour de muku) maillots : un seul bouton « Créer » (refait le mod sans l'installer : l'installation remplaçait
+  // le mod MesMaillots du jeu et voulait retirer un ancien « Maillot Mukuro » fait hors de l'Atelier) ; « Installer » au hub
   for (const [id, creer, mod, idInst] of PAIRES) {
     const orig = $(id); if (!orig || $(id + '-jeu')) continue;
     const b = document.createElement('button'); b.id = id + '-jeu'; b.className = 'primaire creer-jeu'; b.textContent = 'Créer et mettre dans le jeu';
@@ -1868,7 +1869,7 @@ async function mmConstruire() {
   return await new Promise(fini => {
     const suivre = async () => { let e; try { e = await api('/api/maillot_etat'); } catch (x) { return fini({ ok: false, erreur: x.message }); }
       majRapport((e.en_cours ? 'Construction…\n' : e.erreur ? 'Erreur : ' + e.erreur + '\n'
-        : 'Ajouté au mod « Mes maillots » (AtelierCouleurs/sortie/MesMaillots). Pour le mettre dans le jeu : « Installer » dans Mes créations.\n') + e.journal.join('\n'));
+        : 'Maillot créé (mod « Mes maillots » refait, sans toucher au jeu). Pour le mettre dans le jeu : « Installer » dans Mes créations.\n') + e.journal.join('\n'));
       if (e.en_cours) setTimeout(suivre, 1000); else fini({ ok: !e.erreur, erreur: e.erreur }); };
     suivre(); });
 }

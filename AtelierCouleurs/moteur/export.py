@@ -459,7 +459,9 @@ def perdus_a_l_installation(src, dst, mod_id):
                     pass
             return out
         o_s = objets(src)
-        perdus += [n for k, n in objets(dst).items() if k not in o_s]
+        # (22/11) même nom qu'un maillot gardé (ex. deux « Maillot Mukuro », dont un fait hors de l'Atelier) : on le dit
+        perdus += [n + (' (ancienne version du même nom ; celle de l\'Atelier reste)' if n in o_s.values() else '')
+                   for k, n in objets(dst).items() if k not in o_s]
     return list(dict.fromkeys(perdus))                 # un nom une fois (maillot domicile + extérieur : même nom)
 
 

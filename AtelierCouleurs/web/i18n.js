@@ -27,6 +27,16 @@
     'Crée ta copie puis la met dans le jeu (le jeu doit être fermé)': 'Creates your copy then puts it in the game (the game must be closed)',
     'Avancé': 'Advanced', 'Revenir au mode simple': 'Back to simple mode',
     'Enregistrer sans construire': 'Save without building',
+    'Comme en jeu': 'As in the game', 'Original': 'Original', 'Puissance': 'Power', 'Au niveau 1': 'At level 1', 'Au niveau max': 'At max level',
+    'Utilisation': 'Use', 'Coût en PT (tension)': 'TP cost (tension)', 'Nature': 'Nature', 'Solo': 'Solo', '2 joueurs': '2 players', '3 joueurs': '3 players',
+    '4 joueurs': '4 players', 'Poste et élément': 'Position and element', 'Statistiques': 'Stats', 'les changer': 'change them',
+    'poste d’origine': 'original position', 'élément d’origine': 'original element', 'Fermer': 'Close',
+    'Sans « les changer » : les statistiques de l’original. Les 8 vont ensemble.': 'Without “change them”: the original’s stats. The 8 go together.',
+    'Vide ou « comme l’original » : rien ne change': 'Empty or “like the original”: nothing changes',
+    'Partie des valeurs de l’original : seules celles que tu changes sont écrites': 'Starts from the original’s values: only what you change is written',
+    'ATT · Attaquant': 'FW · Forward', 'MIL · Milieu': 'MF · Midfielder', 'DÉF · Défenseur': 'DF · Defender', 'GAR · Gardien': 'GK · Goalkeeper',
+    'FRAPPE': 'KICK', 'CONTRÔLE': 'CONTROL', 'TECHNIQUE': 'TECHNIQUE', 'PRESSION': 'PRESSURE', 'PHYSIQUE': 'PHYSICAL', 'INTELLIGENCE': 'INTELLIGENCE',
+    'AGILITÉ': 'AGILITY', 'LIBERTÉ': 'FREEDOM',
     'En attente de stats': 'Waiting for stats', 'en attente de stats': 'waiting for stats', 'Régler les stats': 'Set the stats', 'Stats': 'Stats',
     "le visuel est fait : règle ses valeurs (puissance, PT, élément…) ou garde celles de l'original": "the look is done: set its values (power, TP, element…) or keep the original's",
     "Garder celles de l'original": "Keep the original's", 'comme l’original': 'like the original',
@@ -84,6 +94,7 @@
 
   // (21/11) textes avec des données : [modèle sur le texte aux espaces réduits, remplacement]
   var MOTIFS = [
+    [/^Copie de (.+?)( · code (\S+))?$/, function (_, n, x, c) { return 'Copy of ' + n + (c ? ' · code ' + c : ''); }],
     [/^Stats de (.+)$/, 'Stats of $1'], [/^original : (.+)$/, 'original: $1'],
     [/^📋 Coller ici : (.+)$/, '📋 Paste here: $1'],
     [/^Image de (\S+) copiée \((\d+) × (\d+)\)\. Ouvre une autre technique, clic droit sur une texture : « Coller ici »\.$/, 'Image of $1 copied ($2 × $3). Open another technique, right-click a texture: “Paste here”.'],

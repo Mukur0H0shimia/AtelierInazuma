@@ -826,3 +826,73 @@ canvas, #atelier-dessin, #centre { touch-action: none; }
 #page-hub .hub-boutons:has(button:nth-child(3)) button { font-size: 13px; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
 #page-hub .hub-boutons:has(button:nth-child(4)) { flex-wrap: wrap; }
 #page-hub .hub-boutons:has(button:nth-child(4)) button { flex: 1 1 40%; }
+
+/* ------------------------------------------------------------------ (22/11, « fais un beau menu pour les stats ») MENU DES STATS
+   même habillage que le Tableau des compétences ; statistiques du joueur d'après references_menus/equipement.webp :
+   étiquettes bleues en capitales, barre colorée par statistique, gros chiffres bleus ; pastilles de poste ATT rouge,
+   MIL bleu, DÉF vert, GAR jaune (couleurs des pastilles de l'écran Équipement). */
+#menu-stats { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; color: #fff;
+  font-family: "Bahnschrift", "Segoe UI", system-ui, sans-serif; background: radial-gradient(ellipse at 60% 40%, #4a5860 0%, #36434a 60%, #2c373d 100%); }
+#menu-stats[open] { display: flex; flex-direction: column; }
+#menu-stats::backdrop { background: rgba(0,0,0,.6); }
+.ms-corps { flex: 1; display: grid; grid-template-columns: minmax(380px, 520px) 1fr; min-height: 0; }
+.ms-gauche { background: linear-gradient(90deg, rgba(20,26,30,.85), rgba(20,26,30,.55) 85%, rgba(20,26,30,0)); padding: 22px 30px 22px 44px;
+  display: flex; flex-direction: column; gap: 12px; overflow: auto; }
+.ms-carte { width: 210px; height: 186px; margin-bottom: 6px; }
+.ms-titre { color: #9fb0b8; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; padding-left: 8px; border-left: 3px solid #d9dde0; }
+.ms-apercu { cursor: default; height: 62px; border-radius: 31px; }
+.ms-apercu .tc-nom { font-size: 28px; } .ms-apercu .tc-pw { font-size: 40px; }
+.tc-barre.esprit.ms-apercu { border-radius: 2px; }
+.ms-infos { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.ms-joueur-tags { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ms-poste { font-size: 34px; font-weight: 700; font-style: italic; padding: 2px 14px; color: #fff; transform: skewX(-10deg); text-shadow: 0 2px 2px rgba(0,0,0,.35); }
+.ms-poste.petit { font-size: 22px; opacity: .85; }
+.ms-poste.vide { font-size: 16px; font-style: normal; font-weight: 400; background: rgba(255,255,255,.12); }
+.ms-poste.p-fw, .ms-choix .poste.p-fw.sel { background: linear-gradient(#ef4b3f, #c92a24); }
+.ms-poste.p-mf, .ms-choix .poste.p-mf.sel { background: linear-gradient(#3d86f0, #1f5ed0); }
+.ms-poste.p-df, .ms-choix .poste.p-df.sel { background: linear-gradient(#45c04f, #2c9a36); }
+.ms-poste.p-gk, .ms-choix .poste.p-gk.sel { background: linear-gradient(#f2c12a, #cf960d); }
+
+.ms-droite { padding: 22px 34px 18px 10px; min-height: 0; overflow: auto; }
+.ms-panneau { max-width: 820px; gap: 10px; }
+.ms-section { font-size: 20px; letter-spacing: 1px; text-transform: uppercase; padding: 6px 12px; margin: 8px -6px 2px; display: flex; align-items: center; gap: 14px;
+  background: linear-gradient(90deg, #1f9a4a, #2cc35c 70%, rgba(44,195,92,0)); clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 0 100%); }
+.ms-ligne { display: grid; grid-template-columns: 230px 1fr; align-items: center; gap: 14px; padding: 4px 0; }
+.ms-ligne label { font-size: 17px; color: #e9eef0; display: flex; flex-direction: column; }
+.ms-ligne label small { font-size: 12px; color: #8fa0a8; }
+.ms-reglage { display: flex; align-items: center; gap: 14px; }
+.ms-reglage input[type=range] { flex: 1; accent-color: #3fe3c6; height: 26px; }
+.ms-reglage input[type=number], .ms-stat-val { width: 96px; font-family: inherit; font-size: 30px; font-style: italic; font-weight: 600; text-align: right;
+  color: #59a8ff; background: rgba(0,0,0,.3); border: 0; border-bottom: 2px solid #2f6fbf; padding: 0 6px; }
+.ms-choix { display: flex; gap: 6px; flex-wrap: wrap; }
+.ms-choix button { font-family: inherit; font-size: 15px; color: #d8e0e4; background: #2c363c; border: 1px solid #4b5961; padding: 7px 14px; cursor: pointer; transform: skewX(-10deg); }
+.ms-choix button:hover { background: #3a4850; }
+.ms-choix button.sel { color: #fff; border-color: transparent; background: linear-gradient(#2f86ff, #1b5ed8); box-shadow: 0 0 0 2px #49e8d2; }
+.ms-choix .el.el-air.sel { background: linear-gradient(#2f9cf4, #1f73d8); } .ms-choix .el.el-foret.sel { background: linear-gradient(#45c04f, #2c9a36); }
+.ms-choix .el.el-feu.sel { background: linear-gradient(#ef4b3f, #c92a24); } .ms-choix .el.el-montagne.sel { background: linear-gradient(#f2a72a, #cf7f0d); }
+.ms-choix .el.el-neant.sel { background: linear-gradient(#a464ea, #7438c2); }
+.ms-choix .el { border-left: 5px solid var(--c, #888); } .ms-choix .el-air { --c: #2f9cf4; } .ms-choix .el-foret { --c: #45c04f; } .ms-choix .el-feu { --c: #ef4b3f; }
+.ms-choix .el-montagne { --c: #f2a72a; } .ms-choix .el-neant { --c: #a464ea; }
+.ms-bascule { margin-left: auto; font-size: 14px; text-transform: none; letter-spacing: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+/* statistiques du joueur (écran Équipement) */
+.ms-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 34px; padding: 6px 4px; }
+.ms-stats.eteint { opacity: .45; }
+.ms-stat { display: grid; grid-template-columns: 120px 1fr 96px; align-items: center; gap: 10px; }
+.ms-stat-nom { color: #3f86e0; font-size: 16px; letter-spacing: 1px; }
+.ms-stat-barre { position: relative; height: 22px; }
+.ms-stat-barre i { position: absolute; left: 0; top: 7px; height: 8px; width: calc(var(--v) * 100%); background: var(--s); box-shadow: 0 0 6px var(--s); pointer-events: none; }
+.ms-stat-barre::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 8px; background: rgba(255,255,255,.08); }
+.ms-stat-barre input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; margin: 0; }
+.ms-stat-val { font-size: 28px; width: 90px; }
+.s-frappe { --s: #ef4b3f; } .s-technique { --s: #f2702a; } .s-controle { --s: #f29a2a; } .s-pression { --s: #d9b47a; }
+.s-physique { --s: #e0c290; } .s-intelligence { --s: #c9ced4; } .s-agilite { --s: #a464ea; } .s-liberte { --s: #45c04f; }
+.ms-note { color: #9fb0b8; font-size: 13px; margin: 2px 0 0; }
+.ms-etat { color: #ffb3a8; min-height: 18px; font-size: 15px; }
+/* bande du bas : aide + actions */
+#menu-stats .tc-aide { gap: 22px; }
+#menu-stats .ms-aide-txt { color: #9fb0b8; font-size: 14px; }
+.ms-original { margin-left: auto; font-family: inherit; font-size: 16px; color: #e9eef0; background: #2c363c; border: 1px solid #4b5961; padding: 10px 16px; cursor: pointer; }
+.ms-original:hover { background: #3f6fae; }
+#menu-stats .ms-garder { font-size: 21px; padding: 10px 26px; clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); }
+@media (max-width: 1200px) { .ms-stats { grid-template-columns: 1fr; } .ms-ligne { grid-template-columns: 170px 1fr; } }
+.ms-gauche .tc-tension, .ms-gauche .ms-infos, .ms-gauche .tc-barre { flex: none; }

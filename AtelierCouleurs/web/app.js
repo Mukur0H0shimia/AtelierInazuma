@@ -2697,41 +2697,138 @@ async function apercuJoueur(r, cle, f) {
 // (22/11, idée de muku : « d'abord le visuel, ensuite les stats dans un menu à part ») fenêtre des valeurs d'une création :
 // champs donnés par le serveur (moteur/stats.py : clés VRFW lues dans des mods qui marchent), partis des valeurs de l'original
 function aDesStats(c) { return !c.jeuSeul && (c.mod === 'MesTechniques' || (c.mod === 'MesEsprits' && c.genre === 'esprit') || (c.mod === 'MesPersonnages' && c.cle)); }
+// (22/11, « fais un beau menu pour les stats ») MENU DES STATS façon menus du jeu, comme le Tableau des compétences :
+// en-tête orange + plaque du nom, à gauche la carte et l'aperçu (barre de technique ou d'esprit comme en jeu, PT en jauge
+// « TENSION »), à droite les réglages ; joueur : panneau de statistiques d'après references_menus/equipement.webp
+// (étiquettes bleues en capitales, barre de couleur par statistique, gros chiffres bleus, pastilles ATT / MIL / DÉF / GAR).
+const MS_EL = { wind: 'air', forest: 'foret', fire: 'feu', mountain: 'montagne', void: 'neant' };
+const MS_POSTE = { fw: ['ATT', 'Attaquant'], mf: ['MIL', 'Milieu'], df: ['DÉF', 'Défenseur'], gk: ['GAR', 'Gardien'] };
+const MS_GENRE = { whs: ['g-tir', 'Tir'], who: ['g-dri', 'Dribble'], whd: ['g-def', 'Défense'], whk: ['g-gar', 'Arrêt'] };
+const MS_STAT = { kick: 'frappe', control: 'controle', technique: 'technique', pressure: 'pression', physical: 'physique',
+  intelligence: 'intelligence', agility: 'agilite', freedom: 'liberte' };
 async function ouvrirStats(c) {
   const code = c.mod === 'MesPersonnages' ? c.cle : c.code;
-  const f = fenetreCoups('Stats de ' + c.nom, '<div class="fc-corps">Lecture…</div>');
-  let r; try { r = await api('/api/stats?mod=' + encodeURIComponent(c.mod) + '&code=' + encodeURIComponent(code)); } catch (e) { f.querySelector('.fc-corps').textContent = e.message; return; }
-  if (!r.ok) { f.querySelector('.fc-corps').textContent = r.erreur; return; }
-  const s = r.stats || {}, jeu = r.jeu || {};
-  const valeur = ch => { const k = ch.cle, v = k.startsWith('stats.') ? (s.stats || {})[k.slice(6)] : s[k];
-    return v !== undefined ? v : (jeu[k] !== undefined ? jeu[k] : ''); };
-  const libJeu = ch => jeu[ch.cle] === undefined || jeu[ch.cle] === '' ? '' : ch.type === 'choix' ? ((ch.choix.find(x => x[0] === jeu[ch.cle]) || [0, jeu[ch.cle]])[1]) : jeu[ch.cle];
-  let h = `<p class="fc-note">Le visuel est fait : ici ses valeurs. Elles partent de celles de l'original (${echapper(c.nom_base || c.base || '')}) ; seules celles que tu changes sont écrites dans le mod.</p>`;
-  let groupe = false;
-  for (const ch of r.champs) {
-    if (ch.groupe === 'stats' && !groupe) { groupe = true;
-      h += `<p class="fc-note">Les 8 statistiques vont ensemble : toutes remplies, ou toutes vides (= celles de l'original).</p>`; }
-    const v = valeur(ch), orig = libJeu(ch);
-    const champ = ch.type === 'choix'
-      ? `<select data-k="${ch.cle}">${ch.vide ? '<option value="">comme l’original</option>' : ''}${ch.choix.map(([x, n]) => `<option value="${x}"${x === v ? ' selected' : ''}>${n}</option>`).join('')}</select>`
-      : `<input type="number" data-k="${ch.cle}" min="${ch.min}" max="${ch.max}" value="${echapper(String(v))}"${ch.vide ? ' placeholder="comme l’original"' : ''}>`;
-    h += `<div class="fc-ligne"><span class="fc-case">${echapper(ch.nom)}</span>${champ}${orig !== '' ? `<small class="fc-orig">original : ${echapper(String(orig))}</small>` : ''}${ch.aide ? `<small class="fc-orig">${echapper(ch.aide)}</small>` : ''}</div>`;
+  let f = $('menu-stats');
+  if (!f) {
+    f = document.createElement('dialog'); f.id = 'menu-stats'; document.body.appendChild(f);
+    f.addEventListener('close', () => { if (typeof majCacheNatif === 'function') majCacheNatif(); });
   }
-  h += `<div class="fc-boutons"><button data-f="original">Garder celles de l'original</button><button class="primaire" data-f="garder">Enregistrer et mettre dans le jeu</button></div><div class="fc-etat"></div>`;
-  f.querySelector('.fc-corps').outerHTML = `<div class="fc-corps fc-stats">${h}</div>`;
+  const tag = { MesTechniques: 'TECH', MesEsprits: 'ESP', MesPersonnages: 'PERSO' }[c.mod] || '';
+  f.innerHTML = `<div class="tc-entete"><div class="jm-coin tc-coin">${iconeJeu('m2', 46)}<span>Stats</span></div>
+      <div class="tc-plaque"><span class="tc-plaque-nom"></span><span class="tc-plaque-sous">Lecture…</span><span class="jm-tag tc-plaque-tag">${tag}</span></div>
+      <button class="tc-fermer" title="Fermer sans rien changer (Échap)">✕</button></div>
+    <div class="ms-corps"><div class="ms-gauche"></div><div class="ms-droite"></div></div>
+    <div class="tc-aide"><span><i class="jm-touche">Échap</i> Fermer</span><span class="ms-aide-txt"></span>
+      <button class="ms-original">Garder celles de l'original</button><button class="tc-enregistrer ms-garder">Enregistrer et mettre dans le jeu</button></div>`;
+  f.querySelector('.tc-plaque-nom').textContent = c.nom;
+  f.querySelector('.tc-fermer').onclick = () => f.close();
+  if (!f.open) f.showModal();
+  if (typeof majCacheNatif === 'function') majCacheNatif();
+  const G = f.querySelector('.ms-gauche'), D = f.querySelector('.ms-droite');
+  let r; try { r = await api('/api/stats?mod=' + encodeURIComponent(c.mod) + '&code=' + encodeURIComponent(code)); } catch (e) { D.textContent = e.message; return; }
+  if (!r.ok) { D.textContent = r.erreur; return; }
+
+  const jeu = r.jeu || {}, deja = r.stats || {}, champ = k => r.champs.find(x => x.cle === k);
+  // valeurs de travail : réglées avant, sinon celles de l'original (joueur : vide = comme l'original)
+  const V = {};
+  for (const ch of r.champs) { const k = ch.cle, d = k.startsWith('stats.') ? (deja.stats || {})[k.slice(6)] : deja[k];
+    V[k] = d !== undefined ? d : (jeu[k] !== undefined ? jeu[k] : ''); }
+  const joueur = r.genre === 'personnages';
+  let statsOn = joueur && !!deja.stats;
+  // ---- carte + aperçu (gauche)
+  const proj = HUB.projets.find(p => p.code === c.base && p.onglet === c.onglet);
+  const vign = c.vignette || (proj && proj.vignette) || '';
+  const nomBase = c.nom_base || ((E.index || []).find(t => t.code === c.base) || {}).nom || c.base || '';   // nom de l'original (techniques : index)
+  f.querySelector('.tc-plaque-sous').textContent = `Copie de ${nomBase}${c.code ? ' · code ' + c.code : ''}`;
+  const libEl = e => ((champ('element') || { choix: [] }).choix.find(x => x[0] === e) || [e, ''])[1];
+  const apercu = () => {
+    const pmax = V.power_max !== '' ? V.power_max : '—', el = MS_EL[V.element] || 'neutre';
+    let h = `<div class="tc-carte ms-carte g-${c.onglet}">${joueur && c.code ? `<img src="/api/portrait?code=${encodeURIComponent(c.code)}" alt="">` : vign ? `<img src="${vign}" alt="">` : ''}<span class="jm-tag">${tag}</span></div>`;
+    if (r.genre === 'technique') {
+      const g = MS_GENRE[(c.code || '').slice(0, 3)] || ['', ''];
+      h += `<div class="ms-titre">Comme en jeu</div>
+        <div class="tc-barre el-${el} ms-apercu"><span class="tc-orbe ${g[0]}"></span><span class="tc-nom">${echapper(c.nom)}</span><span class="tc-pw"><small>${g[1].toUpperCase()}</small>${pmax}</span></div>
+        <div class="tc-tension" style="--t:${Math.min(1, (+V.tp || 0) / 150)}"><span>TENSION</span><i></i><b>${V.tp !== '' ? V.tp : '—'}<small>T</small></b></div>
+        <div class="ms-infos"><span class="tc-puce el-${el}">${echapper(libEl(V.element) || 'Élément')}</span><span class="tc-niv"><span>Niv. 1</span>${V.power_min}</span>
+          <span class="tc-puce">${V.users > 1 ? V.users + ' joueurs' : 'Solo'}</span></div>`;
+      if (jeu.power_max !== undefined) h += `<div class="ms-titre">Original</div><div class="tc-barre petit el-${MS_EL[jeu.element] || 'neutre'}"><span class="tc-orbe ${g[0]}"></span><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>${g[1].toUpperCase()}</small>${jeu.power_max}</span></div>`;
+    } else if (r.genre === 'esprit') {
+      h += `<div class="ms-titre">Comme en jeu</div>
+        <div class="tc-barre esprit ms-apercu"><span class="tc-nom">${echapper(c.nom)}</span><span class="tc-pw"><small>ESPRIT</small>${pmax}</span></div>
+        <div class="ms-infos"><span class="tc-puce el-${el}">${echapper(libEl(V.element) || 'Élément')}</span><span class="tc-niv"><span>Niv. 1</span>${V.power_min}</span></div>`;
+      if (jeu.power_max !== undefined) h += `<div class="ms-titre">Original</div><div class="tc-barre petit esprit"><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>ESPRIT</small>${jeu.power_max}</span></div>`;
+    } else {
+      const p = V.position ? MS_POSTE[V.position] : null, el2 = V.element ? MS_EL[V.element] : '';
+      h += `<div class="ms-titre">Comme en jeu</div><div class="ms-joueur-tags">
+        ${p ? `<span class="ms-poste p-${V.position}">${p[0]}</span>` : '<span class="ms-poste vide">poste d’origine</span>'}
+        ${V.sub_position ? `<span class="ms-poste petit p-${V.sub_position}">${MS_POSTE[V.sub_position][0]}</span>` : ''}
+        ${el2 ? `<span class="tc-puce el-${el2}">${echapper(libEl(V.element))}</span>` : '<span class="tc-puce">élément d’origine</span>'}</div>`;
+    }
+    G.innerHTML = h;
+  };
+  // ---- réglages (droite)
+  const curseur = (k, nom, min, max, pas) => { const ch = champ(k); if (!ch) return '';
+    const orig = jeu[k] !== undefined ? `<small>original : ${jeu[k]}</small>` : '';
+    return `<div class="ms-ligne"><label>${echapper(nom || ch.nom)}${orig}</label><div class="ms-reglage">
+      <input type="range" data-k="${k}" min="${min ?? ch.min}" max="${max ?? ch.max}" step="${pas || 1}" value="${V[k] === '' ? 0 : V[k]}">
+      <input type="number" data-k="${k}" min="${ch.min}" max="${ch.max}" value="${V[k]}"></div></div>`; };
+  const boutonsChoix = (k, items, vide) => { const ch = champ(k); if (!ch) return '';
+    const orig = jeu[k] !== undefined && jeu[k] !== '' ? `<small>original : ${echapper(String(items.find(x => x[0] === jeu[k])?.[1] || jeu[k]))}</small>` : '';
+    return `<div class="ms-ligne"><label>${echapper(ch.nom)}${orig}</label><div class="ms-choix" data-k="${k}">
+      ${vide ? `<button data-v="" class="${V[k] === '' ? 'sel' : ''}">comme l’original</button>` : ''}
+      ${items.map(([v, n, cl]) => `<button data-v="${v}" class="${cl || ''}${String(V[k]) === String(v) ? ' sel' : ''}">${echapper(n)}</button>`).join('')}</div></div>`; };
+  const elems = (champ('element') || { choix: [] }).choix.map(([v, n]) => [v, n, 'el el-' + MS_EL[v]]);
+  const panneau = () => {
+    let h = '<div class="tc-detail ms-panneau">';
+    if (r.genre === 'technique') {
+      h += '<div class="ms-section">Puissance</div>' + curseur('power_min', 'Au niveau 1', 0, 1000) + curseur('power_max', 'Au niveau max', 0, 1500)
+        + '<div class="ms-section">Utilisation</div>' + curseur('tp', 'Coût en PT (tension)', 0, 150)
+        + boutonsChoix('users', [[1, 'Solo'], [2, '2 joueurs'], [3, '3 joueurs'], [4, '4 joueurs']])
+        + '<div class="ms-section">Nature</div>' + boutonsChoix('element', elems)
+        + boutonsChoix('growth', [0, 1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)]));
+    } else if (r.genre === 'esprit') {
+      h += '<div class="ms-section">Puissance</div>' + curseur('power_min', 'Au niveau 1', 0, 300) + curseur('power_max', 'Au niveau max', 0, 300)
+        + '<div class="ms-section">Nature</div>' + boutonsChoix('element', elems);
+    } else {
+      const postes = Object.entries(MS_POSTE).map(([v, [a, n]]) => [v, a + ' · ' + n, 'poste p-' + v]);
+      h += '<div class="ms-section">Poste et élément</div>' + boutonsChoix('position', postes, true) + boutonsChoix('sub_position', postes, true) + boutonsChoix('element', elems, true)
+        + `<div class="ms-section">Statistiques <label class="ms-bascule"><input type="checkbox" class="ms-stats-on"${statsOn ? ' checked' : ''}> les changer</label></div>`
+        + `<div class="ms-stats${statsOn ? '' : ' eteint'}">` + Object.entries(MS_STAT).map(([k, cl]) => {
+          const ch = champ('stats.' + k), v = V['stats.' + k] === '' ? 200 : V['stats.' + k];
+          return `<div class="ms-stat s-${cl}"><span class="ms-stat-nom">${echapper(ch.nom.toUpperCase())}</span>
+            <span class="ms-stat-barre"><i style="--v:${Math.min(1, v / 300)}"></i><input type="range" data-k="stats.${k}" min="0" max="300" value="${v}"${statsOn ? '' : ' disabled'}></span>
+            <input type="number" class="ms-stat-val" data-k="stats.${k}" min="0" max="999" value="${v}"${statsOn ? '' : ' disabled'}></div>`; }).join('')
+        + '</div><p class="ms-note">Sans « les changer » : les statistiques de l’original. Les 8 vont ensemble.</p>';
+    }
+    h += '<div class="ms-etat"></div></div>';
+    D.innerHTML = h;
+    D.querySelectorAll('input[data-k]').forEach(el => el.oninput = () => {
+      const k = el.dataset.k, v = el.value === '' ? '' : +el.value; V[k] = v;
+      D.querySelectorAll(`input[data-k="${k}"]`).forEach(o => { if (o !== el) o.value = v; });
+      const bar = el.closest('.ms-stat'); if (bar) bar.querySelector('i').style.setProperty('--v', Math.min(1, (+v || 0) / 300));
+      apercu(); });
+    D.querySelectorAll('.ms-choix').forEach(b => b.querySelectorAll('button').forEach(x => x.onclick = () => {
+      const k = b.dataset.k, v = x.dataset.v; V[k] = v === '' ? '' : (champ(k).type === 'nombre' ? +v : v);
+      b.querySelectorAll('button').forEach(y => y.classList.toggle('sel', y === x)); apercu(); }));
+    const on = D.querySelector('.ms-stats-on');
+    if (on) on.onchange = () => { statsOn = on.checked;
+      if (statsOn) for (const k of Object.keys(MS_STAT)) if (V['stats.' + k] === '') V['stats.' + k] = 200;
+      panneau(); };
+  };
+  apercu(); panneau();
+  f.querySelector('.ms-aide-txt').textContent = joueur ? 'Vide ou « comme l’original » : rien ne change' : 'Partie des valeurs de l’original : seules celles que tu changes sont écrites';
   const envoyer = async stats => {
-    const e = f.querySelector('.fc-etat'); e.textContent = 'Écriture…';
+    const e = f.querySelector('.ms-etat'); e.textContent = 'Écriture…';
     try { const q = await api('/api/stats', { mod: c.mod, code, stats });
       if (!q.ok) { e.textContent = q.erreur; return; }
       f.close(); majRapport(q.rapport.join('\n'));
       await installer(c.mod); $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub();
     } catch (x) { e.textContent = x.message; } };
-  f.querySelector('[data-f="original"]').onclick = () => envoyer({});
-  f.querySelector('[data-f="garder"]').onclick = () => {
+  f.querySelector('.ms-original').onclick = () => envoyer({});
+  f.querySelector('.ms-garder').onclick = () => {
     const out = {};
-    f.querySelectorAll('[data-k]').forEach(el => { const k = el.dataset.k, v = el.value; if (v === '') return;
-      const ch = r.champs.find(x => x.cle === k), val = ch.type === 'nombre' ? +v : v;
-      if (k.startsWith('stats.')) (out.stats = out.stats || {})[k.slice(6)] = val; else out[k] = val; });
+    for (const ch of r.champs) { const k = ch.cle, v = V[k]; if (v === '' || v === undefined) continue;
+      if (k.startsWith('stats.')) { if (statsOn) (out.stats = out.stats || {})[k.slice(6)] = +v; } else out[k] = v; }
     envoyer(out); };
 }
 async function ouvrirTechniqueLiee(c) {

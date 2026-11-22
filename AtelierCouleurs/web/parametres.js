@@ -95,6 +95,7 @@
     f = document.createElement('div'); f.id = 'parametres';
     f.innerHTML = '<div class="p-boite" role="dialog" aria-label="Paramètres">'
       + '<div class="p-titre"><span>⚙ Paramètres</span><button id="p-fermer" title="Fermer">×</button></div>'
+      + '<h3 data-pas-traduire>Langue · Language · Idioma</h3><div class="p-langues" id="p-langues" data-pas-traduire></div>'
       + '<h3>Couleurs de l\'écran</h3><div class="p-palettes" id="p-palettes"></div>'
       + '<p class="p-note">L\'accueil (Mes créations) garde les couleurs du menu du jeu.</p>'
       + '<h3>Musique de fond</h3>'
@@ -126,6 +127,14 @@
       if (this.checked) { demarrer(); } else { arreter(); }
     };
     f.querySelector('#p-volume').oninput = function () { garder({ volume: +this.value }); };
+    // (22/11, demande de muku) choix de la langue : un bouton par langue, écrit dans sa langue, la langue actuelle en surbrillance
+    var LL = f.querySelector('#p-langues');
+    (window.LANGUES_ATELIER || []).forEach(function (x) {
+      var b = document.createElement('button'); b.className = 'p-langue'; b.dataset.langue = x.code;
+      b.innerHTML = '<b>' + x.code.toUpperCase() + '</b><span></span>'; b.querySelector('span').textContent = x.nom;
+      b.onclick = function () { if (window.choisirLangue) { b.classList.add('attente'); window.choisirLangue(x.code); } };
+      LL.appendChild(b);
+    });
     f.querySelector('#p-police-importer').onclick = function () { window.importerPolice().then(majFenetre); };
     f.querySelector('#p-jeu-utiliser').onclick = function () { choisirJeu(f.querySelector('#p-jeu-autre').value); };
     var fermer = function () { f.classList.remove('ouvert'); natif(); };
@@ -136,6 +145,7 @@
   }
   function majFenetre() {
     var f = fenetre();
+    f.querySelectorAll('.p-langue').forEach(function (b) { b.classList.toggle('sel', b.dataset.langue === (window.ATELIER_LANGUE || 'fr')); });
     f.querySelectorAll('.p-palette').forEach(function (b) { b.classList.toggle('sel', b.dataset.theme === (P.theme || 'or')); });
     f.querySelector('#p-musique').checked = !!P.musique;
     f.querySelector('#p-volume').value = P.volume;

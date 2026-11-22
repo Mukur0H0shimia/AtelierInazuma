@@ -655,6 +655,9 @@ header .marque { display: none; }
 .titre-tech { color: #fff; font-size: 15px; font-weight: 500; padding: 6px 18px 6px 22px; max-width: 34vw; white-space: nowrap;
   background: linear-gradient(100deg, rgba(60,120,200,.55), rgba(40,60,90,.35)); clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%); }
 #bouton-langue, #bouton-avance { font-family: inherit; border-radius: 0 !important; border: 1px solid #4b5961 !important; background: #2c363c !important; color: #e9eef0; padding: 5px 12px; }
+/* (22/11) le choix de langue est un menu : pas la largeur 100 % des autres menus (il poussait ⚙ et « Avancé » hors de l'écran) */
+select#bouton-langue { width: auto !important; flex: none !important; max-width: 170px; padding: 5px 8px; }
+select#bouton-langue option { background: #2c363c; color: #e9eef0; }
 #bouton-avance.actif { background: linear-gradient(#2f86ff, #1b5ed8) !important; border-color: #2f86ff !important; color: #fff; }
 
 /* --- panneaux : sombres translucides, comme la colonne gauche des menus --- */
@@ -814,6 +817,15 @@ canvas, #atelier-dessin, #centre { touch-action: none; }
 #parametres .p-ligne button { font-family: inherit; border-radius: 0; border: 1px solid #4b5961; background: #2c363c; color: #e9eef0; padding: 5px 12px; cursor: pointer; }
 #parametres .p-ligne button:hover { background: #3f6fae; }
 #parametres .p-police { justify-content: space-between; border-bottom: 1px solid #2c363c; }
+/* (22/11) langues : trois gros boutons, chacun écrit dans sa langue */
+#parametres .p-langues { display: flex; gap: 10px; padding: 4px 18px 8px; flex-wrap: wrap; }
+#parametres .p-langue { flex: 1 1 120px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 8px; cursor: pointer;
+  font-family: inherit; color: #e9eef0; background: #2c363c; border: 2px solid #4b5961; border-radius: 0; }
+#parametres .p-langue b { font-size: 20px; letter-spacing: 2px; }
+#parametres .p-langue span { font-size: 14px; color: #c9d4d8; }
+#parametres .p-langue:hover { border-color: #3fe3c6; }
+#parametres .p-langue.sel { border-color: #3fe3c6; background: rgba(63, 227, 198, .14); }
+#parametres .p-langue.attente { opacity: .6; }
 /* (22/11) dossier du jeu */
 #parametres .p-jeu { cursor: pointer; border-bottom: 1px solid #2c363c; flex-wrap: nowrap; }
 #parametres .p-jeu.sel { background: rgba(63, 227, 198, .08); }

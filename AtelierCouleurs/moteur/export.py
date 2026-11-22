@@ -701,6 +701,70 @@ def perdus_a_l_installation(src, dst, mod_id):
     return list(dict.fromkeys(perdus))                 # un nom une fois (maillot domicile + extérieur : même nom)
 
 
+_IGNORER = shutil.ignore_patterns('_retires')          # créations supprimées : restent dans la sortie, jamais dans le jeu
+
+
+def _long(p):
+    """chemin Windows sans limite de 260 caractères (\\\\?\\…) : les sauvegardes sont parfois rangées loin (OneDrive…)"""
+    p = os.path.abspath(p)
+    return ('\\\\?\\' + p) if os.name == 'nt' and not p.startswith('\\\\?\\') else p
+
+
+def _court(ex):
+    s = str(ex)
+    return s if len(s) < 300 else s[:300] + '…'
+
+
+def _effacer(d, essais=5):
+    """rmtree tolérant : lecture seule retirée, quelques essais (antivirus, indexation qui tiennent un fichier un instant)"""
+    import stat, time
+
+    def _forcer(fn, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            fn(p)
+        except OSError:
+            pass
+    for k in range(essais):
+        if not os.path.isdir(_long(d)):
+            return True
+        shutil.rmtree(_long(d), onexc=_forcer) if sys.version_info >= (3, 12) else shutil.rmtree(_long(d), onerror=_forcer)
+        if not os.path.isdir(_long(d)):
+            return True
+        time.sleep(0.3 * (k + 1))
+    return not os.path.isdir(_long(d))
+
+
+def _sans_retires(dst):
+    """(22/11) _retires copié dans le jeu par un Atelier d'avant : retiré (ce n'est qu'une copie : l'original est dans la sortie)"""
+    r = os.path.join(dst, '_retires')
+    if os.path.isdir(r):
+        _effacer(r)
+
+
+def _remplacer_dossier(src, dst):
+    """dst (mod du jeu) remplacé par src sans jamais laisser un mod à moitié effacé : copie dans <dst>.nouveau, puis
+    échange par renommage (refusé tout de suite si un fichier de dst est bloqué : rien ne change), puis l'ancien est effacé.
+    S'il ne peut pas l'être tout de suite, son mod.toml est renommé (VRFW : « off in this version (mod.toml.off) »)."""
+    neuf, vieux = dst + '.nouveau', dst + '.ancien'
+    for d in (neuf, vieux):
+        if os.path.isdir(_long(d)) and not _effacer(d):
+            raise OSError('dossier %s impossible à effacer' % os.path.basename(d))
+    shutil.copytree(_long(src), _long(neuf), ignore=_IGNORER)
+    if os.path.isdir(dst):
+        try:
+            os.rename(_long(dst), _long(vieux))
+        except OSError:
+            _effacer(neuf)
+            raise
+    os.rename(_long(neuf), _long(dst))
+    if os.path.isdir(_long(vieux)) and not _effacer(vieux):
+        try:
+            os.rename(os.path.join(_long(vieux), 'mod.toml'), os.path.join(_long(vieux), 'mod.toml.off'))
+        except OSError:
+            pass
+
+
 def installer(cfg, mod_id=MOD_ID, forcer=False):
     """copie sortie/<mod_id> (MesTechniques ou MesEsprits) dans <jeu>/mods (sauvegarde avant), ajoute le mod à
     enabled.toml ; jeu fermé seulement. (21/11) forcer=False : refuse si des créations du jeu absentes de la sortie
@@ -725,17 +789,28 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
         return {'ok': False, 'perdus': perdus, 'erreur': 'Installer retirerait du jeu : %s (absents de cet Atelier).' % ', '.join(perdus)}
     sauv =os.path.join(cfg['sauvegardes_dir'], mod_id + '_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
     os.makedirs(sauv, exist_ok=True)
-    if os.path.isdir(dst):
-        shutil.copytree(dst, os.path.join(sauv, mod_id), dirs_exist_ok=True)
-    en = os.path.join(mods, 'enabled.toml')
-    if os.path.isfile(en):                              # (21/11) jeu sans enabled.toml : rien à sauvegarder (avant : plantage)
-        shutil.copy(en, os.path.join(sauv, 'enabled.toml'))
-    # (15/11/2026) techniques : AJOUT au mod du jeu (les techniques déjà installées restent, ex. La Flamme absente de la
-    # sortie). Avant : le mod du jeu était vidé puis remplacé, ce qui retirait ces techniques. Esprits : remplacé comme
-    # avant (mes_esprits.toml liste tous les esprits de la sortie). Dans les deux cas, l'ancienne version est sauvegardée.
-    if os.path.isdir(dst) and mod_id != 'MesTechniques':
-        shutil.rmtree(dst)
-    shutil.copytree(src, dst, dirs_exist_ok=True)
+    try:
+        # (22/11, journal d'un joueur : « Installer » n'installait plus rien) le dossier _retires (créations supprimées) partait
+        # dans le jeu ; sa sauvegarde dépassait la longueur de chemin de Windows (WinError 3) et l'installation s'arrêtait
+        _sans_retires(dst)
+        if os.path.isdir(dst):
+            shutil.copytree(_long(dst), _long(os.path.join(sauv, mod_id)), dirs_exist_ok=True, ignore=_IGNORER)
+        en = os.path.join(mods, 'enabled.toml')
+        if os.path.isfile(en):                          # (21/11) jeu sans enabled.toml : rien à sauvegarder (avant : plantage)
+            shutil.copy(en, os.path.join(sauv, 'enabled.toml'))
+        # (15/11/2026) techniques : AJOUT au mod du jeu (les techniques déjà installées restent, ex. La Flamme absente de la
+        # sortie). Esprits et autres : REMPLACÉ. (22/11, même joueur : fichiers bloqués par un autre programme, WinError 32 /
+        # 145) l'ancien mod était effacé AVANT de copier le nouveau : effacement à moitié fait = mod cassé (armure absente).
+        # Maintenant : le nouveau est copié à côté, puis les deux dossiers sont échangés ; si un fichier est bloqué, rien ne
+        # change et la page le dit.
+        if mod_id == 'MesTechniques':
+            shutil.copytree(_long(src), _long(dst), dirs_exist_ok=True, ignore=_IGNORER)
+        else:
+            _remplacer_dossier(src, dst)
+    except (shutil.Error, OSError) as ex:
+        return {'ok': False, 'erreur': 'Un fichier du mod est utilisé par un autre programme (le jeu, le gestionnaire de mods, un '
+                                       'antivirus, OneDrive…) : ferme-le puis clique à nouveau sur « Installer ». Rien n’a été '
+                                       'changé dans le jeu. (%s)' % _court(ex)}
     # (16/11/2026) fichiers retirés dans la sortie (« x.toml.retire », ex. la copie automatique d'une cinématique livrée en
     # fichiers) : leur ancienne version installée est retirée aussi (elle est dans la sauvegarde ci-dessus)
     for r_ in glob.glob(os.path.join(src, '**', '*.toml.retire'), recursive=True):

@@ -3,6 +3,9 @@
 *English below.*
 
 ## 2.0.5
+- **Español** : l'Atelier existe maintenant en espagnol, avec le vocabulaire du jeu (Keshin, Supertécnicas, Tiro, Regate, Parada…). Les noms du jeu suivent aussi la langue.
+- **Choix de la langue** : un menu en haut à droite, et trois boutons dans ⚙ Paramètres (Français, English, Español).
+- **« Installer » ne bloque plus** : les créations supprimées (dossier `_retires`) ne partent plus dans le jeu ; les chemins très longs (OneDrive…) sont acceptés ; si un fichier est utilisé par un autre programme, rien n'est changé et un message le dit. Avant, une installation pouvait s'arrêter au milieu et laisser le mod à moitié effacé (armure absente en jeu).
 - **Tout l'Atelier en anglais** : environ 150 textes traduits en plus. Ils couvrent les rapports détaillés (esprits, totems, joueurs, tenues, objets, armures, maillots, cinématique d'échec), les messages d'erreur, l'éditeur de dessin complet, les calques, le texte de l'onglet Objets et la musique.
 - Raccourcis : « Maj » s'affiche « Shift » en anglais.
 - **Noms de tes mods dans le gestionnaire de mods** (Mes techniques, Mes esprits et totems, Mes personnages, Mes tenues, Mes objets, Mes maillots) : en anglais par défaut, avec leur traduction française et espagnole, comme les autres mods. Ils sont mis à jour au prochain « Installer ».
@@ -123,6 +126,9 @@
 # Update log — Atelier Inazuma
 
 ## 2.0.5
+- **Español**: the Atelier is now in Spanish too, with the game's own words (Keshin, Supertécnicas, Tiro, Regate, Parada…). Game names follow the language as well.
+- **Choosing the language**: a menu at the top right, and three buttons in ⚙ Settings (Français, English, Español).
+- **"Install" no longer gets stuck**: deleted creations (`_retires` folder) no longer go into the game; very long paths (OneDrive…) are accepted; if a file is used by another program, nothing is changed and a message says so. Before, an install could stop halfway and leave the mod half deleted (armour missing in game).
 - **The whole Atelier in English**: about 150 more texts translated. They cover the detailed reports (Keshin, totems, players, outfits, items, armours, kits, failure cutscene), error messages, the full drawing editor, layers, the Items tab text and the music.
 - Shortcuts: "Maj" now shows as "Shift" in English.
 - **Your mods' names in the mod manager** (My techniques, My Keshin and totems, My characters, My outfits, My items, My kits): English by default, with their French and Spanish translations, like the other mods. They are updated at the next "Install".

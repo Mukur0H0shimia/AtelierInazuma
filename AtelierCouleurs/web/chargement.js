@@ -3,8 +3,23 @@
 // fois). Pendant ce temps l'interface ne répond pas encore : cet écran le dit, avec l'avancement (/api/chargement).
 (function () {
   'use strict';
-  var EN = (window.ATELIER_LANGUE || document.documentElement.lang) === 'en';
-  var T = EN ? {
+  var LG = window.ATELIER_LANGUE || document.documentElement.lang;
+  var EN = LG === 'en';
+  var T = LG === 'es' ? {                      // (22/11) espagnol
+    titre: 'Preparando el Atelier',
+    lecture: 'Leyendo los archivos del juego…',
+    textures: 'Índice de las texturas del juego',
+    mods: 'Leyendo tus mods…',
+    une_fois: 'Solo la primera vez: la próxima vez el Atelier se abre en unos segundos.',
+    reste: function (m) { return m <= 1 ? 'queda 1 minuto aprox.' : 'quedan unos ' + m + ' minutos'; },
+    fichiers: function (a, b) { return a.toLocaleString('es') + ' / ' + b.toLocaleString('es') + ' archivos'; },
+    astuces: [
+      'No hay nada que extraer: el Atelier lee el juego directamente en sus paquetes.',
+      'Los archivos originales del juego nunca se modifican: cada creación es una copia con un código nuevo.',
+      'Tus mods aparecen en las pestañas de siempre, incluso los desactivados.',
+      'Idioma arriba a la derecha o en ⚙ Ajustes: los nombres del juego siguen el idioma elegido.'
+    ]
+  } : EN ? {
     titre: 'Getting the Atelier ready',
     lecture: 'Reading the game files…',
     textures: 'Indexing the game textures',
@@ -16,7 +31,7 @@
       'Nothing is extracted: the Atelier reads the game straight from its packs.',
       'The game’s original files are never modified: every creation is a copy with a new code.',
       'Your mods show up in the usual tabs, even the disabled ones.',
-      'FR / EN button at the top right: game names follow the chosen language.'
+      'Language at the top right or in ⚙ Settings: game names follow the chosen language.'
     ]
   } : {
     titre: 'Préparation de l’Atelier',
@@ -30,7 +45,7 @@
       'Rien à extraire : l’Atelier lit le jeu directement dans ses paquets.',
       'Les fichiers d’origine du jeu ne sont jamais modifiés : chaque création est une copie à code neuf.',
       'Tes mods apparaissent dans les onglets habituels, même ceux qui sont désactivés.',
-      'Bouton FR / EN en haut à droite : les noms du jeu suivent la langue choisie.'
+      'Langue en haut à droite ou dans ⚙ Paramètres : les noms du jeu suivent la langue choisie.'
     ]
   };
 

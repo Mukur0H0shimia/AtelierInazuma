@@ -213,6 +213,8 @@
              'Son icône : celle que tu recolores (✎ Mode dessin).': 'Its icon: the one you recolour (✎ Drawing mode).',
              'Son icône : celle de l’original (ce genre d’icône ne se remplace pas encore).': 'Its icon: the original’s (this kind of icon cannot be replaced yet).' }[f] || f); }],
     [/^Calque (\d+)$/, 'Layer $1'],
+    [/^Un fichier du mod est utilisé par un autre programme \(le jeu, le gestionnaire de mods, un antivirus, OneDrive…\) : ferme-le puis clique à nouveau sur « Installer »\. Rien n’a été changé dans le jeu\. \((.+)\)$/,
+     'A file of the mod is used by another program (the game, the mod manager, an antivirus, OneDrive…): close it then click “Install” again. Nothing was changed in the game. ($1)'],
     // avertissement « fichiers du jeu illisibles » (serveur.py, CATALOGUES_EN_ERREUR : « partie : erreur »)
     [/^(techniques|esprits \/ totems \(chara_base\)|tout le jeu \(maillots, tenues, armures, têtes\)|accessoires \(chara_parts\)|objets) : (.+)$/,
      function (_, p, e) { return { techniques: 'techniques', 'esprits / totems (chara_base)': 'Keshin / totems (chara_base)',
@@ -352,13 +354,24 @@
      'Already coloured texture ($1): the material colour MULTIPLIES it (orange × blue = almost black). To change the hue, recolour the texture instead (Textures block) and leave the material white.']
   ];
 
+  // (22/11) ESPAGNOL : dictionnaire web/i18n_es.js (window.I18N_ES, phrases fixes) et modèles window.MOTIFS_ES (textes avec
+  // données). Une phrase pas encore traduite en espagnol s'affiche en ANGLAIS (plus proche pour un hispanophone que le français).
   function trad(s) {
-    if (langue !== 'en' || !s) { return s; }
+    if (langue === 'fr' || !s) { return s; }
+    if (langue === 'es') {                       // null = rien trouvé en espagnol (une traduction identique au français compte)
+      var e = tradL(s, 'es');
+      return e !== null ? e : tradL(s, 'en');
+    }
+    return tradL(s, 'en');
+  }
+  function tradL(s, lg) {
     var brut = s.trim();
     if (!brut) { return s; }
     var t = brut.replace(/\s+/g, ' ');           // le dictionnaire a les espaces réduits
-    var d = window.I18N_EN || {};
-    var r = d[t] !== undefined ? d[t] : SUP[t];
+    var es = lg === 'es';
+    var d = (es ? window.I18N_ES : window.I18N_EN) || {};
+    var SUPL = es ? (window.SUP_ES || {}) : SUP, MOTIFSL = es ? (window.MOTIFS_ES || []) : MOTIFS;
+    var r = d[t] !== undefined ? d[t] : SUPL[t];
     if (r === undefined) {                       // avec des nombres : « {n} »
       var nb = [];
       var modele = t.replace(/\d+(?:[.,]\d+)?/g, function (m) { nb.push(m); return '{n}'; });
@@ -378,21 +391,21 @@
       if (chg) { return s.replace(brut, lignes.join('\n')); }
     }
     if (r === undefined) {                       // textes fabriqués avec des données (noms, nombres, couleurs)
-      for (var m = 0; m < MOTIFS.length && r === undefined; m++) {
-        if (MOTIFS[m][0].test(t)) { r = t.replace(MOTIFS[m][0], MOTIFS[m][1]); }
+      for (var m = 0; m < MOTIFSL.length && r === undefined; m++) {
+        if (MOTIFSL[m][0].test(t)) { r = t.replace(MOTIFSL[m][0], MOTIFSL[m][1]); }
       }
     }
     if (r === undefined) {                       // bannières : police absente de ce PC
       var p0 = t.match(/^Police absente de ce PC : (\S+) \(Impact utilisée à la place\)\.$/);
-      if (p0) { r = 'Font not on this PC: ' + p0[1] + ' (Impact used instead).'; }
+      if (p0) { r = es ? 'Fuente no instalada en este PC: ' + p0[1] + ' (se usa Impact).' : 'Font not on this PC: ' + p0[1] + ' (Impact used instead).'; }
     }
     if (r === undefined) {                       // « cinématique ev62_00010_1 » (titre d'une technique)
       var c0 = t.match(/^cinématique (\S+)$/);
-      if (c0) { r = 'cutscene ' + c0[1]; }
+      if (c0) { r = (es ? 'cinemática ' : 'cutscene ') + c0[1]; }
     }
     if (r === undefined) {                       // « Éclaircir (O) » : texte + touche
       var k0 = t.match(/^([^·]*?)( \([^()]{1,8}\))$/);
-      if (k0 && d[k0[1]] !== undefined) { r = d[k0[1]] + k0[2].replace(/\bMaj\b/g, 'Shift'); }   // (22/11) « Maj+O » -> « Shift+O »
+      if (k0 && d[k0[1]] !== undefined) { r = d[k0[1]] + k0[2].replace(/\bMaj\b/g, es ? 'Mayús' : 'Shift'); }   // (22/11) « Maj+O » -> « Shift+O »
     }
     if (r === undefined && t.indexOf(' · ') > 0) {   // infobulles « Outil (touche) · explication »
       var i0 = t.indexOf(' · ');
@@ -401,6 +414,7 @@
       if (tt !== tete || tr !== reste) { r = tt + ' · ' + tr; }
     }
     if (r === undefined) {                       // dernier recours : les mots du jeu (Esprit guerrier -> Keshin)
+      if (es) { return null; }                   // espagnol : l'anglais prend le relais (trad)
       r = t.replace(/[Ee]sprits? guerriers?|\b[Ee]sprits?\b/g, 'Keshin');
       if (r === t) { return s; }
     }
@@ -442,7 +456,7 @@
     }
   }
 
-  if (langue === 'en') {
+  if (langue !== 'fr') {
     var obs = new MutationObserver(function (liste) {
       for (var i = 0; i < liste.length; i++) {
         var m = liste[i];
@@ -463,24 +477,28 @@
     window.prompt = function (m, v) { return P.call(window, trad(String(m)), v); };
   }
 
-  // bouton FR / EN dans l'en-tête
+  // (22/11) LANGUES : français, anglais, espagnol. Choix dans l'en-tête (menu) et dans ⚙ Paramètres (window.LANGUES_ATELIER /
+  // window.choisirLangue). Chaque langue écrite dans sa propre langue, pour la retrouver sans comprendre la langue actuelle.
+  var LANGUES = [{ code: 'fr', nom: 'Français' }, { code: 'en', nom: 'English' }, { code: 'es', nom: 'Español' }];
+  window.LANGUES_ATELIER = LANGUES;
+  window.choisirLangue = function (l) {
+    if (l === langue || !LANGUES.some(function (x) { return x.code === l; })) { return; }
+    fetch('/api/langue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ langue: l }) })
+      .then(function () { try { localStorage.setItem(CLE, l); } catch (e) { } location.reload(); })
+      .catch(function () { location.reload(); });
+  };
   function bouton() {
     var h = document.querySelector('header');
     if (!h || document.getElementById('bouton-langue')) { return; }
-    var b = document.createElement('button');
+    var b = document.createElement('select');
     b.id = 'bouton-langue';
     b.setAttribute('data-pas-traduire', '');
-    b.title = langue === 'en' ? 'Passer l’Atelier en français' : 'Switch the Atelier to English';
-    b.textContent = langue === 'en' ? 'FR' : 'EN';
-    b.style.cssText = 'margin-left:8px;padding:4px 10px;border-radius:6px;border:1px solid #fff6;background:#0003;color:inherit;' +
-      'font-weight:700;cursor:pointer;flex:none';
-    b.onclick = function () {
-      var l = langue === 'en' ? 'fr' : 'en';
-      b.disabled = true; b.textContent = '…';
-      fetch('/api/langue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ langue: l }) })
-        .then(function () { try { localStorage.setItem(CLE, l); } catch (e) { } location.reload(); })
-        .catch(function () { location.reload(); });
-    };
+    b.title = 'Langue · Language · Idioma';
+    LANGUES.forEach(function (x) { var o = new Option(x.code.toUpperCase() + ' · ' + x.nom, x.code); b.appendChild(o); });
+    b.value = langue;
+    b.style.cssText = 'margin-left:8px;padding:4px 6px;border-radius:6px;border:1px solid #fff6;background:#0003;color:inherit;' +
+      'font-weight:700;cursor:pointer;flex:none;font:inherit';
+    b.onchange = function () { b.disabled = true; window.choisirLangue(b.value); };
     h.appendChild(b);
   }
   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', bouton); } else { bouton(); }

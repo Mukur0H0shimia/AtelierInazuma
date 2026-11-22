@@ -44,6 +44,7 @@ def sauver_cfg():
 
 if _cfg_change:
     sauver_cfg()
+JEU_AU_DEMARRAGE = CFG.get('jeu_dir')            # (22/11) dossier du jeu lu par l'Atelier (lecture directe, mods des onglets)
 if not config_auto._data_ok(CFG.get('data_dir')):
     # pas de fichiers extraits : LECTURE DIRECTE dans les paquets du jeu (moteur/donnees_virtuelles.py)
     if CFG.get('jeu_dir') and os.path.isfile(os.path.join(CFG['jeu_dir'], 'data', 'cpk_list.cfg.bin')):
@@ -1820,6 +1821,8 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, stats_creation(q.get('mod', [''])[0], q.get('code', [''])[0]))
             if u.path == '/api/parametres':                # (22/11) ⚙ Paramètres (palette, musique) : gardés dans config.json
                 return self._envoyer(200, parametres())
+            if u.path == '/api/dossier_jeu':               # (22/11) ⚙ Paramètres : dossier du jeu où « Installer » met les mods
+                return self._envoyer(200, dossier_jeu())
             if u.path in ('/api/musique', '/api/musique.ogg'):   # (22/11) musique de fond : thème de l'écran titre du jeu
                 from moteur import musique as _mu_
                 f_, meta_ = _mu_.ogg(CFG['data_dir'], CACHE, (q.get('piste') or ['titre'])[0])
@@ -2011,6 +2014,8 @@ class Gestion(BaseHTTPRequestHandler):
                     except OSError:
                         pass
                 return self._envoyer(200, {'ok': True, 'polices': polices_perso()})
+            if u.path == '/api/dossier_jeu':               # (22/11) ⚙ Paramètres : changer le dossier du jeu
+                return self._envoyer(200, choisir_dossier_jeu(demande.get('dossier')))
             if u.path == '/api/parametres':                # (22/11) ⚙ Paramètres
                 p_ = parametres()
                 for k_, ok_ in (('theme', lambda v: v in THEMES), ('musique', lambda v: isinstance(v, bool)),
@@ -2226,6 +2231,37 @@ def parametres():
     p = dict(CFG.get('parametres') or {})
     return {'theme': p.get('theme') if p.get('theme') in THEMES else 'or', 'musique': p.get('musique') is True,
             'volume': p['volume'] if isinstance(p.get('volume'), (int, float)) and 0 <= p['volume'] <= 1 else 0.35}
+
+
+MES_MODS = ('MesTechniques', 'MesEsprits', 'MesPersonnages', 'MesTenues', 'MesObjets', 'MesMaillots')
+
+
+def _infos_jeu(d):
+    """un dossier du jeu : VRFW dans son dossier mods ? nos mods déjà installés ? nombre de mods"""
+    m = os.path.join(d or '', 'mods')
+    noms = [x for x in os.listdir(m) if os.path.isdir(os.path.join(m, x))] if os.path.isdir(m) else []
+    return {'dossier': d, 'vrfw': 'VRFW' in noms, 'nb_mods': len(noms), 'mes_mods': [x for x in MES_MODS if x in noms]}
+
+
+def dossier_jeu():
+    """(22/11, retour d'un joueur : créations « Installed » dans l'Atelier mais absentes de son gestionnaire de mods) le dossier
+    du jeu où « Installer » met les mods (jeu_dir) et les autres installations trouvées, pour le voir et le changer dans
+    ⚙ Paramètres. Un même PC peut avoir le jeu de base (steamapps\\common) ET une copie de dépôt (steamapps\\content)."""
+    vus, liste = set(), []
+    for d, _n in [(CFG.get('jeu_dir'), 0)] + config_auto.dossiers_du_jeu(ICI):
+        if d and d.lower() not in vus and config_auto.jeu_valide(d):
+            vus.add(d.lower())
+            liste.append(_infos_jeu(d))
+    return {'actuel': CFG.get('jeu_dir'), 'demarrage': JEU_AU_DEMARRAGE, 'liste': liste}
+
+
+def choisir_dossier_jeu(d):
+    d = os.path.normpath(str(d or '').strip().strip('"')) if d else ''
+    if not config_auto.jeu_valide(d):
+        return {'ok': False, 'erreur': 'Ce dossier ne contient pas le jeu (nie.exe + data\\cpk_list.cfg.bin).'}
+    CFG['jeu_dir'] = d
+    sauver_cfg()
+    return dict(dossier_jeu(), ok=True)
 
 
 def ouvrir_fenetre(url, port=None):

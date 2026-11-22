@@ -106,6 +106,11 @@
       + '<div class="p-ligne"><button id="p-police-importer">➕ Importer une police (.ttf / .otf)</button></div>'
       + '<div id="p-polices"></div>'
       + '<p class="p-note">Proposées dans les bannières, les numéros et noms des maillots et l\'outil Texte du mode dessin.</p>'
+      + '<h3>Dossier du jeu</h3>'
+      + '<p class="p-note">« Installer » met tes créations dans le dossier mods de ce jeu. Choisis celui où se trouve VRFW (celui de ton gestionnaire de mods).</p>'
+      + '<div id="p-jeux"></div>'
+      + '<div class="p-ligne"><input id="p-jeu-autre" placeholder="Autre dossier (celui de nie.exe)…"><button id="p-jeu-utiliser">Utiliser</button></div>'
+      + '<p class="p-note" id="p-jeu-etat"></p>'
       + '<div class="p-bas"><button id="p-ok" class="primaire">OK</button></div></div>';
     document.body.appendChild(f);
     var L = f.querySelector('#p-palettes');
@@ -122,6 +127,7 @@
     };
     f.querySelector('#p-volume').oninput = function () { garder({ volume: +this.value }); };
     f.querySelector('#p-police-importer').onclick = function () { window.importerPolice().then(majFenetre); };
+    f.querySelector('#p-jeu-utiliser').onclick = function () { choisirJeu(f.querySelector('#p-jeu-autre').value); };
     var fermer = function () { f.classList.remove('ouvert'); natif(); };
     f.querySelector('#p-fermer').onclick = fermer; f.querySelector('#p-ok').onclick = fermer;
     f.addEventListener('pointerdown', function (ev) { if (ev.target === f) { fermer(); } });
@@ -147,6 +153,40 @@
       };
       d.appendChild(n); d.appendChild(x); L.appendChild(d);
     });
+    chargerJeux();
+  }
+
+  // ------------------------------------------------------------------ (22/11, retour d'un joueur : créations « Installed » mais
+  // absentes de son gestionnaire de mods) le dossier du jeu où « Installer » met les mods, et les autres installations trouvées
+  function etatJeu(t) { var e = document.getElementById('p-jeu-etat'); if (e) { e.textContent = t; } }
+  function afficherJeux(r) {
+    var L = document.getElementById('p-jeux'); if (!L) { return; }
+    L.innerHTML = '';
+    (r.liste || []).forEach(function (j) {
+      var d = document.createElement('label'); d.className = 'p-ligne p-jeu' + (j.dossier === r.actuel ? ' sel' : '');
+      var c = document.createElement('input'); c.type = 'radio'; c.name = 'p-jeu'; c.checked = j.dossier === r.actuel;
+      c.onchange = function () { choisirJeu(j.dossier); };
+      var t = document.createElement('span'); t.className = 'p-jeu-texte';
+      var ch = document.createElement('b'); ch.textContent = j.dossier;
+      var s = document.createElement('small');
+      s.textContent = (j.vrfw ? 'VRFW ✓' : 'sans VRFW') + ' · ' + j.nb_mods + ' mod(s)'
+        + (j.mes_mods.length ? ' · tes mods : ' + j.mes_mods.join(', ') : '');
+      if (!j.vrfw) { s.className = 'p-jeu-alerte'; }
+      t.appendChild(ch); t.appendChild(s); d.appendChild(c); d.appendChild(t); L.appendChild(d);
+    });
+    if (!(r.liste || []).length) { L.innerHTML = '<p class="p-note">Aucune installation du jeu trouvée.</p>'; }
+    etatJeu(r.actuel && r.demarrage && r.actuel !== r.demarrage
+      ? '« Installer » utilise déjà ce dossier. Relance l\'Atelier pour que ses onglets lisent aussi les mods de ce jeu.' : '');
+  }
+  function chargerJeux() {
+    fetch('/api/dossier_jeu').then(function (r) { return r.json(); }).then(afficherJeux).catch(function () { });
+  }
+  function choisirJeu(d) {
+    if (!d || !String(d).trim()) { return; }
+    fetch('/api/dossier_jeu', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dossier: String(d).trim() }) })
+      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r.ok) { etatJeu(r.erreur); return; } afficherJeux(r); })
+      .catch(function (e) { etatJeu(String(e && e.message || e)); });
   }
 
   // ------------------------------------------------------------------ (22/11, demande d'un joueur) polices importées
@@ -231,7 +271,7 @@
   window.addEventListener('load', function () {
     var h = document.querySelector('header');
     if (h && !document.getElementById('bouton-parametres')) {
-      var b = document.createElement('button'); b.id = 'bouton-parametres'; b.textContent = '⚙'; b.title = 'Paramètres : couleurs, musique';
+      var b = document.createElement('button'); b.id = 'bouton-parametres'; b.textContent = '⚙'; b.title = 'Paramètres : couleurs, musique, polices, dossier du jeu';
       b.onclick = window.ouvrirParametres; h.appendChild(b);
     }
     if (P.musique) { demarrer(); }        // la fenêtre de l'Atelier (WebView2) laisse souvent jouer sans geste

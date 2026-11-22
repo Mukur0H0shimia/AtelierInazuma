@@ -3,6 +3,10 @@
 *English below.*
 
 ## 2.0.2
+- **⚙ Paramètres > Dossier du jeu** : montre le dossier du jeu où « Installer » met tes créations, et toutes les installations trouvées (avec ou sans VRFW, tes mods déjà dedans). On peut en choisir une autre ou en taper le chemin. Utile si ton gestionnaire de mods utilise une autre installation du jeu (créations « installées » mais absentes en jeu).
+- Au premier lancement, l'Atelier choisit d'abord l'installation du jeu qui a VRFW.
+- Si VRFW n'est pas dans le jeu choisi, « Installer » le dit dans une fenêtre, avec le dossier. Avant, l'avertissement restait caché dans les détails.
+- Ouvrir une technique ne plante plus quand le jeu n'a pas de dossier mods.
 - **Anglais** : une vingtaine de textes récents restaient en français (portrait des cartes, stats, suppression, auras choisies par le match, polices, copier-coller de textures…). Ils sont traduits.
 - **« Et maintenant »** : ce bloc n'apparaît plus en double, et il disparaît quand on ouvre un autre élément ou qu'on change d'onglet. Avant, les suites d'un esprit restaient affichées sous un nouveau joueur.
 - **Rapports de création en anglais** : lignes des techniques (objets, auras, bannière, cinématique d'échec, totem…), contrôle des mods, suppressions, menus Techniques du joueur et Technique liée.
@@ -105,6 +109,10 @@
 # Update log — Atelier Inazuma
 
 ## 2.0.2
+- **⚙ Settings > Game folder**: shows the game folder where "Install" puts your creations, and every installation found (with or without VRFW, your mods already in it). You can pick another one or type its path. Useful if your mod manager uses another installation of the game (creations "installed" but missing in game).
+- On first run, the Atelier picks the game installation that has VRFW first.
+- If VRFW is not in the chosen game, "Install" says so in a window, with the folder. Before, the warning stayed hidden in the details.
+- Opening a technique no longer crashes when the game has no mods folder.
 - **English**: about twenty recent texts were still in French (card portrait, stats, delete, auras picked by the match, fonts, texture copy-paste…). They are now translated.
 - **"What next"**: this block no longer shows twice, and it goes away when another item is opened or the tab changes. Before, a spirit's next steps stayed under a new player.
 - **Creation reports in English**: technique lines (objects, auras, banner, failure cutscene, totem…), mod check, deletions, the player's Techniques and Linked technique menus.

@@ -29,6 +29,8 @@ _TOML = {}            # chemin -> (mtime, contenu)
 def _tomls(mods_dir):
     """[(mod, fichier, contenu)] de tous les .toml de content/ (et addons/*/content) ; relus seulement s'ils ont changé"""
     out = []
+    if not os.path.isdir(mods_dir):          # (22/11, journal d'un joueur : jeu sans dossier mods -> ouvrir une technique plantait)
+        return out
     for mod in sorted(os.listdir(mods_dir), key=str.lower):
         r = os.path.join(mods_dir, mod)
         if not os.path.isfile(os.path.join(r, 'mod.toml')):

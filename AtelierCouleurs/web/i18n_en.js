@@ -810,5 +810,13 @@ window.I18N_EN = {
 "Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)": "Copy into the game's mod (backup first; what is already there stays)",
 "CharacterReforged : 6 techniques + 1 esprit (case 9) ; les niveaux peuvent être recalculés": "CharacterReforged: 6 techniques + 1 Keshin (slot 9); levels may be recalculated",
 "Esprit guerrier ou totem": "Keshin or totem",
+"Dossier du jeu": "Game folder",
+"Réparé :": "Repaired:",
+"« Installer » met tes créations dans le dossier mods de ce jeu. Choisis celui où se trouve VRFW (celui de ton gestionnaire de mods).": "“Install” puts your creations in this game's mods folder. Pick the one where VRFW is (the one your mod manager uses).",
+"Autre dossier (celui de nie.exe)…": "Other folder (the one with nie.exe)…",
+"Utiliser": "Use",
+"Aucune installation du jeu trouvée.": "No game installation found.",
+"« Installer » utilise déjà ce dossier. Relance l'Atelier pour que ses onglets lisent aussi les mods de ce jeu.": "“Install” already uses this folder. Restart the Atelier so its tabs also read this game's mods.",
+"Ce dossier ne contient pas le jeu (nie.exe + data\\cpk_list.cfg.bin).": "This folder does not contain the game (nie.exe + data\\cpk_list.cfg.bin).",
 "Certains fichiers du jeu sont illisibles (sans doute modifiés par un autre outil de mod) : ces parties de l'Atelier restent vides.": "Some game files cannot be read (probably changed by another mod tool): these parts of the Atelier stay empty."
 };

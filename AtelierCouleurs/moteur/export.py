@@ -768,8 +768,10 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
     except Exception as ex:
         print('contrôle des mods :', ex)
     if not os.path.isdir(os.path.join(mods, 'VRFW')):   # (21/11) sans le chargeur de mods, rien ne se charge en jeu
-        r['avertissement'] = ('VRFW n’est pas dans le dossier mods du jeu : installe-le (avec Inazuma Fantasy), sinon le mod '
-                              'ne se chargera pas.')
+        # (22/11, journal d'un joueur : son gestionnaire de mods utilisait une AUTRE installation du jeu) le dossier est nommé
+        r['avertissement'] = ('VRFW n’est pas dans le dossier mods de ce jeu (%s) : le mod ne se chargera pas. Si ton gestionnaire '
+                              'de mods utilise une autre installation du jeu, choisis-la dans ⚙ Paramètres > Dossier du jeu, puis '
+                              'installe à nouveau. Sinon, installe VRFW (avec Inazuma Fantasy).' % cfg['jeu_dir'])
     return r
 
 

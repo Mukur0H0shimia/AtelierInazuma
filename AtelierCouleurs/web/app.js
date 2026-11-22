@@ -2080,12 +2080,15 @@ async function installer(mod) {
         + r.perdus.map(n => '- ' + n).join('\n') + '\n\n(une sauvegarde est faite avant ; « Annuler » pour ne rien changer)\nContinuer ?')) return majRapport('Installation annulée : rien n’a changé.');
       r = await api('/api/installer', { mod: mod || 'MesTechniques', forcer: true }); }
     // (21/11) 1re ligne : où la trouver en jeu (textes de l'Atelier : OU_EN_JEU) ; le reste = détails (repliés en mode simple)
-    majRapport(r.ok ? 'C’est dans le jeu ! ' + (OU_EN_JEU[mod || 'MesTechniques'] || '') + ' (Relance le jeu s’il était ouvert.)'
-                      + (r.avertissement ? '\n⚠ ' + r.avertissement : '')
-                      + (r.repares ? '\nRéparé (totem / esprit qui n’apparaissait pas dans la cinématique) : ' + r.repares.join(', ') : '')   // (22/11)
+    majRapport(r.ok ? (r.avertissement ? '⚠ ' + r.avertissement            // (22/11) 1re ligne = celle que montre Mes créations
+                      : 'C’est dans le jeu ! ' + (OU_EN_JEU[mod || 'MesTechniques'] || '') + ' (Relance le jeu s’il était ouvert.)')
+                      + (r.repares ? '\nRéparé :\n- ' + r.repares.join('\n- ') : '')   // (22/11) totems / esprits des cinématiques, cinématiques d'échec
                       + (r.controle ? '\n⚠ À vérifier (le jeu ignorera) :\n- ' + r.controle.join('\n- ') : '')   // (22/11) moteur/verifier_mods.py
                       + '\nInstallé dans ' + r.dossier + '\nSauvegarde : ' + r.sauvegarde + '\nLance le jeu, puis regarde le journal de VRFW (aucune ligne ERROR).'
                     : 'Pas installé : ' + r.erreur);
+    // (22/11, journal d'un joueur : « Installed » mais rien en jeu, son jeu n'avait pas de dossier mods) l'avertissement restait
+    // dans les détails, invisible depuis Mes créations (1re ligne seulement) : fenêtre, avec le réglage du dossier du jeu
+    if (r.ok && r.avertissement) alert('⚠ ' + r.avertissement);
     return r;
   } catch (e) { majRapport('Erreur : ' + e.message); }
 }

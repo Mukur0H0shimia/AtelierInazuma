@@ -91,7 +91,9 @@ def dossiers_du_jeu(outil_dir=None):
 
 
 def trouver_jeu(outil_dir=None):
-    l = sorted(dossiers_du_jeu(outil_dir), key=lambda x: -x[1])
+    # (22/11, retour d'un joueur : créations installées dans une installation que son gestionnaire de mods ne lit pas)
+    # d'abord celle qui a VRFW (le chargeur de mods), puis celle qui a le plus de mods
+    l = sorted(dossiers_du_jeu(outil_dir), key=lambda x: (not os.path.isdir(os.path.join(x[0], 'mods', 'VRFW')), -x[1]))
     return l[0][0] if l else None
 
 

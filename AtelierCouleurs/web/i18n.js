@@ -55,7 +55,7 @@
     "Proposées dans les bannières, les numéros et noms des maillots et l'outil Texte du mode dessin.": 'Offered in banners, kit numbers and names, and the drawing mode Text tool.',
     "Aucune pour l'instant.": 'None yet.', 'Retirer cette police': 'Remove this font',
     '📄 Copier l’image (pour une autre technique)': '📄 Copy the image (for another technique)',
-    '⚙ Paramètres': '⚙ Settings', 'Paramètres : couleurs, musique': 'Settings: colours, music', "Couleurs de l'écran": 'Screen colours',
+    '⚙ Paramètres': '⚙ Settings', 'Paramètres : couleurs, musique': 'Settings: colours, music', 'Paramètres : couleurs, musique, polices, dossier du jeu': 'Settings: colours, music, fonts, game folder', "Couleurs de l'écran": 'Screen colours',
     "L'accueil (Mes créations) garde les couleurs du menu du jeu.": 'The home screen (My creations) keeps the game menu colours.',
     'Musique de fond': 'Background music', "Thème de l'écran titre du jeu": "The game's title screen theme", 'Volume': 'Volume',
     "Elle se coupe toute seule pendant la lecture d'une technique. Lue dans ton jeu, rien n'est copié.": 'It mutes itself while a technique plays. Read from your game, nothing is copied.',
@@ -145,6 +145,14 @@
     [/^technique (\S+) : (event|fail_event) = (\S+) introuvable \(ni scène livrée, ni copie active, ni scène du jeu\)$/,
      'technique $1: $2 = $3 not found (no delivered scene, no active copy, no game scene)'],
     [/^TOML illisible : (.+)$/, 'unreadable TOML: $1'],
+    [/^⚠ VRFW n’est pas dans le dossier mods de ce jeu \((.+)\) : le mod ne se chargera pas\. Si ton gestionnaire de mods utilise une autre installation du jeu, choisis-la dans ⚙ Paramètres > Dossier du jeu, puis installe à nouveau\. Sinon, installe VRFW \(avec Inazuma Fantasy\)\.$/,
+     '⚠ VRFW is not in this game’s mods folder ($1): the mod will not load. If your mod manager uses another installation of the game, pick it in ⚙ Settings > Game folder, then install again. Otherwise, install VRFW (with Inazuma Fantasy).'],
+    [/^VRFW n’est pas dans le dossier mods de ce jeu \((.+)\) : le mod ne se chargera pas\. Si ton gestionnaire de mods utilise une autre installation du jeu, choisis-la dans ⚙ Paramètres > Dossier du jeu, puis installe à nouveau\. Sinon, installe VRFW \(avec Inazuma Fantasy\)\.$/,
+     'VRFW is not in this game’s mods folder ($1): the mod will not load. If your mod manager uses another installation of the game, pick it in ⚙ Settings > Game folder, then install again. Otherwise, install VRFW (with Inazuma Fantasy).'],
+    [/^(VRFW ✓|sans VRFW) ·(\d+) mod\(s\)(?: · tes mods : (.+))?$/, function (_, v, n, m) {
+      return (v === 'sans VRFW' ? 'no VRFW' : v) + ' · ' + n + ' mod(s)' + (m ? ' · your mods: ' + m : ''); }],
+    [/^« (.+) » introuvable dans le jeu et les mods activés \(il venait peut-être d’un mod retiré ou désactivé\)\.$/,
+     '“$1” not found in the game and the enabled mods (it may come from a removed or disabled mod).'],
     // « Supprimer » (serveur.py, supprimer_creation)
     [/^technique supprimée : (\d+) fichiers de l'Atelier et (\d+) du jeu rangés dans (.+)$/, 'technique deleted: $1 files of the Atelier and $2 of the game put aside in $3'],
     [/^(armure|esprit guerrier|tenue|objet) supprimée? \((\d+) fichiers rangés dans (.+)\)$/, function (_, q, n, d) {

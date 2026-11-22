@@ -148,9 +148,11 @@ def trouver_banque(data_dir, nom):
 
 
 def en_ogg(data_dir, nom, cache_dir, perso=None):
-    """son « nom » -> cache/sons/<nom>.ogg (extraits HCA décodés par ffmpeg et mélangés) ; None si introuvable.
-    perso : voix d'un personnage -> sa banque sound_asset/ja/<perso>.acb"""
-    d = os.path.join(cache_dir, 'sons'); os.makedirs(d, exist_ok=True)
+    """son « nom » -> cache/sons_hca/<nom>.ogg (extraits HCA décodés et mélangés) ; None si introuvable.
+    perso : voix d'un personnage -> sa banque sound_asset/ja/<perso>.acb
+    (22/11/2026) décodés par moteur/hca.py : ffmpeg 8.1 lit mal les HCA v3 du jeu (son saturé, cf. hca.py) ; ffmpeg ne
+    fait plus que mélanger et encoder. Nouveau dossier de cache : les sons déjà faits par ffmpeg sont refaits."""
+    d = os.path.join(cache_dir, 'sons_hca'); os.makedirs(d, exist_ok=True)
     out = os.path.join(d, (perso + '_' if perso else '') + nom + '.ogg')
     if os.path.exists(out):
         return out
@@ -171,21 +173,54 @@ def en_ogg(data_dir, nom, cache_dir, perso=None):
     # plusieurs) s'effaçaient leurs fichiers -> erreur 500 ; le .ogg est écrit à part puis mis en place d'un coup
     import threading, uuid
     marque = '%d_%s' % (threading.get_ident(), uuid.uuid4().hex[:6])
-    hcas = []
-    for k, i in enumerate(ids[:8]):
-        f = os.path.join(d, '_%s_%d_%s.hca' % (nom, k, marque))
-        open(f, 'wb').write(b.extrait(i))
-        hcas.append(f)
+    from moteur import hca as _hca
+    import numpy as np
+    extraits = [b.extrait(i) for i in ids[:8]]
     tmp = out[:-4] + '.%s.tmp.ogg' % marque
-    cmd = [_outils_ext.ffmpeg(), '-v', 'error', '-y']
-    for f in hcas:
-        cmd += ['-i', f]
-    if len(hcas) > 1:
-        cmd += ['-filter_complex', 'amix=inputs=%d:normalize=0' % len(hcas)]
+    hcas = []
+    # (22/11) mélange fait ici : les extraits joués ensemble s'additionnent ; au-delà de 1 le son écrête (saturation,
+    # crête jusqu'à 2,3 avant). Ramené à 0,89 seulement s'il dépasse (les autres sons gardent leur niveau) : l'encodage .ogg
+    # ajoute jusqu'à ~9 % sur les attaques (mesuré : 0,98 -> 1,07), le fichier final reste sous 1.
+    try:
+        decodes = [_hca.decoder(h) for h in extraits]
+        freq = decodes[0][1]['freq']
+        if any(e['freq'] != freq for _, e in decodes):
+            raise _hca.NonPris('fréquences différentes')
+        nc = max(x.shape[1] for x, _ in decodes)
+        mix = np.zeros((max(len(x) for x, _ in decodes), nc), np.float32)
+        for x, _ in decodes:
+            mix[:len(x)] += x if x.shape[1] == nc else np.repeat(x[:, :1], nc, axis=1)
+        crete = float(np.abs(mix).max()) if len(mix) else 0.0
+        if crete > 0.89:
+            mix *= 0.89 / crete
+        f = os.path.join(d, '_%s_%s.f32' % (nom, marque))
+        open(f, 'wb').write(mix.astype('<f4').tobytes()); hcas.append(f)
+        cmd = [_outils_ext.ffmpeg(), '-v', 'error', '-y', '-f', 'f32le', '-ar', str(freq), '-ac', str(nc), '-i', f]
+    except Exception as ex:                            # format non pris en charge : décodage de ffmpeg (moins bon)
+        print('son %s : décodeur HCA -> %s' % (nom, ex))
+        cmd = [_outils_ext.ffmpeg(), '-v', 'error', '-y']
+        for k, h in enumerate(extraits):
+            f = os.path.join(d, '_%s_%d_%s.hca' % (nom, k, marque))
+            open(f, 'wb').write(h); hcas.append(f); cmd += ['-i', f]
+        cmd += ['-filter_complex', ('amix=inputs=%d:normalize=0,' % len(hcas) if len(hcas) > 1 else '') + 'alimiter=limit=0.89']
     cmd += ['-c:a', 'libvorbis', '-q:a', '4', tmp]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True)
         ok = r.returncode == 0 and os.path.exists(tmp)
+        # (22/11) crête du fichier ENCODÉ (le .ogg dépasse parfois de plus de 9 %, et pas toujours dans le même sens :
+        # 0,866 a donné 1,054 là où 0,89 donnait 0,997) : mesurée, et refait plus bas tant qu'elle dépasse 0,99 (4 fois max)
+        gain = 1.0
+        for _ in range(4):
+            if not (ok and cmd[4:6] == ['-f', 'f32le']):
+                break
+            lu = subprocess.run([_outils_ext.ffmpeg(), '-v', 'error', '-i', tmp, '-f', 'f32le', '-'], capture_output=True).stdout
+            c2 = float(np.abs(np.frombuffer(lu, np.float32)).max()) if lu else 0.0
+            if c2 <= 0.99:
+                break
+            gain *= 0.96 / c2
+            open(hcas[0], 'wb').write((mix * gain).astype('<f4').tobytes())
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            ok = r.returncode == 0 and os.path.exists(tmp)
     except OSError as ex:                              # ffmpeg introuvable : pas de son, mais pas d'erreur
         print('son :', ex)
         ok = False

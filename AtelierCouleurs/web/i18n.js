@@ -213,6 +213,11 @@
              'Son icône : celle que tu recolores (✎ Mode dessin).': 'Its icon: the one you recolour (✎ Drawing mode).',
              'Son icône : celle de l’original (ce genre d’icône ne se remplace pas encore).': 'Its icon: the original’s (this kind of icon cannot be replaced yet).' }[f] || f); }],
     [/^Calque (\d+)$/, 'Layer $1'],
+    // avertissement « fichiers du jeu illisibles » (serveur.py, CATALOGUES_EN_ERREUR : « partie : erreur »)
+    [/^(techniques|esprits \/ totems \(chara_base\)|tout le jeu \(maillots, tenues, armures, têtes\)|accessoires \(chara_parts\)|objets) : (.+)$/,
+     function (_, p, e) { return { techniques: 'techniques', 'esprits / totems (chara_base)': 'Keshin / totems (chara_base)',
+       'tout le jeu (maillots, tenues, armures, têtes)': 'the whole game (kits, outfits, armours, heads)', 'accessoires (chara_parts)': 'accessories (chara_parts)',
+       objets: 'items' }[p] + ': ' + e; }],
     [/^(\S+) : (\d+) × (\d+) pixels\. Les changements partent dans l'aperçu et le lecteur natif ; le mod les reprend à « Créer le mod »\.$/,
      '$1: $2 × $3 pixels. The changes go to the preview and the native player; the mod takes them when you click “Create”.'],
     [/^la technique liée doit être un tir, un dribble, une défense ou un arrêt \((.+)\)$/, 'the linked technique must be a shot, a dribble, a block or a save ($1)'],

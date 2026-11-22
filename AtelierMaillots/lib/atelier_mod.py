@@ -582,15 +582,18 @@ def construire_mod(projet, cat_par_cle, rgl, pool=None, journal=print):
     noms = ', '.join(m['nom'] for m in projet['maillots'])
     ecr('mod.toml', [
         'id = "%s"' % MOD_ID, '# GÉNÉRÉ par l\'Atelier Maillots (AtelierMaillots) : ne pas modifier à la main.',
-        'name = "Mes maillots"', 'prefix = "%s"' % MOD_ID, 'folder = "%s"' % MOD_ID, 'version = "1.0.%d"' % int(time.time() // 60 % 100000),
+        'name = "My kits"', 'prefix = "%s"' % MOD_ID, 'folder = "%s"' % MOD_ID, 'version = "1.0.%d"' % int(time.time() // 60 % 100000),
         'author = %s' % json.dumps(rgl.get('auteur', 'muku'), ensure_ascii=False),
-        'description = %s' % json.dumps('Maillots faits avec l\'Atelier Maillots, vendus à la boutique générale d\'Inazuma Fantasy : ' + noms, ensure_ascii=False),
+        # (22/11) en anglais (repli des clés mod_name / mod_description de text/keys.toml, comme les autres mods)
+        'description = %s' % json.dumps('Kits made with the Atelier Maillots, sold at the Inazuma Fantasy general store: ' + noms, ensure_ascii=False),
         'priority = 0', 'tags = ["Teams"]', 'updated = "%s"' % time.strftime('%Y-%m-%d'),
         'requires = ["VRFW>=0.3.0"]', 'optional = ["InazumaFantasy"]', 'conflicts = []'])
     ecr('text/keys.toml', ['schema = "VRFW.text_key/1"', 'default_lang = "en"', '', '[en.new]', 'mod_name = "My kits"',
                            'mod_description = %s' % json.dumps('Kits made with the kit workshop: ' + noms, ensure_ascii=False), '',
                            '[fr.new]', 'mod_name = "Mes maillots"',
-                           'mod_description = %s' % json.dumps('Maillots faits avec l\'Atelier Maillots : ' + noms, ensure_ascii=False)])
+                           'mod_description = %s' % json.dumps('Maillots faits avec l\'Atelier Maillots : ' + noms, ensure_ascii=False), '',
+                           '[es.new]', 'mod_name = "Mis equipaciones"',
+                           'mod_description = %s' % json.dumps('Equipaciones hechas con el Atelier Maillots: ' + noms, ensure_ascii=False)])
     # contrôle des TOML
     import tomllib
     for f in glob.glob(os.path.join(tmp, '**', '*.toml'), recursive=True):

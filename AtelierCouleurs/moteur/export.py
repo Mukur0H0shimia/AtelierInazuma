@@ -715,6 +715,7 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
     repares = reparer_assignes(cfg, src) if mod_id == 'MesTechniques' else []      # (22/11) copies à totem faites avant
     if mod_id == 'MesTechniques':                       # (22/11) copies sans leur cinématique d'échec (fail_event)
         repares += reparer_echecs(cfg, src)
+    textes_mod(src, mod_id)                             # (22/11) nom et description du mod : anglais + traductions
     for p in glob.glob(os.path.join(src, '**', '*.toml'), recursive=True):
         tomllib.load(open(p, 'rb'))
     mods = os.path.join(cfg['jeu_dir'], 'mods')
@@ -779,6 +780,59 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
 
 
 MES_MODS = ('MesTechniques', 'MesEsprits', 'MesPersonnages', 'MesTenues', 'MesObjets', 'MesMaillots')
+
+# (22/11, « ce que tous les utilisateurs voient doit être traduit ») nom et description de nos mods dans le gestionnaire de mods
+# et l'écran Mods de VRFW. Comme les autres mods (LU : InazumaFantasy, CharacterReforged, BetterQoL) : mod.toml = l'anglais
+# (« English fallback of the text keys mod_name / mod_description »), text/keys.toml = une section [<langue>.new] par langue.
+TEXTES_MODS = {
+    'MesTechniques': {
+        'en': ('My techniques', 'Recoloured techniques made with the Atelier Inazuma (copies: the original techniques do not change).'),
+        'fr': ('Mes techniques', "Techniques recolorées créées avec l'Atelier Inazuma (copies : les techniques d'origine ne changent pas)."),
+        'es': ('Mis supertécnicas', 'Supertécnicas recoloreadas creadas con el Atelier Inazuma (copias: las supertécnicas originales no cambian).')},
+    'MesEsprits': {
+        'en': ('My Keshin and totems', 'Recoloured copies of Keshin and totems, made with the Atelier Inazuma (the originals do not change). On sale at the Inazuma Fantasy training shop.'),
+        'fr': ('Mes esprits et totems', "Copies recolorées d'esprits guerriers et de totems, créées avec l'Atelier Inazuma (les originaux ne changent pas). En vente dans la boutique d'entraînement d'Inazuma Fantasy."),
+        'es': ('Mis Keshin y tótems', 'Copias recoloreadas de Keshin y tótems, creadas con el Atelier Inazuma (los originales no cambian). A la venta en la tienda de entrenamiento de Inazuma Fantasy.')},
+    'MesPersonnages': {
+        'en': ('My characters', 'Copies of characters with their head recoloured, made with the Atelier Inazuma (the originals do not change). In the ChronicleDeluxe Kizuna draw.'),
+        'fr': ('Mes personnages', "Copies de personnages avec leur tête recolorée, créées avec l'Atelier Inazuma (les originaux ne changent pas). Au tirage Kizuna de ChronicleDeluxe."),
+        'es': ('Mis personajes', 'Copias de personajes con la cabeza recoloreada, creadas con el Atelier Inazuma (los originales no cambian). En el sorteo Kizuna de ChronicleDeluxe.')},
+    'MesTenues': {
+        'en': ('My outfits', "Game outfits recoloured with the Atelier Inazuma, to equip (copies: the game's outfits do not change)."),
+        'fr': ('Mes tenues', "Tenues du jeu recolorées avec l'Atelier Inazuma, à équiper (copies : les tenues du jeu ne changent pas)."),
+        'es': ('Mis atuendos', 'Atuendos del juego recoloreados con el Atelier Inazuma, para equipar (copias: los atuendos del juego no cambian).')},
+    'MesObjets': {
+        'en': ('My items', 'Copies of game items (icon, name, description), made with the Atelier Inazuma. On sale at the Inazuma Fantasy general store.'),
+        'fr': ('Mes objets', "Copies d'objets du jeu (icône, nom, description), créées avec l'Atelier Inazuma. En vente à la boutique générale d'Inazuma Fantasy."),
+        'es': ('Mis objetos', 'Copias de objetos del juego (icono, nombre, descripción), creadas con el Atelier Inazuma. A la venta en la tienda general de Inazuma Fantasy.')},
+}
+
+
+def textes_mod(dossier, mod_id):
+    """mod.toml : nom et description en anglais ; text/keys.toml : mod_name / mod_description en anglais, français, espagnol.
+    MesMaillots : son écrivain (moteur/maillots/atelier_mod.py) le fait lui-même (sa description liste les maillots).
+    Renvoie True si quelque chose a changé."""
+    t = TEXTES_MODS.get(mod_id)
+    f = os.path.join(dossier, 'mod.toml')
+    if not t or not os.path.isfile(f):
+        return False
+    avant = open(f, encoding='utf-8').read()
+    m = re.sub(r'(?m)^name = .*$', lambda _: 'name = ' + json.dumps(t['en'][0], ensure_ascii=False), avant, count=1)
+    m = re.sub(r'(?m)^description = .*$', lambda _: 'description = ' + json.dumps(t['en'][1], ensure_ascii=False), m, count=1)
+    cles = ['schema = "VRFW.text_key/1"', 'default_lang = "en"', '# Écrit par l\'Atelier Inazuma (nom et description du mod).', '']
+    for lg in ('en', 'fr', 'es'):
+        cles += ['[%s.new]' % lg, 'mod_name = ' + json.dumps(t[lg][0], ensure_ascii=False),
+                 'mod_description = ' + json.dumps(t[lg][1], ensure_ascii=False), '']
+    k = os.path.join(dossier, 'text', 'keys.toml')
+    k_avant = open(k, encoding='utf-8').read() if os.path.isfile(k) else None
+    k_neuf = '\n'.join(cles)
+    if m == avant and k_avant == k_neuf:
+        return False
+    if m != avant:
+        _ecrire(f, m)
+    if k_avant != k_neuf:
+        _ecrire(k, k_neuf)
+    return True
 
 
 def reparer_enabled(en, sauv=None):

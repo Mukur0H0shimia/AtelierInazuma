@@ -5,6 +5,8 @@
 ## 2.0.5
 - **Tout l'Atelier en anglais** : environ 150 textes traduits en plus. Ils couvrent les rapports détaillés (esprits, totems, joueurs, tenues, objets, armures, maillots, cinématique d'échec), les messages d'erreur, l'éditeur de dessin complet, les calques, le texte de l'onglet Objets et la musique.
 - Raccourcis : « Maj » s'affiche « Shift » en anglais.
+- **Noms de tes mods dans le gestionnaire de mods** (Mes techniques, Mes esprits et totems, Mes personnages, Mes tenues, Mes objets, Mes maillots) : en anglais par défaut, avec leur traduction française et espagnole, comme les autres mods. Ils sont mis à jour au prochain « Installer ».
+- L'avertissement « fichiers du jeu illisibles » est traduit lui aussi.
 
 ## 2.0.4
 - **Aucun mod ne se charge, « requires `VRFW`, which is not enabled » dans le journal de VRFW** : si VRFW est installé mais absent de la liste des mods activés (ton gestionnaire a pu rallumer tes mods sans lui après le bug de la 2.0.2), l'Atelier le remet au démarrage.
@@ -123,6 +125,8 @@
 ## 2.0.5
 - **The whole Atelier in English**: about 150 more texts translated. They cover the detailed reports (Keshin, totems, players, outfits, items, armours, kits, failure cutscene), error messages, the full drawing editor, layers, the Items tab text and the music.
 - Shortcuts: "Maj" now shows as "Shift" in English.
+- **Your mods' names in the mod manager** (My techniques, My Keshin and totems, My characters, My outfits, My items, My kits): English by default, with their French and Spanish translations, like the other mods. They are updated at the next "Install".
+- The "unreadable game files" warning is translated too.
 
 ## 2.0.4
 - **No mod loads, "requires `VRFW`, which is not enabled" in the VRFW log**: if VRFW is installed but missing from the enabled-mods list (your mod manager may have switched your mods back on without it after the 2.0.2 bug), the Atelier puts it back on start.

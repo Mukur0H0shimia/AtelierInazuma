@@ -32,11 +32,41 @@ def _type(rel):
     return next((t for p, t in TYPES if rel == p or rel.startswith(p + '/')), 'Modèle')
 
 
-def _actifs(mods_dir):
+def actifs_ordonnes(mods_dir):
+    """(22/11, 2.0.4 : joueur sans mods\\enabled.toml) les mods activés, dans l'ordre d'enabled.toml (le dernier gagne). SANS ce
+    fichier, VRFW charge tous les mods (LU dans winmm.dll : « : every mod enabled » ; sauf « default_enabled = false ») :
+    avant, l'Atelier les croyait TOUS éteints (stats, techniques et contenu des mods ignorés). Ordre alors DÉDUIT de
+    load_order.toml (« top = highest priority: loads last ») sinon alphabétique."""
+    en = os.path.join(mods_dir, 'enabled.toml')
+    if os.path.isfile(en):
+        try:
+            return list(tomllib.load(open(en, 'rb')).get('enabled') or [])
+        except Exception:
+            return []
+    if not os.path.isdir(mods_dir):
+        return []
+    tous = []
+    for x in sorted(os.listdir(mods_dir), key=str.lower):
+        f = os.path.join(mods_dir, x, 'mod.toml')
+        if not os.path.isfile(f):
+            continue
+        try:
+            if tomllib.load(open(f, 'rb')).get('default_enabled') is False:
+                continue
+        except Exception:
+            pass
+        tous.append(x)
     try:
-        return set(tomllib.load(open(os.path.join(mods_dir, 'enabled.toml'), 'rb')).get('enabled') or [])
+        ordre = tomllib.load(open(os.path.join(mods_dir, 'load_order.toml'), 'rb')).get('order') or []
     except Exception:
-        return set()
+        ordre = []
+    rang = {m: i for i, m in enumerate(reversed(ordre))}           # le haut de la liste charge en dernier
+    rang['VRFW'] = -2                                               # « VRFW first: the base, always loads before every other mod »
+    return sorted(tous, key=lambda m: (rang.get(m, -1), m.lower()))
+
+
+def _actifs(mods_dir):
+    return set(actifs_ordonnes(mods_dir))
 
 
 def _chemins_jeu(racine):

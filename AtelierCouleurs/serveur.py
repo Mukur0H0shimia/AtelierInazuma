@@ -1753,11 +1753,8 @@ def icone_copie(d):
 
 
 def coups_actifs():
-    import tomllib
-    try:
-        return tomllib.load(open(os.path.join(CFG['jeu_dir'], 'mods', 'enabled.toml'), 'rb')).get('enabled') or []
-    except (OSError, ValueError):
-        return []
+    from moteur.mods_jeu import actifs_ordonnes   # (22/11, 2.0.4) sans enabled.toml : tous les mods sont actifs
+    return actifs_ordonnes(os.path.join(CFG.get('jeu_dir') or '', 'mods'))
 
 
 def infos_technique_liee(code):

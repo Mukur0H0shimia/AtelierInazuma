@@ -128,10 +128,8 @@ def coups_des_mods(cfg, code_perso, id_carte):
     ou [[edit.cards]] id = carte, moves) : [{move, level}] du dernier mod qui en donne, et son nom"""
     import tomllib
     mods = os.path.join(cfg['jeu_dir'], 'mods')
-    try:
-        actifs = tomllib.load(open(os.path.join(mods, 'enabled.toml'), 'rb')).get('enabled') or []
-    except (OSError, ValueError):
-        actifs = []
+    from .mods_jeu import actifs_ordonnes         # (22/11, 2.0.4) sans enabled.toml : tous les mods sont actifs
+    actifs = actifs_ordonnes(mods)
     trouve = None
     for m in actifs:
         if m not in _MODS:
@@ -295,10 +293,8 @@ def stats_mods(cfg):
     enabled.toml (le dernier gagne). DÉDUIT : les options des mods (if_mod = « power_changes ») sont prises comme activées."""
     import tomllib
     mods = os.path.join(cfg['jeu_dir'], 'mods')
-    try:
-        actifs = tomllib.load(open(os.path.join(mods, 'enabled.toml'), 'rb')).get('enabled') or []
-    except (OSError, ValueError):
-        actifs = []
+    from .mods_jeu import actifs_ordonnes         # (22/11, 2.0.4) sans enabled.toml : tous les mods sont actifs
+    actifs = actifs_ordonnes(mods)
     out = {}
     for m in actifs:
         for f in sorted(glob.glob(os.path.join(mods, m, 'content', 'techniques', '**', '*.toml'), recursive=True)):

@@ -107,12 +107,9 @@ POSTES = {1: 'gk', 2: 'fw', 3: 'mf', 4: 'df'}
 
 
 def _mods_actifs(cfg):
-    import tomllib
-    mods = os.path.join(cfg['jeu_dir'], 'mods')
-    try:
-        return mods, tomllib.load(open(os.path.join(mods, 'enabled.toml'), 'rb')).get('enabled') or []
-    except (OSError, ValueError):
-        return mods, []
+    mods =os.path.join(cfg['jeu_dir'], 'mods')
+    from .mods_jeu import actifs_ordonnes         # (22/11, 2.0.4) sans enabled.toml : tous les mods sont actifs
+    return mods, actifs_ordonnes(mods)
 
 
 def jeu_joueur(cfg, carte):

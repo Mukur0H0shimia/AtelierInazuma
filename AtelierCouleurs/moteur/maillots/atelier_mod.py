@@ -619,8 +619,12 @@ def construire_mod(projet, cat_par_cle, rgl, pool=None, journal=print, cible=Non
         return
     # activation dans enabled.toml
     en = os.path.join(mods, 'enabled.toml')
-    s = open(en, encoding='utf-8').read() if os.path.isfile(en) else ''      # (21/11) jeu sans enabled.toml : créé
-    if ('"%s"' % MOD_ID) not in s:
+    # (22/11, 2.0.4) sans enabled.toml, VRFW charge TOUS les mods : le créer avec « MesMaillots » seul éteignait VRFW et tous
+    # les autres (joueur : « tous mes mods ne seront pas chargés ») -> jamais créé, seulement complété
+    s = open(en, encoding='utf-8').read() if os.path.isfile(en) else None
+    if s is None:
+        journal('pas de mods/enabled.toml : VRFW charge déjà tous les mods, rien à activer')
+    elif ('"%s"' % MOD_ID) not in s:
         sauv = os.path.join(ICI, 'enabled_avant_atelier.toml')
         if not os.path.exists(sauv) and os.path.isfile(en):
             shutil.copy(en, sauv)

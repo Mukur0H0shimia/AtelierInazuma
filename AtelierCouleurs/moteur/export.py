@@ -117,6 +117,19 @@ def assurer_esprit(cfg, key):
     return []
 
 
+def nom_copie_aura(nom, aura, k):
+    """(22/11, essai des 858 techniques avec couleurs changées : 45 sur 138 retombaient dans la copie automatique de VRFW, celle
+    qui fait perdre son visage à l'adversaire) la scène livrée en fichiers remplace le nom de l'aura EN PLACE (scene_en_fichiers :
+    « même longueur ») : « mestechniques_<nom>_0 » n'avait jamais la longueur de « ball_aura_sptskill_lion ». Nom de MÊME
+    LONGUEUR : « mt » + crc32 (nom, aura, n°) en hexa + « _ » + la fin du nom d'origine (unique, lisible). Aura de moins de
+    12 lettres (aucune dans le jeu) : ancien nom."""
+    n = len(aura)
+    if n < 12:
+        return '%s_%s_%d' % (MOD_ID.lower(), nom, k)
+    tete = 'mt%08x_' % zlib.crc32(('%s|%s|%d' % (nom, aura, k)).encode())
+    return tete + aura[len(tete):]
+
+
 def reparer_assignes(cfg, sortie):
     """(22/11, Frappe du loup d'un ami : pas de loup en jeu) avant le 22/11, seuls les esprits (k…) d'une cinématique étaient
     vus : une copie d'une technique à TOTEM (loup a000020 dans ev60_02700) ne livrait pas ses animations sous l'id neuf, et
@@ -383,7 +396,7 @@ def exporter(cfg, demande, infos_technique):
         if re.search(r'<[A-Z_0-9]+>', aura):            # (22/11, LU dans nie.exe : voir app.js) aura choisie par le match
             rapport.append('aura %s : choisie par le match (balise), pas recolorable -> ignorée' % aura)
             continue
-        copie = '%s_%s_%d' % (MOD_ID.lower(), nom, k)
+        copie = nom_copie_aura(nom, aura, k)
         e += ['[[recolor]]', 'aura = %s' % _q(aura), 'copy = %s' % _q(copie),
               'color = [[0.0, %.3f, %.3f, %.3f, 0.0]]' % tuple(float(c) for c in rvb), '']
         for acteur in info['acteurs']:
@@ -706,7 +719,11 @@ def scene_en_fichiers(cfg, nom):
         assert len(anc[1]) == len(c['set'][1]), (anc[1], c['set'][1])
         # la table des textes d'une scène est partagée : le texte à changer ne doit servir qu'aux commandes de cet acteur
         autres = [a for _, cmd, a in _commandes(fichier) if anc[1] in a and (not a or a[0] != c['args'][0])]
-        assert not autres, 'texte %s partagé par une autre commande' % anc[1]
+        # (22/11, essai des 858 techniques : 7 tombaient ici) une AURA (CMD_C3FB5CC5) est recolorée pour tous ses acteurs, et
+        # les autres commandes qui la nomment (la retirer, la poser sur un autre acteur) doivent viser la copie aussi :
+        # remplacer le texte partout est alors exactement ce qu'il faut
+        if c['command'] != 'CMD_C3FB5CC5':
+            assert not autres, 'texte %s partagé par une autre commande' % anc[1]
         remplacer[liste][anc[1]] = c['set'][1]
         rapport.append('%s : %s -> %s' % (liste, anc[1], c['set'][1]))
     # (22/11, Frappe du loup) <ASSIGN> = le totem / l'esprit DU JOUEUR qui lance (nie.exe : remplacement des balises ; table

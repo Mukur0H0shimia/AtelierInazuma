@@ -145,6 +145,100 @@
     [/^technique (\S+) : (event|fail_event) = (\S+) introuvable \(ni scène livrée, ni copie active, ni scène du jeu\)$/,
      'technique $1: $2 = $3 not found (no delivered scene, no active copy, no game scene)'],
     [/^TOML illisible : (.+)$/, 'unreadable TOML: $1'],
+    // (22/11, avant l'espagnol : tout en anglais) rapports et erreurs des esprits, joueurs, tenues, objets, armures, maillots
+    [/^copie (\S+) → code neuf (\S+) \(l'original ne change pas\)$/, 'copy $1 → new code $2 (the original does not change)'],
+    [/^texture (\S+) \((\d+)x(\d+)\)$/, 'texture $1 ($2x$3)'],
+    [/^texture textures recolorées gardées \(noms d'origine remis\)$/, 'texture: recoloured textures kept (original names restored)'],
+    [/^scènes copiées : (.+)$/, function (_, x) { return 'cutscenes copied: ' + (x === 'aucune' ? 'none' : x); }],
+    [/^icône : (dessin d'origine recoloré comme la copie|photo du modèle recoloré|copiée|aucune)$/, function (_, x) {
+      return 'icon: ' + { "dessin d'origine recoloré comme la copie": 'original drawing recoloured like the copy', 'photo du modèle recoloré': 'photo of the recoloured model', 'copiée': 'copied', 'aucune': 'none' }[x]; }],
+    [/^boutique d'entraînement : (\d+) points$/, 'training shop: $1 points'],
+    [/^(.+) : technique liée « (.+) » \((\S+)\)$/, '$1: linked technique “$2” ($3)'],
+    [/^(.+) : technique liée d'origine \(celle de (.+)\)$/, '$1: original linked technique (the one of $2)'],
+    [/^cinématique : (.+) y apparaît \(animations de son esprit d'origine\)$/, 'cutscene: $1 appears in it (animations of its original Keshin)'],
+    [/^cinématique : (.+) y apparaît avec les animations de (.+) \(mêmes os\)$/, 'cutscene: $1 appears in it with the animations of $2 (same bones)'],
+    [/^cinématique : faite pour l'esprit (.+), dont les os ne sont pas tous dans (.+) : il y sera caché$/, 'cutscene: made for the Keshin $1, whose bones are not all in $2: it will be hidden there'],
+    [/^cinématique : aucun esprit dedans \(rien à faire\)$/, 'cutscene: no Keshin in it (nothing to do)'],
+    [/^MesTechniques : animations de (.+) livrées sous (\S+) \(à réinstaller aussi\)$/, 'MesTechniques: animations of $1 delivered under $2 (install it again too)'],
+    [/^(.+) : pas de texture, copie laissée$/, '$1: no texture, copy left as it is'],
+    [/^(.+) \((\S+)\) : modèle et (\d+) scène\(s\) refaits, textures gardées$/, '$1 ($2): model and $3 cutscene(s) redone, textures kept'],
+    [/^sauvegarde : (.+)$/, 'backup: $1'],
+    [/^armure (\S+) recolorée → forme en armure de « (.+) » \((\S+)\), modèle (\S+), technique (\S+) \(copiée de (\S+)\)$/,
+     'armour $1 recoloured → armoured form of “$2” ($3), model $4, technique $5 (copied from $6)'],
+    [/^id déjà utilisé \((.+)\) : réessaie$/, 'id already used ($1): try again'],
+    [/^(\S+) n’est pas dans (\S+)$/, '$1 is not in $2'],
+    [/^(\S+) : format pas encore pris en charge$/, '$1: format not supported yet'],
+    [/^Le corps « (.+) » n’a pas de version de cette tenue, ni de corps au même squelette à emprunter\.$/, 'The build “$1” has no version of this outfit, and no build with the same skeleton to borrow from.'],
+    [/^Le nom « (.+) » est déjà pris par une autre tenue : choisis-en un autre\.$/, 'The name “$1” is already used by another outfit: pick another one.'],
+    [/^Le nom « (.+) » est déjà pris par une autre copie : choisis-en un autre\.$/, 'The name “$1” is already used by another copy: pick another one.'],
+    [/^tenue « (.+) » : copie de (.+) \(vêtement (\S+)\), à équiper par les corps (.+), (\d+) jetons$/, 'outfit “$1”: copy of $2 (clothes $3), for the builds $4, $5 tokens'],
+    [/^portrait : (dessin d’origine recoloré comme la tête|photo de la tête recolorée)$/, function (_, x) {
+      return 'portrait: ' + (x === 'photo de la tête recolorée' ? 'photo of the recoloured head' : 'original drawing recoloured like the head'); }],
+    [/^portrait de (\S+) refait : (dessin d'origine recoloré|photo du modèle recoloré)$/, function (_, c, x) {
+      return 'portrait of ' + c + ' redone: ' + (x === "dessin d'origine recoloré" ? 'original drawing recoloured' : 'photo of the recoloured model'); }],
+    [/^(.+) : (\d+) techniques choisies$/, '$1: $2 techniques chosen'],
+    [/^(.+) : techniques de la carte d'origine \((.*)\)$/, '$1: techniques of the original card ($2)'],
+    [/^niv\. (\d+) : (.+)$/, 'lv. $1: $2'],
+    [/^(\S+) n’a pas de carte de joueur à copier\.$/, '$1 has no player card to copy.'],
+    [/^cette texture n’est pas dans une colonne connue du vêtement (\S+)$/, 'this texture is not in a known column of the clothes $1'],
+    [/^(.+) : copie de (.+) \((\S+)\) qui porte la tenue recolorée \((vêtement|chaussures|gants) (\S+), copie de (\S+)\), code (\S+)$/, function (_, n, p, c, g, m, b, k) {
+      return n + ': copy of ' + p + ' (' + c + ') wearing the recoloured outfit (' + { 'vêtement': 'clothes', chaussures: 'shoes', gants: 'gloves' }[g] + ' ' + m + ', copy of ' + b + '), code ' + k; }],
+    [/^ATTENTION : (\d+) ligne\(s\) où la texture est en colonne 7 \(nom de clé pas encore lu\) : gardées comme dans le jeu$/, 'WARNING: $1 row(s) where the texture is in column 7 (key name not read yet): kept as in the game'],
+    [/^la texture (\S+) n’est pas celle de l’accessoire$/, 'the texture $1 is not the accessory’s'],
+    [/^(.+) : copie de (.+) \((\S+)\) qui porte l’objet (\S+) recoloré \(accessoire (\S+)\), code (\S+)$/, '$1: copy of $2 ($3) wearing the recoloured item $4 (accessory $5), code $6'],
+    [/^technique 0x([0-9A-F]{8}) inconnue \(ni du jeu, ni de mes créations\)$/, 'unknown technique 0x$1 (neither from the game nor from my creations)'],
+    [/^(\d+) techniques : 6 au plus \(CharacterReforged : positions 1 à 6, cases 7 et 8 vides\)$/, '$1 techniques: 6 at most (CharacterReforged: positions 1 to 6, slots 7 and 8 empty)'],
+    [/^icône recolorée \(planche (\S+)\)$/, 'icon recoloured (sheet $1)'],
+    [/^icône recolorée \(fichier neuf (\S+), comme les emblèmes de ChronicleDeluxe et MesMaillots\)$/, 'icon recoloured (new file $1, like the emblems of ChronicleDeluxe and MesMaillots)'],
+    [/^« (.+) » : copie de « (.+) » \((\S+), (catégorie .+|catégorie prise par VRFW sur l’original)\), (\d+) jetons à la boutique générale d’Inazuma Fantasy$/, function (_, n, o, c, k, p) {
+      return '“' + n + '”: copy of “' + o + '” (' + c + ', ' + (k === 'catégorie prise par VRFW sur l’original' ? 'category taken by VRFW from the original' : 'category ' + k.slice(10)) + '), '
+        + p + ' tokens at the Inazuma Fantasy general store'; }],
+    [/^copie du modèle (\S+) : (.+)$/, 'copy of the model $1: $2'],
+    [/^bannière de (\d+)x(\d+) au lieu de 1728x352$/, 'banner of $1x$2 instead of 1728x352'],
+    [/^Technique « (.+) » introuvable dans MesTechniques\.$/, 'Technique “$1” not found in MesTechniques.'],
+    [/^bannière de (.+) \((\S+)\) remplacée$/, 'banner of $1 ($2) replaced'],
+    [/^(\S+) : modèle refait sous (\S+) \(au lieu de (\S+)\)$/, '$1: model redone under $2 (instead of $3)'],
+    [/^déjà livrée en fichiers \(pas de content\/anims\/(.+)\)$/, 'already delivered as files (no content/anims/$1)'],
+    [/^texte (.+) partagé par une autre commande$/, 'text $1 shared by another command'],
+    [/^modèle de mod introuvable : (.+)$/, 'mod model not found: $1'],
+    [/^modèle introuvable : (.+)$/, 'model not found: $1'],
+    [/^le jeu n'a pas de portrait pour (.+)$/, 'the game has no portrait for $1'],
+    [/^décodage impossible : (.+)$/, 'cannot decode: $1'],
+    [/^Musique indisponible : (.+)$/, function (_, e) { return 'Music unavailable: ' + trad(e); }],
+    [/^(.+) · (.+) \(désactivé\)$/, function (_, t, m) { return trad(t) + ' · ' + m + ' (disabled)'; }],
+    [/^il manque le haut domicile pour : (.+)$/, 'the home top is missing for: $1'],
+    [/^Un NOUVEL objet : ton nom, ta description, ton prix ; les mêmes effets que « (.+) »\. L’original ne change pas\. (.+)$/, function (_, n, f) {
+      return 'A NEW item: your name, your description, your price; the same effects as “' + n + '”. The original does not change. '
+        + ({ 'Pas d’image dans le jeu pour ce genre d’objet : la copie s’affiche en texte, comme l’original.': 'No picture in the game for this kind of item: the copy is shown as text, like the original.',
+             'Son icône : celle que tu recolores (✎ Mode dessin).': 'Its icon: the one you recolour (✎ Drawing mode).',
+             'Son icône : celle de l’original (ce genre d’icône ne se remplace pas encore).': 'Its icon: the original’s (this kind of icon cannot be replaced yet).' }[f] || f); }],
+    [/^Calque (\d+)$/, 'Layer $1'],
+    [/^(\S+) : (\d+) × (\d+) pixels\. Les changements partent dans l'aperçu et le lecteur natif ; le mod les reprend à « Créer le mod »\.$/,
+     '$1: $2 × $3 pixels. The changes go to the preview and the native player; the mod takes them when you click “Create”.'],
+    [/^la technique liée doit être un tir, un dribble, une défense ou un arrêt \((.+)\)$/, 'the linked technique must be a shot, a dribble, a block or a save ($1)'],
+    [/^numéro : (.+) \((\d+)x(\d+)\)…$/, 'number: $1 ($2x$3)…'],
+    [/^relief : recherche du maillot le plus uni de cette coupe \((\d+) maillots, une seule fois\)…$/, 'relief: looking for the plainest kit of this cut ($1 kits, only once)…'],
+    // Atelier Maillots (journal du mod « Mes maillots », moteur/maillots/atelier_mod.py)
+    [/^(\d+) maillots du jeu utilisables comme base$/, '$1 game kits usable as a base'],
+    [/^images exportées dans (.+)$/, 'pictures exported to $1'],
+    [/^(.+) : relief du tissu \((.+)\) : (.+)$/, '$1: fabric relief ($2): $3'],
+    [/^pas de « (.+) » dans (.+)$/, 'no “$1” in $2'],
+    [/^(.+) : (.+) agrandi de (\d+)x(\d+) à (\d+)x(\d+)$/, '$1: $2 enlarged from $3x$4 to $5x$6'],
+    [/^(.+) : (.+) redimensionné de (\d+)x(\d+) à (\d+)x(\d+)$/, '$1: $2 resized from $3x$4 to $5x$6'],
+    [/^(.+) : encodage du (.+) (\d+) %$/, '$1: encoding the $2 $3 %'],
+    [/^(.+) : (.+) encodé en ([\d.,]+) s$/, '$1: $2 encoded in $3 s'],
+    [/^(.+) : emblème (.+)$/, '$1: emblem $2'],
+    [/^(.+) : il manque l'image du haut \(domicile\)$/, '$1: the top picture (home) is missing'],
+    [/^(.+) : bords non traités \((.+)\)$/, '$1: edges not processed ($2)'],
+    [/^(.+) : bustes des portraits \(domicile (.+), extérieur (.+)\)…$/, '$1: portrait busts (home $2, away $3)…'],
+    [/^(.+) : motif du maillot sur les portraits$/, '$1: kit pattern on the portraits'],
+    [/^(.+) : pas d'icône \(ni la tienne, ni celle du maillot de base\)$/, '$1: no icon (neither yours nor the base kit’s)'],
+    [/^mod écrit \(pas installé\) : (\d+) maillot\(s\) dans (.+)$/, 'mod written (not installed): $1 kit(s) in $2'],
+    [/^mod installé : (\d+) maillot\(s\) dans (.+)$/, 'mod installed: $1 kit(s) in $2'],
+    [/^modèle 3D introuvable pour (.+)$/, '3D model not found for $1'],
+    [/^aperçu 3D : (.+)$/, function (_, e) { return '3D preview: ' + trad(e); }],
+    [/^ce n'est pas un fichier PNG : (.+)$/, 'this is not a PNG file: $1'],
+    [/^PNG non pris en charge \(profondeur (\d+) bits, type (\d+)\) : réenregistre en PNG 24 ou 32 bits$/, 'PNG not supported (depth $1 bits, type $2): save it again as a 24 or 32 bit PNG'],
     [/^VRFW remis dans enabled\.toml \(il en manquait : aucun mod ne se chargeait\)$/, 'VRFW put back in enabled.toml (it was missing: no mod was loading)'],
     [/^enabled\.toml \(créé par une version précédente de l’Atelier, il éteignait VRFW et tes autres mods\) retiré$/,
      'enabled.toml (made by an older version of the Atelier, it switched VRFW and your other mods off) removed'],
@@ -161,7 +255,9 @@
     [/^(armure|esprit guerrier|tenue|objet) supprimée? \((\d+) fichiers rangés dans (.+)\)$/, function (_, q, n, d) {
       return { armure: 'armour', 'esprit guerrier': 'Keshin', tenue: 'outfit', objet: 'item' }[q] + ' deleted (' + n + ' files put aside in ' + d + ')'; }],
     [/^personnage supprimé \(fichiers rangés dans (.+)\)$/, 'character deleted (files put aside in $1)'],
-    [/^Utilisée? par : (.+)\. Change-l[ae] d'abord là-bas\.$/, 'Used by: $1. Change it there first.'],
+    [/^Utilisée? par : (.+)\. Change-l[ae] d'abord là-bas\.$/, function (_, u) {
+      return 'Used by: ' + u.replace(/ \(techniques du joueur\)/g, ' (player’s techniques)').replace(/ \(technique liée\)/g, ' (linked technique)')
+        .replace(/ \(armure\)/g, ' (armour)') + '. Change it there first.'; }],
     [/^Le jeu est ouvert : ferme-le d'abord \(la technique est aussi retirée du jeu\)\.$/, 'The game is open: close it first (the technique is also removed from the game).'],
     [/^(armure|esprit|tenue|objet) inconnue?$/, function (_, q) { return 'unknown ' + { armure: 'armour', esprit: 'Keshin', tenue: 'outfit', objet: 'item' }[q]; }],
     [/^suppression pas prévue pour ce genre$/, 'deleting is not available for this kind'],
@@ -291,7 +387,7 @@
     }
     if (r === undefined) {                       // « Éclaircir (O) » : texte + touche
       var k0 = t.match(/^([^·]*?)( \([^()]{1,8}\))$/);
-      if (k0 && d[k0[1]] !== undefined) { r = d[k0[1]] + k0[2]; }
+      if (k0 && d[k0[1]] !== undefined) { r = d[k0[1]] + k0[2].replace(/\bMaj\b/g, 'Shift'); }   // (22/11) « Maj+O » -> « Shift+O »
     }
     if (r === undefined && t.indexOf(' · ') > 0) {   // infobulles « Outil (touche) · explication »
       var i0 = t.indexOf(' · ');

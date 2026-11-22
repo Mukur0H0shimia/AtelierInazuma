@@ -28,6 +28,11 @@
     'Avancé': 'Advanced', 'Revenir au mode simple': 'Back to simple mode',
     'Enregistrer sans construire': 'Save without building', 'Supprimer': 'Delete', 'Retirer cette création (ses fichiers sont rangés à part, récupérables)': 'Remove this creation (its files are put aside, recoverable)', 'Créer la tenue': 'Create the outfit', 'Créer le joueur': 'Create the player', 'faites avec « Créer »': 'made with “Create”', 'Créer': 'Create',
     '« Créer » enregistre le maillot et refait le mod « Mes maillots » avec tous tes maillots, sans toucher au jeu. Pour le mettre dans le jeu : « Installer » dans Mes créations.': '“Create” saves the kit and rebuilds the “My kits” mod with all your kits, without touching the game. To put it in the game: “Install” in My creations.',
+    // (22/11) nouveau menu des stats
+    'Comme l’original : change une valeur, l’écart s’affiche ici.': 'Same as the original: change a value and the difference shows here.',
+    'Valeurs de l’original gardées tant que tu ne changes rien.': 'The original’s values are kept until you change something.',
+    '↺ Tout remettre': '↺ Reset all', 'Puiss. niv. 1': 'Power lv. 1', 'Puiss. max': 'Max power', 'PT': 'TP', 'Joueurs': 'Players',
+    'Évolution': 'Growth', '2e poste': '2nd position',
     'Comme en jeu': 'As in the game', 'Original': 'Original', 'Puissance': 'Power', 'Au niveau 1': 'At level 1', 'Au niveau max': 'At max level',
     'Utilisation': 'Use', 'Coût en PT (tension)': 'TP cost (tension)', 'Nature': 'Nature', 'Solo': 'Solo', '2 joueurs': '2 players', '3 joueurs': '3 players',
     '4 joueurs': '4 players', 'Poste et élément': 'Position and element', 'Statistiques': 'Stats', 'les changer': 'change them',

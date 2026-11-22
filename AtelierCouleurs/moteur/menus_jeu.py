@@ -25,7 +25,15 @@ FICHIERS = {
     'petites_icones': ('100_topmenu/100_topmenu01/topmenu01_08/topmenu01_08.g4tx', 1),
     'fond': ('100_mainmenu/mainmenu90/mainmenu90_00/mainmenu90_00.g4tx', 1),
     'fond_orange': ('101_member/101_member01/member01_00/member01_00.g4tx', 3),
+    # (22/11, menu des stats) icônes communes : éléments (carrés feu / forêt / vent, montagne), orbes des techniques
+    'icones_communes': ('200_icon/15_icon_common/icon_common.g4tx', 0),
 }
+# (22/11) zones MESURÉES dans icon_common (composantes opaques ; regardées une à une) : [x, y, l, h]. La montagne n'a que
+# son dessin opaque (son carré brun 150,90,0 a un alpha nul : le menu le redessine)
+ZONES_NOMMEES = {'icones_communes': {
+    'feu': [512, 1036, 50, 50], 'foret': [684, 1048, 50, 50], 'montagne': [746, 1046, 44, 36], 'vent': [892, 1052, 50, 50],
+    'tir': [330, 998, 68, 68], 'tir_vert': [254, 998, 68, 68], 'mur': [10, 650, 80, 80], 'dribble': [110, 650, 80, 80],
+    'dribble_vert': [210, 650, 80, 80], 'gant': [926, 970, 68, 68]}}
 
 
 def _dossier(cache_dir):
@@ -98,7 +106,7 @@ def zones(data_dir, cache_dir, nom, pas=4, marge=3):
 
 GRILLES = {'icones_menu': (3, 3), 'petites_icones': (6, 5)}
 # (le hub n'utilise que ces images ; les planches irrégulières des tuiles se découpent mal : icônes collées)
-HUB = ('icones_menu', 'petites_icones', 'fond', 'fond_orange')
+HUB = ('icones_menu', 'petites_icones', 'fond', 'fond_orange', 'icones_communes')
 
 
 def tout(data_dir, cache_dir):
@@ -112,9 +120,11 @@ def tout(data_dir, cache_dir):
         if nom in GRILLES:                              # planches rangées en grille régulière (LU à l'œil : 3 x 3, 6 x 5)
             c, l = GRILLES[nom]
             z = [[int(i * w / c), int(j * h / l), int(w / c), int(h / l)] for j in range(l) for i in range(c)]
-        elif nom.startswith('icones'):
+        elif nom.startswith('icones') and nom not in ZONES_NOMMEES:
             z = zones(data_dir, cache_dir, nom, pas=4, marge=1)
         else:
             z = []
-        res[nom] = {'url': '/menu_jeu/%s.png' % nom, 'w': w, 'h': h, 'zones': z}
+        if nom in ZONES_NOMMEES:
+            z = []
+        res[nom] = {'url': '/menu_jeu/%s.png' % nom, 'w': w, 'h': h, 'zones': z, 'noms': ZONES_NOMMEES.get(nom, {})}
     return res

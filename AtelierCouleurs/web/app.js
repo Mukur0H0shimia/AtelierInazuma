@@ -2738,6 +2738,19 @@ const MS_POSTE = { fw: ['ATT', 'Attaquant'], mf: ['MIL', 'Milieu'], df: ['DÉF',
 const MS_GENRE = { whs: ['g-tir', 'Tir'], who: ['g-dri', 'Dribble'], whd: ['g-def', 'Défense'], whk: ['g-gar', 'Arrêt'] };
 const MS_STAT = { kick: 'frappe', control: 'controle', technique: 'technique', pressure: 'pression', physical: 'physique',
   intelligence: 'intelligence', agility: 'agilite', freedom: 'liberte' };
+function iconeNommee(nom, t) {          // (22/11) icône de icon_common par son nom (menus_jeu.ZONES_NOMMEES)
+  const P = MJ && MJ.icones_communes, z = P && P.noms && P.noms[nom];
+  if (!z) return '';
+  const k = t / Math.max(z[2], z[3]);
+  return `<i class="jm-icone ms2-ic" style="width:${Math.round(z[2] * k)}px;height:${Math.round(z[3] * k)}px;background-image:url('${P.url}');`
+    + `background-size:${P.w * k}px ${P.h * k}px;background-position:${-z[0] * k}px ${-z[1] * k}px"></i>`;
+}
+const MS_EL_IC = { fire: 'feu', forest: 'foret', wind: 'vent' };
+function elIcone(e, t) {                // carré d'élément du jeu ; montagne : son carré brun est redessiné (alpha nul dans la planche)
+  if (e === 'mountain') return `<span class="ms2-carre mont" style="width:${t}px;height:${t}px">${iconeNommee('montagne', t * .8)}</span>`;
+  const ic = MS_EL_IC[e] ? iconeNommee(MS_EL_IC[e], t) : '';
+  return ic || `<span class="ms2-carre el-${MS_EL[e] || 'neutre'}" style="width:${t}px;height:${t}px"></span>`;
+}
 async function ouvrirStats(c) {
   const code = c.mod === 'MesPersonnages' ? c.cle : c.code;
   let f = $('menu-stats');
@@ -2745,7 +2758,8 @@ async function ouvrirStats(c) {
     f = document.createElement('dialog'); f.id = 'menu-stats'; document.body.appendChild(f);
     f.addEventListener('close', () => { if (typeof majCacheNatif === 'function') majCacheNatif(); });
   }
-  const tag = { MesTechniques: 'TECH', MesEsprits: 'ESP', MesPersonnages: 'PERSO' }[c.mod] || '';
+  const tag = c.genre === 'totem' ? 'TOT' : { MesTechniques: 'TECH', MesEsprits: 'ESP', MesPersonnages: 'PERSO' }[c.mod] || '';
+  const motEsprit = c.genre === 'totem' ? 'TOTEM' : 'ESPRIT';                // (22/11) les totems ne sont pas des esprits
   f.innerHTML = `<div class="tc-entete"><div class="jm-coin tc-coin">${iconeJeu('m2', 46)}<span>Stats</span></div>
       <div class="tc-plaque"><span class="tc-plaque-nom"></span><span class="tc-plaque-sous">Lecture…</span><span class="jm-tag tc-plaque-tag">${tag}</span></div>
       <button class="tc-fermer" title="Fermer sans rien changer (Échap)">✕</button></div>
@@ -2781,14 +2795,14 @@ async function ouvrirStats(c) {
       h += `<div class="ms-titre">Comme en jeu</div>
         <div class="tc-barre el-${el} ms-apercu"><span class="tc-orbe ${g[0]}"></span><span class="tc-nom">${echapper(c.nom)}</span><span class="tc-pw"><small>${g[1].toUpperCase()}</small>${pmax}</span></div>
         <div class="tc-tension" style="--t:${Math.min(1, (+V.tp || 0) / 150)}"><span>TENSION</span><i></i><b>${V.tp !== '' ? V.tp : '—'}<small>T</small></b></div>
-        <div class="ms-infos"><span class="tc-puce el-${el}">${echapper(libEl(V.element) || 'Élément')}</span><span class="tc-niv"><span>Niv. 1</span>${V.power_min}</span>
+        <div class="ms-infos"><span class="tc-puce el-${el} ms2-puce">${elIcone(V.element, 22)}${echapper(libEl(V.element) || 'Élément')}</span><span class="tc-niv"><span>Niv. 1</span>${V.power_min}</span>
           <span class="tc-puce">${V.users > 1 ? V.users + ' joueurs' : 'Solo'}</span></div>`;
       if (jeu.power_max !== undefined) h += `<div class="ms-titre">Original</div><div class="tc-barre petit el-${MS_EL[jeu.element] || 'neutre'}"><span class="tc-orbe ${g[0]}"></span><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>${g[1].toUpperCase()}</small>${jeu.power_max}</span></div>`;
     } else if (r.genre === 'esprit') {
       h += `<div class="ms-titre">Comme en jeu</div>
-        <div class="tc-barre esprit ms-apercu"><span class="tc-nom">${echapper(c.nom)}</span><span class="tc-pw"><small>ESPRIT</small>${pmax}</span></div>
-        <div class="ms-infos"><span class="tc-puce el-${el}">${echapper(libEl(V.element) || 'Élément')}</span><span class="tc-niv"><span>Niv. 1</span>${V.power_min}</span></div>`;
-      if (jeu.power_max !== undefined) h += `<div class="ms-titre">Original</div><div class="tc-barre petit esprit"><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>ESPRIT</small>${jeu.power_max}</span></div>`;
+        <div class="tc-barre esprit ms-apercu"><span class="tc-nom">${echapper(c.nom)}</span><span class="tc-pw"><small>${motEsprit}</small>${pmax}</span></div>
+        <div class="ms-infos"><span class="tc-puce el-${el} ms2-puce">${elIcone(V.element, 22)}${echapper(libEl(V.element) || 'Élément')}</span><span class="tc-niv"><span>Niv. 1</span>${V.power_min}</span></div>`;
+      if (jeu.power_max !== undefined) h += `<div class="ms-titre">Original</div><div class="tc-barre petit esprit"><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>${motEsprit}</small>${jeu.power_max}</span></div>`;
     } else {
       const p = V.position ? MS_POSTE[V.position] : null, el2 = V.element ? MS_EL[V.element] : '';
       h += `<div class="ms-titre">Comme en jeu</div><div class="ms-joueur-tags">
@@ -2798,32 +2812,47 @@ async function ouvrirStats(c) {
     }
     G.innerHTML = h;
   };
-  // ---- réglages (droite)
-  const curseur = (k, nom, min, max, pas) => { const ch = champ(k); if (!ch) return '';
-    const orig = jeu[k] !== undefined ? `<small>original : ${jeu[k]}</small>` : '';
-    return `<div class="ms-ligne"><label>${echapper(nom || ch.nom)}${orig}</label><div class="ms-reglage">
-      <input type="range" data-k="${k}" min="${min ?? ch.min}" max="${max ?? ch.max}" step="${pas || 1}" value="${V[k] === '' ? 0 : V[k]}">
-      <input type="number" data-k="${k}" min="${ch.min}" max="${ch.max}" value="${V[k]}"></div></div>`; };
-  const boutonsChoix = (k, items, vide) => { const ch = champ(k); if (!ch) return '';
-    const orig = jeu[k] !== undefined && jeu[k] !== '' ? `<small>original : ${echapper(String(items.find(x => x[0] === jeu[k])?.[1] || jeu[k]))}</small>` : '';
-    return `<div class="ms-ligne"><label>${echapper(ch.nom)}${orig}</label><div class="ms-choix" data-k="${k}">
+  // ---- réglages (droite) — (22/11, « fais-moi encore un meilleur menu pour les stats ») façon fiche d'Équipement du jeu
+  // (references_menus/equipement.webp) : panneau sombre à alvéoles, noms en capitales bleues, jauge avec l'ORIGINAL en
+  // fantôme (ce qui est gagné en vert, perdu encadré de rouge), gros chiffres bleus avec « +25 / −10 » au-dessus, boutons
+  // − / + (Maj : 10), ↺ par ligne ; en haut, les cases des changements comme le jeu (« −10 +25 +43 ») ; éléments avec les
+  // icônes du jeu (icon_common, menus_jeu.ZONES_NOMMEES).
+  const nombre = k => (champ(k) || {}).type === 'nombre';
+  const libChoix = (k, v) => { const ch = champ(k) || {}; const x = (ch.choix || []).find(y => String(y[0]) === String(v));
+    return x ? x[1] : (k === 'position' || k === 'sub_position') && MS_POSTE[v] ? MS_POSTE[v][0] : String(v); };
+  const NOMS_COURTS = { power_min: 'Puiss. niv. 1', power_max: 'Puiss. max', tp: 'PT', users: 'Joueurs', element: 'Élément', growth: 'Évolution',
+    position: 'Poste', sub_position: '2e poste' };
+  const ligneNombre = (k, nom, max) => { const ch = champ(k); if (!ch) return '';
+    return `<div class="ms2-ligne" data-k="${k}" data-max="${max}">
+      <span class="ms2-nom">${echapper(nom)}</span>
+      <div class="ms2-jauge"><i class="b"></i><i class="p"></i><i class="m"></i><b class="o"></b>
+        <input type="range" data-k="${k}" min="${ch.min ?? 0}" max="${max}" step="1" value="${V[k] === '' ? 0 : V[k]}"></div>
+      <button class="ms2-pas" data-d="-1" title="−1 (Maj : −10)">−</button>
+      <span class="ms2-chiffre"><small class="ms2-delta"></small><input type="number" data-k="${k}" min="${ch.min}" max="${ch.max}" value="${V[k]}"></span>
+      <button class="ms2-pas" data-d="1" title="+1 (Maj : +10)">+</button>
+      <button class="ms2-raz" title="Remettre la valeur de l’original${jeu[k] !== undefined ? ' (' + jeu[k] + ')' : ''}">↺</button></div>`; };
+  const ligneChoix = (k, items, vide, cls) => { const ch = champ(k); if (!ch) return '';
+    return `<div class="ms2-ligne ms2-l-choix"><span class="ms2-nom">${echapper(ch.nom)}</span><div class="ms-choix ${cls || ''}" data-k="${k}">
       ${vide ? `<button data-v="" class="${V[k] === '' ? 'sel' : ''}">comme l’original</button>` : ''}
-      ${items.map(([v, n, cl]) => `<button data-v="${v}" class="${cl || ''}${String(V[k]) === String(v) ? ' sel' : ''}">${echapper(n)}</button>`).join('')}</div></div>`; };
-  const elems = (champ('element') || { choix: [] }).choix.map(([v, n]) => [v, n, 'el el-' + MS_EL[v]]);
+      ${items.map(([v, n, cl, ic]) => `<button data-v="${v}" class="${cl || ''}${String(V[k]) === String(v) ? ' sel' : ''}${jeu[k] !== undefined && String(jeu[k]) === String(v) ? ' orig' : ''}">${ic || ''}<span>${echapper(n)}</span></button>`).join('')}</div>
+      <button class="ms2-raz" data-raz="${k}" title="Remettre celui de l’original">↺</button></div>`; };
+  const elems = (champ('element') || { choix: [] }).choix.map(([v, n]) => [v, n, 'el el-' + MS_EL[v], elIcone(v, 26)]);
+  const fond = '<div class="ms2-alveoles"></div>';
   const panneau = () => {
-    let h = '<div class="tc-detail ms-panneau">';
+    let h = `<div class="tc-detail ms-panneau ms2">${fond}<div class="ms2-deltas"></div>`;
     if (r.genre === 'technique') {
-      h += '<div class="ms-section">Puissance</div>' + curseur('power_min', 'Au niveau 1', 0, 1000) + curseur('power_max', 'Au niveau max', 0, 1500)
-        + '<div class="ms-section">Utilisation</div>' + curseur('tp', 'Coût en PT (tension)', 0, 150)
-        + boutonsChoix('users', [[1, 'Solo'], [2, '2 joueurs'], [3, '3 joueurs'], [4, '4 joueurs']])
-        + '<div class="ms-section">Nature</div>' + boutonsChoix('element', elems)
-        + boutonsChoix('growth', [0, 1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)]));
+      h += '<div class="ms-section">Puissance</div>' + ligneNombre('power_min', 'Au niveau 1', 1000) + ligneNombre('power_max', 'Au niveau max', 1500)
+        + '<div class="ms-section">Utilisation</div>' + ligneNombre('tp', 'Coût en PT (tension)', 150)
+        + ligneChoix('users', [[1, 'Solo'], [2, '2 joueurs'], [3, '3 joueurs'], [4, '4 joueurs']])
+        + '<div class="ms-section">Nature</div>' + ligneChoix('element', elems, false, 'ms2-els')
+        + ligneChoix('growth', [0, 1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)]));
     } else if (r.genre === 'esprit') {
-      h += '<div class="ms-section">Puissance</div>' + curseur('power_min', 'Au niveau 1', 0, 300) + curseur('power_max', 'Au niveau max', 0, 300)
-        + '<div class="ms-section">Nature</div>' + boutonsChoix('element', elems);
+      h += '<div class="ms-section">Puissance</div>' + ligneNombre('power_min', 'Au niveau 1', 300) + ligneNombre('power_max', 'Au niveau max', 300)
+        + '<div class="ms-section">Nature</div>' + ligneChoix('element', elems, false, 'ms2-els');
     } else {
       const postes = Object.entries(MS_POSTE).map(([v, [a, n]]) => [v, a + ' · ' + n, 'poste p-' + v]);
-      h += '<div class="ms-section">Poste et élément</div>' + boutonsChoix('position', postes, true) + boutonsChoix('sub_position', postes, true) + boutonsChoix('element', elems, true)
+      h += '<div class="ms-section">Poste et élément</div>' + ligneChoix('position', postes, true) + ligneChoix('sub_position', postes, true)
+        + ligneChoix('element', elems, true, 'ms2-els')
         + `<div class="ms-section">Statistiques <label class="ms-bascule"><input type="checkbox" class="ms-stats-on"${statsOn ? ' checked' : ''}> les changer</label></div>`
         + `<div class="ms-stats${statsOn ? '' : ' eteint'}">` + Object.entries(MS_STAT).map(([k, cl]) => {
           const ch = champ('stats.' + k), v = V['stats.' + k] === '' ? 200 : V['stats.' + k];
@@ -2834,18 +2863,55 @@ async function ouvrirStats(c) {
     }
     h += '<div class="ms-etat"></div></div>';
     D.innerHTML = h;
+    const regler = (k, v) => { V[k] = v; D.querySelectorAll(`input[data-k="${k}"]`).forEach(o => { if (+o.value !== +v || o.value === '') o.value = v; }); majTout(); apercu(); };
     D.querySelectorAll('input[data-k]').forEach(el => el.oninput = () => {
       const k = el.dataset.k, v = el.value === '' ? '' : +el.value; V[k] = v;
       D.querySelectorAll(`input[data-k="${k}"]`).forEach(o => { if (o !== el) o.value = v; });
       const bar = el.closest('.ms-stat'); if (bar) bar.querySelector('i').style.setProperty('--v', Math.min(1, (+v || 0) / 300));
-      apercu(); });
+      majTout(); apercu(); });
+    D.querySelectorAll('.ms2-ligne[data-k]').forEach(L => {
+      const k = L.dataset.k, ch = champ(k);
+      L.querySelectorAll('.ms2-pas').forEach(b => b.onclick = ev => {
+        const v = Math.max(ch.min ?? 0, Math.min(ch.max ?? 9999, (+V[k] || 0) + (+b.dataset.d) * (ev.shiftKey ? 10 : 1)));
+        regler(k, v); });
+      L.querySelector('.ms2-raz').onclick = () => { if (jeu[k] !== undefined) regler(k, jeu[k]); };
+    });
     D.querySelectorAll('.ms-choix').forEach(b => b.querySelectorAll('button').forEach(x => x.onclick = () => {
-      const k = b.dataset.k, v = x.dataset.v; V[k] = v === '' ? '' : (champ(k).type === 'nombre' ? +v : v);
-      b.querySelectorAll('button').forEach(y => y.classList.toggle('sel', y === x)); apercu(); }));
+      const k = b.dataset.k, v = x.dataset.v; V[k] = v === '' ? '' : (nombre(k) ? +v : v);
+      b.querySelectorAll('button').forEach(y => y.classList.toggle('sel', y === x)); majTout(); apercu(); }));
+    D.querySelectorAll('[data-raz]').forEach(b => b.onclick = () => {
+      const k = b.dataset.raz, cible = jeu[k] !== undefined ? String(jeu[k]) : '';
+      const x = D.querySelector(`.ms-choix[data-k="${k}"] button[data-v="${CSS.escape(cible)}"]`); if (x) x.click(); });
     const on = D.querySelector('.ms-stats-on');
     if (on) on.onchange = () => { statsOn = on.checked;
       if (statsOn) for (const k of Object.keys(MS_STAT)) if (V['stats.' + k] === '') V['stats.' + k] = 200;
       panneau(); };
+    majTout();
+  };
+  // jauges, chiffres des écarts, cases des changements (en haut)
+  const majTout = () => {
+    D.querySelectorAll('.ms2-ligne[data-k]').forEach(L => {
+      const k = L.dataset.k, max = +L.dataset.max || 1, v = V[k] === '' ? 0 : +V[k], o = jeu[k] !== undefined ? +jeu[k] : v;
+      const J = L.querySelector('.ms2-jauge');
+      J.style.setProperty('--v', Math.min(1, v / max)); J.style.setProperty('--o', Math.min(1, o / max));
+      const d = v - o, e = L.querySelector('.ms2-delta');
+      e.textContent = d ? (d > 0 ? '+' : '−') + Math.abs(d) : ''; e.className = 'ms2-delta' + (d > 0 ? ' plus' : d < 0 ? ' moins' : '');
+      L.classList.toggle('change', !!d);
+    });
+    D.querySelectorAll('.ms2-l-choix').forEach(L => { const b = L.querySelector('.ms-choix'), k = b && b.dataset.k;
+      L.classList.toggle('change', !!k && jeu[k] !== undefined && V[k] !== '' && String(V[k]) !== String(jeu[k])); });
+    const cases = [];
+    for (const ch of r.champs) { const k = ch.cle; if (k.startsWith('stats.') || V[k] === '' || V[k] === undefined || jeu[k] === undefined) continue;
+      if (String(V[k]) === String(jeu[k])) continue;
+      const nom = NOMS_COURTS[k] || ch.nom;
+      if (nombre(k) && k !== 'users' && k !== 'growth') { const d = +V[k] - +jeu[k];
+        cases.push(`<span class="ms2-case ${d > 0 ? 'plus' : 'moins'}"><small>${echapper(nom)}</small>${d > 0 ? '+' : '−'}${Math.abs(d)}</span>`); }
+      else cases.push(`<span class="ms2-case chg"><small>${echapper(nom)}</small>${echapper(libChoix(k, jeu[k]))} → ${echapper(libChoix(k, V[k]))}</span>`); }
+    const Z = D.querySelector('.ms2-deltas');
+    if (Z) Z.innerHTML = cases.length ? cases.join('') + `<button class="ms2-tout-raz" title="Remettre toutes les valeurs de l’original (rien n’est écrit avant « Enregistrer »)">↺ Tout remettre</button>`
+      : `<span class="ms2-rien">${jeu && Object.keys(jeu).length ? 'Comme l’original : change une valeur, l’écart s’affiche ici.' : 'Valeurs de l’original gardées tant que tu ne changes rien.'}</span>`;
+    const T = D.querySelector('.ms2-tout-raz');
+    if (T) T.onclick = () => { for (const ch of r.champs) if (jeu[ch.cle] !== undefined) V[ch.cle] = jeu[ch.cle]; panneau(); apercu(); };
   };
   apercu(); panneau();
   f.querySelector('.ms-aide-txt').textContent = joueur ? 'Vide ou « comme l’original » : rien ne change' : 'Partie des valeurs de l’original : seules celles que tu changes sont écrites';

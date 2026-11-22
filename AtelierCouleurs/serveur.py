@@ -1223,7 +1223,7 @@ def liste_projets():
                                                    or e.get('nom'), 'date': e.get('date'),
                     'textures': len(e.get('textures') or {}), 'materiaux': len(e.get('coulMat') or {}),
                     'teintes': len(e.get('teinteSom') or {}) + len(e.get('teintePtl') or {}), 'remplacements': len(e.get('recette') or []),
-                    'couleurs': vus[:4]})
+                    'couleurs': vus[:4], 'cree': e.get('cree')})       # (22/11) création faite depuis ce projet
     out.sort(key=lambda x: x.get('date') or '', reverse=True)
     return out
 

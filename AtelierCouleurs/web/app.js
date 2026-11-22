@@ -504,7 +504,7 @@ async function ouvrir_(code) {
   const perso = estPerso();
   const t = await api(perso ? '/api/personnage?code=' + encodeURIComponent(code) + (ONGLETS_JEU.includes(E.onglet) ? '&cat=' + E.onglet + (E.onglet === 'maillots' ? '&cote=' + (MM.cote || '10') : '') : '') : '/api/technique?code=' + code);
   E.tech = t; E.tech.perso = perso; E.tech.onglet = E.onglet; E.objets = t.objets_details; E.textures = {}; E.coulMat = {}; E.teinteSom = {}; E.teintePtl = {}; E.selPieces.clear(); E.selTex.clear();
-  E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
+  E.cree = null; E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
   if (perso) { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}`;
     $('p-nom').value = t.nom + ' (couleurs)'; $('p-desc').value = ''; if ($('rt-nom')) $('rt-nom').value = t.nom + ' (couleurs)'; if ($('cp-nom')) { $('cp-nom').value = ''; $('cp-nom').placeholder = t.nom + ' bis'; } }
   else { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}${t.element ? ' · ' + libElement(t.element) : ''}  ·  cinématique ${t.cinematique}`;
@@ -1279,7 +1279,8 @@ async function sauverProjet() {
     try { const v = await faireVignette(); if (v) { E.vignette = v; E.vignetteT = performance.now(); } } finally { NATIF.sauveProjet = false; } }
   const etat = { version: 1, code: E.tech.code, onglet: E.tech.onglet, nom: E.tech.nom, date: new Date().toISOString(), textures: tex, apercu: couleursPrincipales(4), vignette: E.vignette || null,
     coulMat: E.coulMat, teinteSom: E.teinteSom, teintePtl: E.teintePtl, recette: E.recette, champs: c, auras,
-    calques: window.atelierEtat ? atelierEtat() : {} };        // (15/11/2026) calques de l'atelier de retouche
+    calques: window.atelierEtat ? atelierEtat() : {},           // (15/11/2026) calques de l'atelier de retouche
+    cree: E.cree || null };                                     // (22/11) la création faite depuis ce projet (Mes créations)
   NATIF.sauveProjet = true;
   try { const r = await api('/api/projet', { action: 'garder', cle: cleProjet(), etat }); if (r.ok) { E.sigProjet = sig; if (etat.vignette) E.vignetteManque = false; } }
   catch (e) { /* serveur absent : on réessaiera */ } finally { NATIF.sauveProjet = false; }
@@ -1296,6 +1297,7 @@ async function verifierProjet() {
   // (cachée par le mode dessin : un Pégase noir n'a jamais été gardé). Nouvelle création = nouveau projet ; les autres restent au hub.
 }
 async function reprendreProjet(e) {
+  E.cree = e.cree || null;                        // (22/11) lien projet -> création gardé
   majRapport('Reprise du projet…');
   for (const [k, url] of Object.entries(e.textures || {})) { const x = E.textures[k]; if (!x || !x.cur) continue;
     try { const im = await chargerImage(url), cx = x.cur.getContext('2d');
@@ -1418,8 +1420,10 @@ function dessinerHub() {
   const cr = HUB.creations.filter(c => ok(c.nom, c.base, c.code, c.nom_base) && (!HUB.filtre || c.onglet === HUB.filtre));
   if (!cr.length) l.innerHTML = `<div class="hub-vide"><b>${HUB.creations.length ? 'Aucune création ne correspond' : 'Aucun mod créé pour l’instant'}</b>${HUB.creations.length ? 'Essaie un autre mot.' : 'Quand une technique te plaît : « Créer le mod » dans le panneau de droite.'}</div>`;
   for (const c of cr) {
-    const proj = HUB.projets.find(p => p.code === c.base && p.onglet === c.onglet);
-    const vign = c.vignette || (proj && !proj.vignetteTexture ? proj.vignette : null) || (proj && proj.vignette);
+    const proj = projetDe(c);
+    // (22/11) joueur sans projet à lui : son portrait recoloré (celui des cartes du jeu)
+    const vign = c.vignette || (proj && !proj.vignetteTexture ? proj.vignette : null) || (proj && proj.vignette)
+      || (c.mod === 'MesPersonnages' && c.code ? '/api/portrait?code=' + encodeURIComponent(c.code) : null);
     const st = c.jeuSeul ? ['Dans le jeu', 'oui'] : c.installe ? ['Installé', 'oui'] : ['Pas installé', 'non'];
     const d = carte({ onglet: c.onglet, vignette: vign, estTexture: !c.vignette && proj && proj.vignetteTexture, badge: st[0], badgeCl: st[1], titre: c.nom, couleurs: proj && proj.couleurs, lecture: true,
       sousImg: `${genre(c.genre)} · copie de ${echapper(c.nom_base || c.base)}`,
@@ -2737,7 +2741,7 @@ async function ouvrirStats(c) {
   const joueur = r.genre === 'personnages';
   let statsOn = joueur && !!deja.stats;
   // ---- carte + aperçu (gauche)
-  const proj = HUB.projets.find(p => p.code === c.base && p.onglet === c.onglet);
+  const proj = projetDe(c);
   const vign = c.vignette || (proj && proj.vignette) || '';
   const nomBase = c.nom_base || ((E.index || []).find(t => t.code === c.base) || {}).nom || c.base || '';   // nom de l'original (techniques : index)
   f.querySelector('.tc-plaque-sous').textContent = `Copie de ${nomBase}${c.code ? ' · code ' + c.code : ''}`;
@@ -2831,6 +2835,25 @@ async function ouvrirStats(c) {
     for (const ch of r.champs) { const k = ch.cle, v = V[k]; if (v === '' || v === undefined) continue;
       if (k.startsWith('stats.')) { if (statsOn) (out.stats = out.stats || {})[k.slice(6)] = +v; } else out[k] = v; }
     envoyer(out); };
+}
+// (22/11, retour de muku : « j'ai fait 2 Mark et les deux ont pris les mêmes textures ») les cartes de Mes créations
+// trouvaient leur projet par le seul code de l'ORIGINAL : deux copies de Mark montraient le même projet (image, « Modifier »).
+// Chaque création garde maintenant SON projet ; sans lien, on ne devine que s'il n'y a qu'une création de cet original.
+async function lierProjetCreation(mod, code) {
+  if (!E.tech || !code) return;
+  E.cree = { mod, code: String(code) }; E.sigProjet = null;
+  try { await sauverProjet(); } catch (e) { /* le lien manquera, rien de plus */ }
+}
+for (const [nom, mod] of [['exporter', 'MesTechniques'], ['exporterPerso', 'MesEsprits'], ['cpExporter', 'MesPersonnages'], ['ctExporter', 'MesPersonnages'],
+  ['coExporter', 'MesPersonnages'], ['cuExporter', 'MesTenues'], ['ojExporter', 'MesObjets'], ['caExporter', 'MesEsprits']]) {
+  const f0 = window[nom]; if (typeof f0 !== 'function') continue;
+  window[nom] = async function (...a) { const r = await f0.apply(this, a); if (r && r.ok && (r.code || r.key)) await lierProjetCreation(mod, r.code || r.key); return r; };
+}
+function projetDe(c) {
+  const lie = HUB.projets.find(p => p.cree && p.cree.mod === c.mod && p.cree.code === String(c.code));
+  if (lie) return lie;
+  const memes = HUB.creations.filter(x => x.base === c.base && x.onglet === c.onglet).length;
+  return memes === 1 ? HUB.projets.find(p => p.code === c.base && p.onglet === c.onglet && !p.cree) || null : null;
 }
 async function ouvrirTechniqueLiee(c) {
   const f = fenetreCoups('Technique de ' + c.nom, '<div class="fc-corps">Lecture…</div>');

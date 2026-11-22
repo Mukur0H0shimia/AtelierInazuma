@@ -1478,7 +1478,13 @@ function dessinerAuras() {
   for (const a of E.tech.auras) {
     const d = document.createElement('div'); d.className = 'aura';
     // (17/11/2026) aura recolorée par un mod (VRFW [[recolor]] aura / copy / color) : cochée, avec la couleur du mod
-    d.innerHTML = `<input type="checkbox" data-aura="${a.aura}"${a.couleur ? ' checked' : ''}><span class="n">${a.aura}${a.origine && a.origine !== a.aura ? ' <small>(copie de ' + echapper(a.origine) + ')</small>' : ''}</span><input type="color" value="${a.couleur || '#2a1f8c'}" data-aura-c="${a.aura}">`;
+    // (22/11, LU dans nie.exe) nom avec balise (« ball_aura_out15_<BALL_AURA> », 405 cinématiques de techniques) : la commande
+    // d'aura remplace BALL_AURA (crc 0x72a1ed8f) par la variante de l'aura du ballon que le MATCH a posée (fonction 0x140f57420,
+    // service de mots 0x141605580 ; valeur posée par le code du ballon 0x1414b0ee1) -> pas de nom fixe : pas recolorable.
+    // (Avant : le nom n'était pas échappé, « <BALL_AURA> » était pris pour une balise HTML et coupé à l'affichage.)
+    const variable = /<[A-Z_0-9]+>/.test(a.aura);
+    d.innerHTML = `<input type="checkbox" data-aura="${echapper(a.aura)}"${a.couleur && !variable ? ' checked' : ''}${variable ? ' disabled' : ''}><span class="n">${echapper(a.aura)}${a.origine && a.origine !== a.aura ? ' <small>(copie de ' + echapper(a.origine) + ')</small>' : ''}${variable ? ' <small>(choisie par le match : pas recolorable)</small>' : ''}</span><input type="color" value="${a.couleur || '#2a1f8c'}" data-aura-c="${echapper(a.aura)}"${variable ? ' disabled' : ''}>`;
+    if (variable) d.title = 'Le jeu met ici l’aura du ballon du moment (sa variante change pendant le match) : aucun nom fixe à recolorer.';
     b.appendChild(d);
   }
 }

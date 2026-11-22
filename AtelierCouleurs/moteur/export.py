@@ -380,6 +380,9 @@ def exporter(cfg, demande, infos_technique):
         info = next((a for a in infos_technique['auras'] if a['aura'] == aura), None)
         if not info:
             continue
+        if re.search(r'<[A-Z_0-9]+>', aura):            # (22/11, LU dans nie.exe : voir app.js) aura choisie par le match
+            rapport.append('aura %s : choisie par le match (balise), pas recolorable -> ignorée' % aura)
+            continue
         copie = '%s_%s_%d' % (MOD_ID.lower(), nom, k)
         e += ['[[recolor]]', 'aura = %s' % _q(aura), 'copy = %s' % _q(copie),
               'color = [[0.0, %.3f, %.3f, %.3f, 0.0]]' % tuple(float(c) for c in rvb), '']

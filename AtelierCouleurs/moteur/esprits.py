@@ -266,6 +266,17 @@ def groupes_scene(cfg, ev):
     return _GROUPES.get(zlib.crc32(ev.encode()), (None, None))
 
 
+def evenements_du_dossier(cfg, dossier):
+    """(22/11) scènes d'un dossier common/event/<evNN>/<dossier> : lui-même s'il a sa ligne dans event_env_config, sinon
+    <dossier>_<n> d'après common/event_cfg/evt (ev83_00010 -> ev83_00010_1, ev83_00010_2) ; [dossier] si rien de tel"""
+    if groupes_scene(cfg, dossier) != (None, None):
+        return [dossier]
+    d = os.path.join(cfg['data_dir'], 'common', 'event_cfg', 'evt')
+    n = sorted(os.path.basename(f)[:-len('.cfg.bin')] for f in glob.glob(os.path.join(d, dossier + '_*.cfg.bin'))
+               if re.fullmatch(re.escape(dossier) + r'_\d+\.cfg\.bin', os.path.basename(f)))
+    return [x for x in n if groupes_scene(cfg, x) != (None, None)] or [dossier]
+
+
 def ecrire_vrfw(cfg, sortie, registre):
     ch, tech, txt, shop = [], [], [], []
     scenes, bases = {}, {}
@@ -310,6 +321,17 @@ def ecrire_vrfw(cfg, sortie, registre):
                     scenes.setdefault(s, []).append((neuf, pl['esprit'], pl['esprit']))
                     if pl.get('copie'):
                         bases[s] = pl.get('dossier') or s      # scène copiée par VRFW : la ligne de sa scène d'origine
+    # (22/11, muku : « un loup bleu, mais pas le son de l'invocation ») un DOSSIER de scène peut porter plusieurs scènes :
+    # ev83_00010 (invocation des totems) = ev83_00010_1 + ev83_00010_2 (LU : event_cfg/evt et event_env_config, groupes
+    # 3814588639 / 2803462029). La ligne écrite sous le nom du dossier était refusée par VRFW (« ev83_00010 has no row in
+    # event_env_config_soccer_demo … skipped ») : le totem copié n'était sur aucune liste de sons -> muet. Une ligne par scène.
+    eclate = {}
+    for s, liste in scenes.items():
+        for ev_ in ([s] if s in bases else evenements_du_dossier(cfg, s)):
+            eclate.setdefault(ev_, []).extend(liste)
+            if s in bases:
+                bases[ev_] = bases[s]
+    scenes = eclate
     env = []
     for s, liste in sorted(scenes.items()):
         g_tag, g_snd = groupes_scene(cfg, bases.get(s, s))

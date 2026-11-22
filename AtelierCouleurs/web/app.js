@@ -633,7 +633,7 @@ function teintesPieces() {
 function dessinerPieces() {
   const box = $('pieces'); box.innerHTML = '';
   for (const o of E.objets) {
-    const t = document.createElement('div'); t.className = 'objet-titre'; t.textContent = o.erreur ? `${o.acteur} (illisible : ${o.erreur})` : o.modeleActeur ? `${o.nom}  (modèle de personnage : textures seulement)` : `${o.nom}  (${o.pieces.length} pièces)`; box.appendChild(t);
+    const t = document.createElement('div'); t.className = 'objet-titre'; t.textContent = o.erreur ? `${o.acteur} (illisible : ${o.erreur})` : o.espritDuJoueur ? `${o.nom}  (totem / esprit du joueur : en jeu, c’est celui du joueur qui lance — pour le recolorer, fais une copie dans Totems ou Esprits)` : o.modeleActeur ? `${o.nom}  (modèle de personnage : textures seulement)` : `${o.nom}  (${o.pieces.length} pièces)`; box.appendChild(t);
     if (o.erreur) continue;
     o.pieces.forEach(p => {
       const cle = o.nom + '/' + p.index, d = document.createElement('div'); d.className = 'piece' + (E.selPieces.has(cle) ? ' sel' : ''); d.dataset.cle = cle;

@@ -294,6 +294,13 @@ def exporter(cfg, demande, infos_technique):
     modeles = {o['acteur']: o for o in infos_technique.get('objets_details') or [] if o.get('modeleActeur')}
     persos = ['schema = "VRFW.character/2"', '# Copies recolorées des modèles de « %s » (Atelier Couleurs).' % demande['nom'], 'default_lang = "en"', '']
     for acteur, reglage in (demande.get('objets') or {}).items():
+        if acteur in modeles and reglage.get('textures') and modeles[acteur].get('espritDuJoueur'):
+            # (22/11, VU EN JEU par muku : Frappe du loup (couleurs), loup recoloré dans la technique -> en jeu c'est le loup du
+            # TOTEM du joueur) <ASSIGN> + INVARID = totem / esprit du lanceur, remplacé par le jeu : la copie recolorée ne
+            # sert à rien, et sa commande (texte INVARID partagé) empêchait la cinématique livrée en fichiers -> non copiée
+            rapport.append('modèle %s : c’est le totem / l’esprit du joueur qui lance (le jeu le choisit) -> pas copié ; '
+                           'pour le recolorer, fais une copie dans l’onglet Totems ou Esprits' % modeles[acteur]['modeleActeur'])
+            continue
         if acteur in modeles and reglage.get('textures'):
             anc = modeles[acteur]['modeleActeur']
             neuf, info, perso = copie_modele(cfg, sortie, nom, acteur, anc, reglage['textures'])
@@ -413,6 +420,11 @@ def exporter(cfg, demande, infos_technique):
     r_ = os.path.join(sortie, 'content', 'anims', nom + '.toml.retire')
     if os.path.exists(r_):
         os.remove(r_)
+    # (22/11) scène livrée en fichiers par une version précédente : retirée (si la nouvelle ne s'y prête pas, ces fichiers
+    # restaient et VRFW refusait la copie automatique : « id ev60_89120 is already an event of … a mod's files »)
+    for f_ in glob.glob(os.path.join(sortie, 'assets', 'event_cfg', '*', ev + '*.cfg.bin')):
+        if re.fullmatch(re.escape(ev) + r'(_eff|_snd)?\.cfg\.bin', os.path.basename(f_)):
+            os.remove(f_)
     try:
         r = scene_en_fichiers(cfg, nom)
         rapport += r.get('rapport') or ['cinématique : copie automatique de VRFW gardée (%s)' % r.get('erreur')]
@@ -542,6 +554,21 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
         vieux = os.path.join(dst, os.path.relpath(r_, src))[:-len('.retire')]
         if os.path.isfile(vieux):
             os.remove(vieux)
+    # (22/11) inverse : une copie revenue à la copie automatique de VRFW (content/anims/x.toml actif) ne doit plus avoir sa
+    # scène en fichiers dans le jeu (restes d'une installation précédente ; ils sont dans la sauvegarde ci-dessus)
+    if mod_id == 'MesTechniques':
+        for a_ in glob.glob(os.path.join(src, 'content', 'anims', '*.toml')):
+            try:
+                ev_ = tomllib.load(open(a_, 'rb'))['event'][0]['id']
+            except (OSError, ValueError, KeyError, IndexError):
+                continue
+            for f_ in glob.glob(os.path.join(dst, 'assets', 'event_cfg', '*', ev_ + '*.cfg.bin')):
+                if re.fullmatch(re.escape(ev_) + r'(_eff|_snd)?\.cfg\.bin', os.path.basename(f_)) \
+                        and not os.path.exists(os.path.join(src, os.path.relpath(f_, dst))):
+                    os.remove(f_)
+            vieux = os.path.join(dst, 'content', 'anims', os.path.basename(a_) + '.retire')
+            if os.path.isfile(vieux):
+                os.remove(vieux)
     activer_mod(en, mod_id)
     r = {'ok': True, 'dossier': dst, 'sauvegarde': sauv}
     if repares:

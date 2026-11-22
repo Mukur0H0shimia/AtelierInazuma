@@ -343,7 +343,10 @@ def ecrire_vrfw(cfg, sortie, registre):
         f = lambda d: '{ ' + ', '.join('%s = %s' % (k, _q(v)) for k, v in sorted(d.items())) + ' }'
         # (15/11/2026) LU (event_env_config, col. 52 = groupe des mots, col. 54 = groupe des sons) : pas de liste là où la scène
         # n'a pas de groupe (ev61_00920 : sons 0 -> VRFW « group 0x00000000 is not in EVENT_ASSIGN_SND… (skipped) »)
-        env += ['[[event_env]]', 'event = %s' % _q(s)] + (['tag_words = { set = %s }' % f(tags)] if g_tag != 0 else []) \
+        # (22/11, journal de muku : « event_env #2 (ev60_89120): ev60_89120 has no row in event_env_config_soccer_demo: give
+        # `from` (the event to clone) (skipped) ») scène d'une COPIE de technique : sa ligne vient de la scène d'origine
+        de_ = ['from = %s' % _q(bases[s])] if bases.get(s) and bases[s] != s and groupes_scene(cfg, s) == (None, None) else []
+        env += ['[[event_env]]', 'event = %s' % _q(s)] + de_ + (['tag_words = { set = %s }' % f(tags)] if g_tag != 0 else []) \
             + (['snd_tag_words = { set = %s }' % f(snd)] if g_snd != 0 else []) + ['']
     entete = '# Écrit par l\'Atelier Inazuma (ne pas modifier à la main : réécrit à chaque export).\n'
     _ecrire(os.path.join(sortie, 'content', 'characters', 'mes_esprits.toml'), 'schema = "VRFW.character/2"\n' + entete + 'default_lang = "en"\n\n' + '\n'.join(ch))

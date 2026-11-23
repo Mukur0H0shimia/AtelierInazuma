@@ -112,6 +112,13 @@
       + '<div id="p-jeux"></div>'
       + '<div class="p-ligne"><input id="p-jeu-autre" placeholder="Autre dossier (celui de nie.exe)…"><button id="p-jeu-utiliser">Utiliser</button></div>'
       + '<p class="p-note" id="p-jeu-etat"></p>'
+      + '<h3>Corbeille</h3>'
+      + '<p class="p-note">Ce que tu supprimes (projets, créations, maillots) est rangé à part, jamais effacé : tu peux le remettre, ou l\'effacer pour de bon pour gagner de la place.</p>'
+      + '<div class="p-ligne"><button id="p-corb-ouvrir">🗑 Ouvrir la corbeille</button><span class="p-taille" id="p-corb-taille" data-pas-traduire></span></div>'
+      + '<h3>Cache</h3>'
+      + '<p class="p-note">Ce que l\'Atelier a déjà lu du jeu et des mods, pour aller plus vite. Le vider libère de la place ; il est refait au besoin (un peu plus lent la première fois). Le terrain des cinématiques est gardé.</p>'
+      + '<div class="p-ligne"><button id="p-cache-vider">Vider le cache (sauf le terrain)</button><span class="p-taille" id="p-cache-taille" data-pas-traduire></span></div>'
+      + '<p class="p-note" id="p-cache-etat"></p>'
       + '<div class="p-bas"><button id="p-ok" class="primaire">OK</button></div></div>';
     document.body.appendChild(f);
     var L = f.querySelector('#p-palettes');
@@ -137,6 +144,8 @@
     });
     f.querySelector('#p-police-importer').onclick = function () { window.importerPolice().then(majFenetre); };
     f.querySelector('#p-jeu-utiliser').onclick = function () { choisirJeu(f.querySelector('#p-jeu-autre').value); };
+    f.querySelector('#p-corb-ouvrir').onclick = ouvrirCorbeille;
+    f.querySelector('#p-cache-vider').onclick = viderCache;
     var fermer = function () { f.classList.remove('ouvert'); natif(); };
     f.querySelector('#p-fermer').onclick = fermer; f.querySelector('#p-ok').onclick = fermer;
     f.addEventListener('pointerdown', function (ev) { if (ev.target === f) { fermer(); } });
@@ -163,8 +172,129 @@
       };
       d.appendChild(n); d.appendChild(x); L.appendChild(d);
     });
-    chargerJeux();
+    chargerJeux(); chargerTailles();
   }
+
+  // ------------------------------------------------------------------ (23/11, demande de muku) CORBEILLE et CACHE
+  // voir et remettre ce qui a été supprimé (projets/corbeille, sortie/<mod>/_retires, maillots retirés), l'effacer pour de bon ;
+  // vider le cache sauf le terrain (moteur/corbeille.py)
+  function api(u, corps) {
+    return fetch(u, corps ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) } : undefined)
+      .then(function (r) { return r.json(); });
+  }
+  function enOctets(n) {
+    var fr = (window.ATELIER_LANGUE || 'fr') === 'fr';
+    if (n >= 1073741824) { return (n / 1073741824).toFixed(1).replace('.', fr ? ',' : '.') + (fr ? ' Go' : ' GB'); }
+    if (n >= 1048576) { return Math.round(n / 1048576) + (fr ? ' Mo' : ' MB'); }
+    return Math.max(1, Math.round(n / 1024)) + (fr ? ' Ko' : ' KB');
+  }
+  function enDate(t) {
+    if (!t) { return ''; }
+    var d = new Date(t); if (isNaN(d)) { return t; }
+    return d.toLocaleString(window.ATELIER_LANGUE || 'fr', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  function chargerTailles() {
+    var c = document.getElementById('p-cache-taille'), t = document.getElementById('p-corb-taille');
+    if (c) { c.textContent = '…'; }
+    api('/api/cache_taille').then(function (r) { if (c) { c.textContent = enOctets(r.videable || 0); } }).catch(function () { if (c) { c.textContent = ''; } });
+    api('/api/corbeille').then(function (r) { if (t) { t.textContent = r.elements.length + ' · ' + enOctets(r.taille || 0); } }).catch(function () { });
+  }
+  function viderCache() {
+    var e = document.getElementById('p-cache-etat');
+    if (!confirm('Vider le cache de l\'Atelier (sauf le terrain) ?\nRien de ce que tu as créé n\'est touché. Ce qui est effacé sera relu du jeu au besoin.')) { return; }
+    e.textContent = 'Vidage du cache…';
+    api('/api/cache_vider', {}).then(function (r) {
+      e.textContent = 'Libéré : ' + enOctets(r.libere || 0) + '. Relance l\'Atelier pour repartir proprement.'
+        + (r.bloques && r.bloques.length ? ' Utilisé en ce moment, gardé : ' + r.bloques.join(', ') + '.' : '');
+      chargerTailles();
+    }).catch(function (x) { e.textContent = String(x && x.message || x); });
+  }
+  var CORB = { filtre: '', liste: [] };
+  var GENRES_CORB = { projet: 'Projet', creation: 'Création', maillot: 'Maillot' };
+  function boiteCorbeille() {
+    var d = document.getElementById('corbeille');
+    if (d) { return d; }
+    d = document.createElement('div'); d.id = 'corbeille';
+    d.innerHTML = '<div class="p-boite c-boite" role="dialog" aria-label="Corbeille">'
+      + '<div class="p-titre"><span>🗑 Corbeille</span><button class="c-fermer" title="Fermer">×</button></div>'
+      + '<div class="c-filtres"><button data-f="" class="sel">Tout</button><button data-f="projet">Projets</button><button data-f="creation">Créations</button><button data-f="maillot">Maillots</button>'
+      + '<span class="c-total" data-pas-traduire></span><button class="c-vider">Tout supprimer définitivement</button></div>'
+      + '<p class="p-note">« Restaurer » remet l\'élément là où il était. « Supprimer définitivement » l\'efface pour de bon (place libérée).</p>'
+      + '<div class="c-liste"></div><p class="p-note c-etat"></p>'
+      + '<div class="p-bas"><button class="primaire c-ok">OK</button></div></div>';
+    document.body.appendChild(d);
+    var fermer = function () { d.classList.remove('ouvert'); chargerTailles(); };
+    d.querySelector('.c-fermer').onclick = fermer; d.querySelector('.c-ok').onclick = fermer;
+    d.addEventListener('pointerdown', function (ev) { if (ev.target === d) { fermer(); } });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && d.classList.contains('ouvert')) { ev.stopPropagation(); fermer(); } }, true);
+    d.querySelectorAll('.c-filtres [data-f]').forEach(function (b) {
+      b.onclick = function () { CORB.filtre = b.dataset.f; d.querySelectorAll('.c-filtres [data-f]').forEach(function (x) { x.classList.toggle('sel', x === b); }); dessinerCorbeille(); };
+    });
+    d.querySelector('.c-vider').onclick = function () {
+      var l = CORB.liste.filter(function (x) { return !CORB.filtre || x.genre === CORB.filtre; });
+      if (!l.length) { return; }
+      var tot = l.reduce(function (a, x) { return a + (x.taille || 0); }, 0);
+      if (!confirm('Supprimer définitivement ' + l.length + ' élément(s) (' + enOctets(tot) + ') ?\nOn ne pourra plus les restaurer.')) { return; }
+      etatCorbeille('Suppression…');
+      api('/api/corbeille', { action: 'vider', ids: l.map(function (x) { return x.id; }) }).then(function (r) {
+        etatCorbeille('Libéré : ' + enOctets(r.libere || 0) + (r.erreurs && r.erreurs.length ? ' — pas supprimé : ' + r.erreurs.join(' ; ') : ''));
+        chargerCorbeille();
+      });
+    };
+    return d;
+  }
+  function etatCorbeille(t) { var e = document.querySelector('#corbeille .c-etat'); if (e) { e.textContent = t; } }
+  function dessinerCorbeille() {
+    var d = boiteCorbeille(), L = d.querySelector('.c-liste'); L.innerHTML = '';
+    var l = CORB.liste.filter(function (x) { return !CORB.filtre || x.genre === CORB.filtre; });
+    d.querySelector('.c-total').textContent = l.length + ' · ' + enOctets(l.reduce(function (a, x) { return a + (x.taille || 0); }, 0));
+    if (!l.length) { L.innerHTML = '<p class="p-note c-vide">La corbeille est vide.</p>'; return; }
+    l.forEach(function (x) {
+      var r = document.createElement('div'); r.className = 'c-ligne';
+      var im = document.createElement('div'); im.className = 'c-image';
+      if (x.vignette) { im.style.backgroundImage = 'url("' + x.vignette + '")'; } else { im.textContent = x.genre === 'maillot' ? '👕' : x.genre === 'projet' ? '✎' : '★'; }
+      var t = document.createElement('div'); t.className = 'c-texte';
+      var b = document.createElement('b'); b.textContent = x.titre; b.setAttribute('data-pas-traduire', '');
+      var g = document.createElement('span'); g.className = 'c-genre'; g.textContent = GENRES_CORB[x.genre] || x.genre;
+      var s = document.createElement('small'); s.setAttribute('data-pas-traduire', '');
+      s.textContent = [x.mod, x.onglet, enDate(x.supprime), enOctets(x.taille || 0)].filter(Boolean).join(' · ');
+      t.appendChild(g); t.appendChild(b); t.appendChild(s);
+      if (x.images_seules) {
+        var n2 = document.createElement('small'); n2.className = 'c-alerte'; n2.textContent = 'Ancien maillot : seules ses images restent, on ne peut que les effacer.';
+        t.appendChild(n2);
+      } else if (x.genre === 'creation' && !x.restaurable) {
+        var n = document.createElement('small'); n.className = 'c-alerte'; n.textContent = 'Suppression ancienne : sa fiche manque, on ne peut que l\'effacer.';
+        t.appendChild(n);
+      }
+      var bt = document.createElement('div'); bt.className = 'c-boutons';
+      var re = document.createElement('button'); re.className = 'primaire'; re.textContent = 'Restaurer';
+      re.disabled = x.genre !== 'projet' && !x.restaurable;
+      re.onclick = function () {
+        re.disabled = true; etatCorbeille('Restauration…');
+        api('/api/corbeille', { action: 'restaurer', id: x.id }).then(function (q) {
+          etatCorbeille(q.ok ? (q.message || 'Restauré.') : 'Pas restauré : ' + q.erreur);
+          chargerCorbeille();
+          if (q.ok && typeof chargerHub === 'function' && document.getElementById('page-hub')) { chargerHub(); }
+        });
+      };
+      var su = document.createElement('button'); su.textContent = 'Supprimer définitivement';
+      su.onclick = function () {
+        if (!confirm('Supprimer définitivement « ' + x.titre + ' » (' + enOctets(x.taille || 0) + ') ?\nOn ne pourra plus le restaurer.')) { return; }
+        api('/api/corbeille', { action: 'supprimer', id: x.id }).then(function (q) {
+          etatCorbeille(q.ok ? 'Libéré : ' + enOctets(q.libere || 0) : 'Pas supprimé : ' + q.erreur); chargerCorbeille();
+        });
+      };
+      bt.appendChild(re); bt.appendChild(su);
+      r.appendChild(im); r.appendChild(t); r.appendChild(bt); L.appendChild(r);
+    });
+  }
+  function chargerCorbeille() {
+    var L = boiteCorbeille().querySelector('.c-liste'); if (!CORB.liste.length) { L.innerHTML = '<p class="p-note">Lecture…</p>'; }
+    return api('/api/corbeille').then(function (r) { CORB.liste = r.elements || []; dessinerCorbeille(); })
+      .catch(function (e) { etatCorbeille(String(e && e.message || e)); });
+  }
+  function ouvrirCorbeille() { boiteCorbeille().classList.add('ouvert'); etatCorbeille(''); chargerCorbeille(); }
+  window.ouvrirCorbeille = ouvrirCorbeille;
 
   // ------------------------------------------------------------------ (22/11, retour d'un joueur : créations « Installed » mais
   // absentes de son gestionnaire de mods) le dossier du jeu où « Installer » met les mods, et les autres installations trouvées
@@ -281,7 +411,7 @@
   window.addEventListener('load', function () {
     var h = document.querySelector('header');
     if (h && !document.getElementById('bouton-parametres')) {
-      var b = document.createElement('button'); b.id = 'bouton-parametres'; b.textContent = '⚙'; b.title = 'Paramètres : couleurs, musique, polices, dossier du jeu';
+      var b = document.createElement('button'); b.id = 'bouton-parametres'; b.textContent = '⚙'; b.title = 'Paramètres : couleurs, musique, polices, dossier du jeu, corbeille, cache';
       b.onclick = window.ouvrirParametres; h.appendChild(b);
     }
     if (P.musique) { demarrer(); }        // la fenêtre de l'Atelier (WebView2) laisse souvent jouer sans geste

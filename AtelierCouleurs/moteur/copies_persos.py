@@ -292,9 +292,15 @@ def retirer(cfg, cle):
         else os.path.join(_sortie(cfg), 'assets', 'chr', '_face', e['serie'], e['code'])
     g = os.path.join(_sortie(cfg), '_retires', datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
     os.makedirs(g, exist_ok=True)
+    p = os.path.join(_sortie(cfg), 'assets', 'menu', '200_icon', '10_icon_chr', 'face', e['code'] + '_l.g4tx')
+    # (23/11) fiche pour la Corbeille (« Restaurer ») : son entrée du registre et où remettre chaque fichier
+    fiche = {'mod': MOD_ID, 'genre': 'personnages', 'code': e['code'], 'nom': e.get('nom') or cle, 'cle': cle, 'entree': e,
+             'date': datetime.datetime.now().isoformat(timespec='seconds'),
+             'fichiers': {e['code']: os.path.relpath(d, _sortie(cfg)).replace(os.sep, '/'),
+                          e['code'] + '_l.g4tx': os.path.relpath(p, _sortie(cfg)).replace(os.sep, '/')}}
+    json.dump(fiche, open(os.path.join(g, '_retire.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     if os.path.isdir(d):
         shutil.move(d, os.path.join(g, e['code']))
-    p = os.path.join(_sortie(cfg), 'assets', 'menu', '200_icon', '10_icon_chr', 'face', e['code'] + '_l.g4tx')
     if os.path.exists(p):
         shutil.move(p, os.path.join(g, e['code'] + '_l.g4tx'))
     _sauver(cfg, reg); _ecrire_contenu(cfg, reg)

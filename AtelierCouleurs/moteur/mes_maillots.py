@@ -131,12 +131,19 @@ def enregistrer(cfg, d):
 
 def supprimer(id_):
     """retiré de la liste (ses images restent dans travail/<id>)"""
+    if isinstance(id_, dict):                  # (23/11) ancien appel du hub : le maillot entier au lieu de son id
+        id_ = id_.get('id')
     p = A.charger_projet()
     avant = len(p['maillots'])
+    # (23/11) la liste AVANT la suppression (avant : écrite après -> le maillot supprimé n'y était pas, impossible à remettre ;
+    # moteur/corbeille.py la lit pour « Restaurer »)
+    copie = json.dumps(p, ensure_ascii=False, indent=2)
     p['maillots'] = [m for m in p['maillots'] if m['id'] != id_]
     if len(p['maillots']) != avant:
-        json.dump(p, open(A.PROJET + '.avant_suppression_%d.json' % int(time.time()), 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+        open(A.PROJET + '.avant_suppression_%d.json' % int(time.time()), 'w', encoding='utf-8').write(copie)
         A.sauver_projet(p)
+    else:
+        return {'ok': False, 'erreur': 'maillot introuvable (%s)' % id_}
     return {'ok': True}
 
 

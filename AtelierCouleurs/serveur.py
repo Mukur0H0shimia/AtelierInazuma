@@ -137,6 +137,15 @@ def charger_catalogues():
         _acc = _essayer('accessoires (chara_parts)', _accessoires_3d, set())
         JEU['tenues'] = JEU.get('tenues', []) + [dict(x, nom='Accessoire ' + x['code'], genre='Accessoire') for x in JEU['objets3d'] if x['code'] in _acc]
     JEU['objets'] = _essayer('objets', lambda: objets_jeu.construire(CFG['data_dir'], CT), [])
+    # (23/11) maillots : noms dans la langue de l'Atelier (cache/index_jeu.json garde ceux du catalogue d'origine, en français)
+    try:
+        from moteur.maillots import atelier_mod as _am
+        _nm = _am.noms_maillots(CFG['data_dir'])
+        for _x in JEU.get('maillots', []):
+            if _nm.get(_x.get('cle_maillot')):
+                _x['nom'] = _nm[_x['cle_maillot']]
+    except Exception as _ex:
+        print('noms des maillots :', _ex)
     # (21/11) noms du jeu avec balises (« Maillot <FST:GARCILDO> Team ») : lisibles, comme dans l'Atelier Maillots
     for _l in JEU.values():
         if isinstance(_l, list):
@@ -312,7 +321,8 @@ def entree_mod(code):
     return MOD_CODE.get(code)
 
 
-threading.Thread(target=mods_liste, kwargs={'frais': True}, daemon=True).start()   # (17/11/2026) lu dès le démarrage
+if __name__ != '__mp_main__':        # (23/11) pas dans les processus de travail (catalogues vides : KeyError 'modele' au journal)
+    threading.Thread(target=mods_liste, kwargs={'frais': True}, daemon=True).start()   # (17/11/2026) lu dès le démarrage
 
 
 def technique(code):
@@ -1254,6 +1264,43 @@ def liste_projets():
     return out
 
 
+def lier_anciens_projets(projets, creations):
+    """(23/11, muku : « test technique a eu ses textures reset », « mon Pégase couleurs aussi ») les créations faites AVANT le
+    lien projet -> création (22/11) n'avaient pas de projet lié : leur projet restait dans « À continuer » comme un travail en
+    cours ; retiré de la liste (🗑), « Modifier » rouvrait l'élément du jeu, couleurs d'origine. Chaque création sans projet lié
+    adopte celui que « Modifier » ouvrait déjà (app.js projetDe) : même nom, sinon le plus récent sur le même élément quand
+    une seule création en vient, enregistré AVANT la création. Lié : hors de « À continuer », il ne peut plus être jeté."""
+    import datetime
+
+    def quand(p):
+        try:
+            return datetime.datetime.fromisoformat(str(p.get('date')).replace('Z', '+00:00')).timestamp()
+        except ValueError:
+            return None
+    lies = {(p['cree'].get('mod'), str(p['cree'].get('code'))) for p in projets if isinstance(p.get('cree'), dict)}
+    for c in creations:
+        if not c.get('mod') or c.get('code') is None or (c['mod'], str(c['code'])) in lies:
+            continue
+        libres = [p for p in projets if not p.get('cree') and p.get('onglet') == c.get('onglet') and str(p.get('code')) == str(c.get('base'))]
+        p = next((p for p in libres if p.get('titre') == c.get('nom')), None)
+        if p is None and sum(1 for x in creations if x.get('base') == c.get('base') and x.get('onglet') == c.get('onglet')) == 1:
+            p = next((p for p in libres if quand(p) is not None and c.get('date') and quand(p) <= float(c['date']) + 120), None)
+        if p is None:
+            continue
+        f = fichier_projet(p['cle'])
+        try:
+            e = json.load(open(f, encoding='utf-8'))
+            e['cree'] = {'mod': c['mod'], 'code': str(c['code'])}
+            tmp = f + '.tmp'
+            json.dump(e, open(tmp, 'w', encoding='utf-8'), ensure_ascii=False)
+            os.replace(tmp, f)
+        except (OSError, ValueError):
+            continue
+        p['cree'] = e['cree']
+        lies.add((c['mod'], str(c['code'])))
+    return projets
+
+
 def mod_a_jour(mod, _memo={}):
     """(15/11/2026) TOUS les fichiers de sortie/<mod> sont-ils dans <jeu>/mods/<mod> ? Avant, le hub ne comparait qu'un
     fichier texte par création : une réparation des modèles (fichiers .g4pkm, scènes) restait « Installé ». Taille + date
@@ -1348,10 +1395,25 @@ def regler_stats(mod, code, brut):
         reg[k]['stats'] = st.nettoyer(genre, brut)
     except ValueError as ex:
         return {'ok': False, 'erreur': str(ex)}
+    inv = None
+    if genre == 'esprit':                  # (23/11) élément changé : l'invocation de cet élément (moteur/esprits.py)
+        try:
+            inv = esprits.plan_invocation(CFG, reg[k])
+        except Exception as ex:            # (lecture des animations impossible : l'invocation d'origine reste)
+            print('invocation :', ex)
+        if inv:
+            reg[k]['invocation'] = inv
+        else:
+            reg[k].pop('invocation', None)
     sauver()
     ch = st._changes(reg[k]['stats'], jeu) if genre != 'personnages' else reg[k]['stats']
-    return {'ok': True, 'mod': mod, 'rapport': ['%s : %s' % (e.get('nom'), ', '.join('%s = %s' % (x, y) for x, y in ch.items()) if ch
-                                                         else "valeurs de l'original gardées")]}
+    rapport = ['%s : %s' % (e.get('nom'), ', '.join('%s = %s' % (x, y) for x, y in ch.items()) if ch else "valeurs de l'original gardées")]
+    nom_el = dict(st.CHOIX_ELEMENT).get((inv or {}).get('element'), '')
+    if inv and inv['etat'] == 'emprunt':
+        rapport.append('invocation : celle de l’élément %s (%s), avec les animations de %s' % (nom_el, inv['scene'], inv['esprit']))
+    elif inv:
+        rapport.append('invocation : aucun esprit de l’élément %s n’a les mêmes os, l’invocation d’origine reste' % nom_el)
+    return {'ok': True, 'mod': mod, 'rapport': rapport}
 
 
 # ------------------------------------------------------------------ (22/11, demande de muku) SUPPRIMER une création
@@ -1389,8 +1451,18 @@ def _retirer_bannieres(f, key):
     if not os.path.isfile(f):
         return
     blocs = open(f, encoding='utf-8').read().split('\n[[telop]]')
-    garde = [blocs[0]] + [b for b in blocs[1:] if ('id = "%s"' % key) not in b and ('id = "%s_' % key) not in b]   # + variantes
+    vise = lambda b: ('id = "%s"' % key) in b or ('id = "%s_' % key) in b      # + variantes
+    garde = [blocs[0]] + [b for b in blocs[1:] if not vise(b)]
     open(f, 'w', encoding='utf-8').write('\n[[telop]]'.join(garde))
+    return [b for b in blocs[1:] if vise(b)]          # (23/11) gardées avec la création retirée (corbeille : « Restaurer »)
+
+
+def _noter_retrait(garde, **rec):
+    """(23/11, muku : « voir et restaurer ce qu'on a supprimé ») fiche de la création retirée, à côté de ses fichiers :
+    son entrée du registre (outil_*.json) et ce qu'il faut pour la remettre telle quelle (Corbeille de ⚙ Paramètres)"""
+    os.makedirs(garde, exist_ok=True)
+    rec['date'] = datetime.datetime.now().isoformat(timespec='seconds')
+    json.dump(rec, open(os.path.join(garde, '_retire.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 
 
 def supprimer_creation(mod, code, genre=None):
@@ -1431,7 +1503,10 @@ def supprimer_creation(mod, code, genre=None):
         codes_mod = [v for k, v in modeles.items() if nom and k.startswith(nom + '|')]
         motifs = [nom, code, e.get('id')] + codes_mod
         n = _ranger(sortie, motifs, garde) if nom else 0
-        _retirer_bannieres(os.path.join(sortie, 'content', 'telops', 'any', 'telops.toml'), code)
+        ban = _retirer_bannieres(os.path.join(sortie, 'content', 'telops', 'any', 'telops.toml'), code)
+        if nom:
+            _noter_retrait(garde, mod=mod, genre='technique', code=code, nom=e.get('nom') or nom, cle=nom, entree=e,
+                           modeles={k: v for k, v in modeles.items() if k.startswith(nom + '|')}, bannieres=ban or [])
         # « Installer » ne fait qu'AJOUTER des techniques au jeu : celle-ci est donc aussi retirée du mod du jeu (rangée à part)
         jeu = os.path.join(CFG.get('jeu_dir') or '', 'mods', 'MesTechniques')
         nj = _ranger(jeu, motifs if nom else [code], os.path.join(garde, '_jeu'))
@@ -1456,6 +1531,7 @@ def supprimer_creation(mod, code, genre=None):
             return {'ok': False, 'erreur': 'armure inconnue'}
         e = reg.pop(k)
         n = _ranger(sortie, [e.get('modele'), e.get('key')], garde)
+        _noter_retrait(garde, mod=mod, genre='armures', code=code, nom=e.get('nom') or k, cle=k, entree=e)
         json.dump(reg, open(os.path.join(sortie, 'outil_armures.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
         armures_copies.ecrire_vrfw(CFG, reg)
         return {'ok': True, 'rapport': ['armure supprimée (%d fichiers rangés dans %s)' % (n, garde)]}
@@ -1469,6 +1545,7 @@ def supprimer_creation(mod, code, genre=None):
             return {'ok': False, 'erreur': 'Utilisé par : ' + ', '.join(u) + '. Change-le d\'abord là-bas.'}
         e = reg.pop(code)
         n = _ranger(sortie, [code, e.get('key'), e.get('slug') and 'mesesprits_' + e['slug']], garde)
+        _noter_retrait(garde, mod=mod, genre=e.get('genre') or 'esprit', code=code, nom=e.get('nom') or code, cle=code, entree=e)
         esprits.ecrire_vrfw(CFG, sortie, reg)
         json.dump(reg, open(os.path.join(sortie, 'outil_esprits.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
         return {'ok': True, 'rapport': ['esprit guerrier supprimé (%d fichiers rangés dans %s)' % (n, garde)]}
@@ -1482,6 +1559,7 @@ def supprimer_creation(mod, code, genre=None):
             return {'ok': False, 'erreur': 'tenue inconnue'}
         e = reg.pop(k)
         n = _ranger(sortie, [e.get('modele'), k], garde)
+        _noter_retrait(garde, mod=mod, genre='tenues', code=code, nom=e.get('nom') or k, cle=k, entree=e)
         json.dump(reg, open(os.path.join(sortie, 'outil_tenues.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
         copies_outfits.ecrire(CFG, reg)
         return {'ok': True, 'rapport': ['tenue supprimée (%d fichiers rangés dans %s)' % (n, garde)]}
@@ -1489,8 +1567,9 @@ def supprimer_creation(mod, code, genre=None):
         reg = objets_jeu.registre(CFG)
         if code not in reg:
             return {'ok': False, 'erreur': 'objet inconnu'}
-        reg.pop(code)
+        e = reg.pop(code)
         n = _ranger(sortie, [code], garde)
+        _noter_retrait(garde, mod=mod, genre='objets', code=code, nom=(e or {}).get('nom') or code, cle=code, entree=e)
         json.dump(reg, open(os.path.join(sortie, 'outil_objets.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
         objets_jeu.ecrire(CFG, reg)
         return {'ok': True, 'rapport': ['objet supprimé (%d fichiers rangés dans %s)' % (n, garde)]}
@@ -1827,6 +1906,12 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, parametres())
             if u.path == '/api/dossier_jeu':               # (22/11) ⚙ Paramètres : dossier du jeu où « Installer » met les mods
                 return self._envoyer(200, dossier_jeu())
+            if u.path == '/api/corbeille':                 # (23/11) ⚙ Paramètres : ce qui a été supprimé (projets, créations, maillots)
+                from moteur import corbeille
+                return self._envoyer(200, corbeille.lister(ICI, CFG))
+            if u.path == '/api/cache_taille':              # (23/11) ⚙ Paramètres : place du cache (le terrain reste)
+                from moteur import corbeille
+                return self._envoyer(200, corbeille.taille_cache(CACHE))
             if u.path in ('/api/musique', '/api/musique.ogg'):   # (22/11) musique de fond : thème de l'écran titre du jeu
                 from moteur import musique as _mu_
                 f_, meta_ = _mu_.ogg(CFG['data_dir'], CACHE, (q.get('piste') or ['titre'])[0])
@@ -1851,7 +1936,8 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/prereglages':              # (15/11/2026) préréglages de couleurs (réutilisables)
                 return self._envoyer(200, {'liste': lire_prereglages()})
             if u.path == '/api/projets':                  # (15/11/2026) hub « Mes créations »
-                return self._envoyer(200, {'projets': liste_projets(), 'creations': liste_creations()})
+                _cr = liste_creations()
+                return self._envoyer(200, {'projets': lier_anciens_projets(liste_projets(), _cr), 'creations': _cr})
             if u.path == '/api/projet':                   # (15/11/2026) projet en cours d'une technique (reprise)
                 f = fichier_projet(q.get('cle', [''])[0])
                 if not os.path.isfile(f):
@@ -2008,6 +2094,27 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, regler_stats(demande.get('mod'), demande.get('code'), demande.get('stats') or {}))
             if u.path == '/api/supprimer_creation':        # (22/11) « Supprimer » d'une carte de Terminées
                 return self._envoyer(200, supprimer_creation(demande.get('mod'), str(demande.get('code') or ''), demande.get('genre')))
+            if u.path == '/api/corbeille':                 # (23/11) Restaurer / Supprimer définitivement / Vider la corbeille
+                from moteur import corbeille
+                a = demande.get('action')
+                if a == 'restaurer':
+                    r = corbeille.restaurer(ICI, CFG, demande.get('id'), construire_maillots=lambda: mes_maillots.construire(CFG))
+                    if r.get('ok'):
+                        threading.Thread(target=mods_liste, kwargs={'frais': True}, daemon=True).start()
+                    return self._envoyer(200, r)
+                if a == 'supprimer':
+                    try:
+                        return self._envoyer(200, {'ok': True, 'libere': corbeille.supprimer(ICI, demande.get('id'))})
+                    except (OSError, ValueError) as ex:
+                        return self._envoyer(200, {'ok': False, 'erreur': str(ex)})
+                if a == 'vider':
+                    return self._envoyer(200, corbeille.vider(ICI, CFG, demande.get('ids')))
+                return self._envoyer(200, {'ok': False, 'erreur': 'action inconnue'})
+            if u.path == '/api/cache_vider':               # (23/11) vider le cache sauf le terrain
+                from moteur import corbeille
+                with _verrou:
+                    _modeles.clear()                       # modèles lus gardés en mémoire : relus depuis le jeu
+                return self._envoyer(200, corbeille.vider_cache(CACHE))
             if u.path == '/api/police_importer':          # (22/11) police .ttf / .otf importée (fichier en data URL)
                 return self._envoyer(200, importer_police(demande.get('nom'), demande.get('data')))
             if u.path == '/api/police_retirer':

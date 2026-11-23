@@ -190,7 +190,18 @@ def os_squelette(data_dir, code):
     return set()
 
 
+_OS_ANIMES = {}
+
+
 def os_animes(data_dir, ev, code):
+    """(23/11) gardé en mémoire : l'invocation d'une copie d'esprit lit tous les esprits d'une scène"""
+    cle = (data_dir, ev, code)
+    if cle not in _OS_ANIMES:
+        _OS_ANIMES[cle] = _os_animes(data_dir, ev, code)
+    return set(_OS_ANIMES[cle])
+
+
+def _os_animes(data_dir, ev, code):
     from . import anim
     d, s = dossier_scene(ev), set()
     for f in glob.glob(os.path.join(data_dir, 'common', 'event', d[:4], d, '%s_%s_*.g4pk' % (d, code))):

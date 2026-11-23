@@ -2,6 +2,16 @@
 
 *English below.*
 
+## 2.0.6
+- **Corbeille** (⚙ Paramètres) : tout ce que tu as supprimé (projets, créations, maillots) se voit dans une liste avec sa date et sa taille. « Restaurer » le remet comme avant ; « Supprimer définitivement » l'efface pour gagner de la place.
+- **Vider le cache** (⚙ Paramètres) : libère la place prise par ce que l'Atelier a déjà lu du jeu et des mods. Tes créations ne sont pas touchées, et le terrain des cinématiques est gardé.
+- **« Modifier » rouvrait une création avec les couleurs d'origine** quand elle avait été faite avec une ancienne version et que son projet avait été retiré de « À continuer ». Chaque création retrouve maintenant son projet toute seule, et ce projet ne s'affiche plus dans « À continuer » (il ne peut plus être jeté par erreur).
+- **Supprimer un maillot dans Mes créations** ne le retirait pas : il revenait au rechargement. C'est corrigé.
+- **Armures sur tous les joueurs** : une armure faite dans l'Atelier n'avait le modèle que pour un seul type de corps ; sur les autres joueurs, le jeu ne proposait pas l'armure. Elle a maintenant un modèle pour chaque corps (comme les armures du jeu). Pour une armure déjà faite : « Installer » sur la carte de ton esprit guerrier.
+- **Invocation selon l'élément** : un esprit guerrier copié dont tu changes l'élément (« Régler les stats ») a maintenant l'invocation de cet élément, comme ceux du jeu (feu → invocation de feu…). Il prend les animations d'un esprit de cet élément qui a les mêmes os ; s'il n'y en a aucun, l'invocation d'origine reste et le rapport le dit.
+- Refaire un esprit guerrier avec « Créer » garde maintenant ses stats (avant, elles étaient perdues).
+- **Anglais et espagnol complets** : les phrases qui contiennent un nom ou un nombre (rapports, confirmations, menus : « Préréglage « Rouge » appliqué », « Sélection : 3 pièces »…) restaient en français. Elles sont maintenant traduites, et les noms des maillots du jeu suivent la langue choisie.
+
 ## 2.0.5
 - **Español** : l'Atelier existe maintenant en espagnol, avec le vocabulaire du jeu (Keshin, Supertécnicas, Tiro, Regate, Parada…). Les noms du jeu suivent aussi la langue.
 - **Choix de la langue** : un menu en haut à droite, et trois boutons dans ⚙ Paramètres (Français, English, Español).
@@ -124,6 +134,16 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 2.0.6
+- **Trash** (⚙ Settings): everything you deleted (projects, creations, kits) shows in a list with its date and size. "Restore" puts it back as before; "Delete permanently" erases it to free up space.
+- **Empty the cache** (⚙ Settings): frees the space taken by what the Atelier has already read from the game and the mods. Your creations are not touched, and the cutscene pitch is kept.
+- **"Edit" reopened a creation with the original colours** when it was made with an older version and its project had been removed from "To continue". Each creation now finds its project by itself, and that project no longer shows in "To continue" (it can no longer be thrown away by mistake).
+- **Deleting a kit in My creations** did not remove it: it came back on reload. Fixed.
+- **Armours on every player**: an armour made in the Atelier only had the model for one body type; on other players, the game didn't offer the armour. It now has a model for every body (like the game's armours). For an armour you already made: “Install” on your Keshin's card.
+- **Summon by element**: a copied Keshin whose element you change (“Set the stats”) now has the summon of that element, like the game's own (fire → fire summon…). It uses the animations of a Keshin of that element with the same bones; if there is none, the original summon stays and the report says so.
+- Re-making a Keshin with “Create” now keeps its stats (they used to be lost).
+- **Complete English and Spanish**: sentences containing a name or a number (reports, confirmations, menus: “Preset “Red” applied”, “Selection: 3 parts”…) stayed in French. They are now translated, and the game's kit names follow the chosen language.
 
 ## 2.0.5
 - **Español**: the Atelier is now in Spanish too, with the game's own words (Keshin, Supertécnicas, Tiro, Regate, Parada…). Game names follow the language as well.

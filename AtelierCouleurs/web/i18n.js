@@ -100,6 +100,23 @@
 
   // (21/11) textes avec des données : [modèle sur le texte aux espaces réduits, remplacement]
   var MOTIFS = [
+    // (23/11) invocation d'une copie d'esprit guerrier selon son élément
+    [/^invocation : celle de l’élément (\S+) \((\S+)\), avec les animations de (\S+)$/, function (_, e, s, k) {
+      return 'summon: the ' + ({ Air: 'Wind', 'Forêt': 'Forest', Feu: 'Fire', Montagne: 'Mountain', 'Néant': 'Void' }[e] || e) + ' one (' + s + '), with the animations of ' + k; }],
+    [/^invocation : aucun esprit de l’élément (\S+) n’a les mêmes os, l’invocation d’origine reste$/, function (_, e) {
+      return 'summon: no ' + ({ Air: 'Wind', 'Forêt': 'Forest', Feu: 'Fire', Montagne: 'Mountain', 'Néant': 'Void' }[e] || e) + ' Keshin has the same bones, the original summon stays'; }],
+    // (23/11) Corbeille et cache (⚙ Paramètres)
+    [/^Libéré : (.+?)\. Relance l'Atelier pour repartir proprement\.(?: Utilisé en ce moment, gardé : (.+)\.)?$/, function (_, n, g) {
+      return 'Freed: ' + n + '. Restart the Atelier to start clean.' + (g ? ' In use right now, kept: ' + g + '.' : ''); }],
+    [/^Libéré : (.+?)(?: — pas supprimé : (.+))?$/, function (_, n, e) { return 'Freed: ' + n + (e ? ' — not deleted: ' + e : ''); }],
+    [/^Pas restauré : (.+)$/, function (_, e) { return 'Not restored: ' + trad(e); }],
+    [/^« (.+) » est de retour dans Mes créations\. Pour le jeu : « Installer » sur sa carte\.$/, '“$1” is back in My creations. For the game: “Install” on its card.'],
+    [/^« (.+) » est de retour \(le mod « Mes maillots » est refait avec lui\)\.$/, '“$1” is back (the “My kits” mod is rebuilt with it).'],
+    [/^« (.+) » ne peut pas revenir : une création porte déjà son nom ou son code(?: \((.+)\))?\. Supprime ou renomme celle-là d’abord\.$/, function (_, n, c) {
+      return '“' + n + '” cannot come back: a creation already has its name or code' + (c ? ' (' + c + ')' : '') + '. Delete or rename that one first.'; }],
+    [/^Supprimer définitivement (\d+) élément\(s\) \((.+)\) \?$/, 'Delete $1 item(s) permanently ($2)?'],
+    [/^Supprimer définitivement « (.+) » \((.+)\) \?$/, 'Delete “$1” permanently ($2)?'],
+    [/^maillot introuvable \((.+)\)$/, 'kit not found ($1)'],
     // (22/11, 2.0.2) textes ajoutés après la traduction : copier / coller une texture, polices importées, Mes créations
     [/^Image de (.+) collée sur (\S+)(?: \(mise à sa taille : (.+?)\))?\. La forme des pièces reste celle de cette technique : une image faite pour une autre forme peut tomber autrement\. Pour revenir en arrière : « Annuler le dernier » \(bloc Remplacer une couleur partout\)\.$/,
      function (_, a, b, taille) { return 'Picture of ' + a + ' pasted on ' + b + (taille ? ' (resized: ' + taille + ')' : '')
@@ -364,6 +381,77 @@
     }
     return tradL(s, 'en');
   }
+  // (23/11, muku : « vérifie que tout est en anglais et en espagnol ») PHRASES FABRIQUÉES avec des données
+  // (`Préréglage « ${nom} » gardé.`, 'Libéré : ' + n + '.', 'tenue supprimée (%d fichiers rangés dans %s)') : jamais dans le
+  // dictionnaire telles quelles. web/i18n_modeles.js (Partage/generer_modeles.py) donne leurs MORCEAUX FIXES, relevés dans le
+  // code ; la phrase affichée est reconnue par ses morceaux, chaque morceau traduit par le dictionnaire, les données gardées.
+  var MOD_C = null, MOD_VU = {}, PROF_M = 0;
+  function compilerModeles() {
+    MOD_C = [];
+    var L = window.MODELES_FR || [];
+    for (var i = 0; i < L.length; i++) {
+      var f = L[i].map(function (x) { return String(x).replace(/\s+/g, ' '); });
+      f[0] = f[0].replace(/^ /, ''); f[f.length - 1] = f[f.length - 1].replace(/ $/, '');
+      var lit = f.join('').replace(/[^A-Za-zÀ-ÿ]/g, '').length;
+      if (lit < 4) { continue; }
+      var re = '^' + f.map(function (x) { return x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('([\\s\\S]*?)') + '$';
+      try { MOD_C.push({ re: new RegExp(re), f: f, lit: lit }); } catch (e) { }
+    }
+    MOD_C.sort(function (a, b) { return b.lit - a.lit; });
+  }
+  function chercherM(c, d, SUPL) {
+    if (d[c] !== undefined) { return d[c]; }
+    if (SUPL[c] !== undefined) { return SUPL[c]; }
+    return undefined;
+  }
+  function morceauM(f, d, SUPL) {             // morceau fixe -> traduit (espaces des bords gardés) ; undefined si inconnu
+    var c = f.trim();
+    if (!/[A-Za-zÀ-ÿ]/.test(c)) { return f; }
+    var av = f.slice(0, f.length - f.replace(/^\s+/, '').length), ap = f.slice(f.replace(/\s+$/, '').length);
+    var r = chercherM(c, d, SUPL);
+    if (r === undefined) {                    // ponctuation des bords (« : », « ( », « « », « ) ») retirée pour chercher
+      var m = c.match(/^([:;»)\],.·–—\s]+)?([\s\S]*?)([\s«(:?!–—·]+)?$/);
+      if (m && (m[1] || m[3]) && /[A-Za-zÀ-ÿ]{2}/.test(m[2])) {
+        var x = chercherM(m[2], d, SUPL);
+        if (x !== undefined) { r = (m[1] || '') + x + (m[3] || ''); }
+      }
+    }
+    // rien de français dedans (« [[recolor]] », « crc32 », « Atelier Inazuma », « px ») : gardé tel quel
+    if (r === undefined && !/[àâçéèêëîïôûùœ«»’]|\b(le|la|les|des|du|une|un|et|pour|avec|sans|dans|sur|est|pas|ce|cette|ses|son|sa|tes|ton|ta|qui|que|au|aux|de|en|ou|à)\b/i.test(c)) { r = c; }
+    return r === undefined ? undefined : av + r + ap;
+  }
+  function parModele(t, lg) {
+    var cle = lg + '\u0001' + t;
+    if (MOD_VU.hasOwnProperty(cle)) { return MOD_VU[cle]; }
+    if (!MOD_C) { compilerModeles(); }
+    var es = lg === 'es', d = (es ? window.I18N_ES : window.I18N_EN) || {}, SUPL = es ? (window.SUP_ES || {}) : SUP, r;
+    for (var i = 0; i < MOD_C.length && r === undefined; i++) {
+      var m = t.match(MOD_C[i].re);
+      if (!m) { continue; }
+      var out = '', ok = true;
+      for (var j = 0; j < MOD_C[i].f.length && ok; j++) {
+        var tr = morceauM(MOD_C[i].f[j], d, SUPL);
+        if (tr === undefined) { ok = false; break; }
+        out += tr;
+        if (j + 1 < m.length) {               // donnée : traduite si c'est un texte connu (dictionnaire, nombres, modèles)
+          var v = m[j + 1], vt = chercherM(v.trim(), d, SUPL);
+          if (vt === undefined && PROF_M < 2 && /[A-Za-zÀ-ÿ]{3}/.test(v)) {
+            PROF_M++;
+            try { var v2 = tradL(v.trim(), lg); if (v2 !== null && v2 !== v.trim()) { vt = v2; } } finally { PROF_M--; }
+          }
+          out += vt !== undefined ? v.replace(v.trim(), vt) : v;
+        }
+      }
+      if (ok) {                               // typographie : pas d'espace avant « : ? ! », guillemets de la langue
+        out = out.replace(/ ([:;?!])/g, '$1').replace(/\u00a0([:;?!])/g, '$1');
+        out = es ? out.replace(/« /g, '«').replace(/ »/g, '»') : out.replace(/« ?/g, '“').replace(/ ?»/g, '”');
+        if (es && /\?$/.test(out) && out.indexOf('¿') < 0) { out = '¿' + out; }          // question espagnole : « ¿ … ? »
+        r = out;
+      }
+    }
+    MOD_VU[cle] = r;
+    return r;
+  }
   function tradL(s, lg) {
     var brut = s.trim();
     if (!brut) { return s; }
@@ -396,7 +484,7 @@
       }
     }
     if (r === undefined) {                       // bannières : police absente de ce PC
-      var p0 = t.match(/^Police absente de ce PC : (\S+) \(Impact utilisée à la place\)\.$/);
+      var p0 = t.match(/^Police absente de ce PC : (.+?) \(Impact utilisée à la place\)\.$/);
       if (p0) { r = es ? 'Fuente no instalada en este PC: ' + p0[1] + ' (se usa Impact).' : 'Font not on this PC: ' + p0[1] + ' (Impact used instead).'; }
     }
     if (r === undefined) {                       // « cinématique ev62_00010_1 » (titre d'une technique)
@@ -407,11 +495,29 @@
       var k0 = t.match(/^([^·]*?)( \([^()]{1,8}\))$/);
       if (k0 && d[k0[1]] !== undefined) { r = d[k0[1]] + k0[2].replace(/\bMaj\b/g, es ? 'Mayús' : 'Shift'); }   // (22/11) « Maj+O » -> « Shift+O »
     }
+    if (r === undefined) {                       // (23/11) phrase fabriquée avec des données : par ses morceaux fixes
+      r = parModele(t, lg);
+    }
+    if (r === undefined && PROF_M < 2) {         // (23/11) « nom : message » (rapports) : le message traduit, le nom gardé
+      var nm = t.match(/^([^:«»]{1,60}?) : (.+)$/);
+      if (nm) {
+        PROF_M++;
+        try {
+          var mt = tradL(nm[2], lg), gt = chercherM(nm[1], d, SUPL);         // le nom aussi s'il est connu (« tes mods : … »)
+          if (mt !== null && mt !== nm[2]) { r = (gt !== undefined ? gt : nm[1]) + ': ' + mt; }
+          else if (gt !== undefined) { r = gt + ': ' + nm[2]; }
+        } finally { PROF_M--; }
+      }
+    }
     if (r === undefined && t.indexOf(' · ') > 0) {   // infobulles « Outil (touche) · explication »
       var i0 = t.indexOf(' · ');
       var tete = t.slice(0, i0), reste = t.slice(i0 + 3);
       var tt = trad(tete), tr = d[reste] !== undefined ? d[reste] : trad(reste);
       if (tt !== tete || tr !== reste) { r = tt + ' · ' + tr; }
+      // (23/11) « sans VRFW · 26 mod(s) · tes mods : … » : chaque partie à part
+      if (r !== undefined && /[«»]|\b(des|du|tes|les|sans|dans)\b/.test(tr) && reste.indexOf(' · ') > 0) {
+        r = t.split(' · ').map(function (x) { return d[x] !== undefined ? d[x] : trad(x); }).join(' · ');
+      }
     }
     if (r === undefined) {                       // dernier recours : les mots du jeu (Esprit guerrier -> Keshin)
       if (es) { return null; }                   // espagnol : l'anglais prend le relais (trad)

@@ -149,6 +149,31 @@ def _id(graine, pris):
         k += 1
 
 
+_LIGNES_CR = {}
+
+
+def lignes_par_corps(cfg, armure):
+    """(23/11, un joueur : « l'esprit n'a pas l'option d'armure » sur son joueur) une armure a UN MODÈLE PAR GROUPE DE CORPS
+    (3e colonne des lignes, 0 à 16) ; CharacterReforged ne propose l'armure qu'aux joueurs dont le corps en a un (LU :
+    CharacterReforged/content/transforms/armour_rules.toml « every player whose body has a mesh for the armour »). Nos copies
+    écrivaient `from = "<armure>"` avec UNE seule ligne (`rows = [{ upper_texture }]`) : la copie n'avait que le corps 0
+    (celui d'Harper Evans, où elle marchait). Lignes complètes = celles que CharacterReforged déclare pour l'armure d'origine
+    (content/looks/armour_clothes.toml, 17 corps pour ka000101), comme l'armure de Michael (Mukuro). [] si introuvables."""
+    if armure in _LIGNES_CR:
+        return _LIGNES_CR[armure]
+    out = []
+    for f in [os.path.join(cfg.get('jeu_dir') or '', 'mods', 'CharacterReforged', 'content', 'looks', 'armour_clothes.toml')]:
+        try:
+            t = tomllib.load(open(f, 'rb'))
+        except (OSError, ValueError):
+            continue
+        for c in t.get('clothes') or []:
+            if c.get('model') == armure and isinstance(c.get('rows'), list):
+                out = [list(r) for r in c['rows'] if isinstance(r, list) and len(r) > 2]
+    _LIGNES_CR[armure] = out
+    return out
+
+
 def ecrire_vrfw(cfg, reg):
     sortie = _sortie(cfg)
     entete = '# Écrit par l\'Atelier Inazuma : armures de mes copies d\'esprits (réécrit à chaque export).\n'
@@ -156,8 +181,16 @@ def ecrire_vrfw(cfg, reg):
     reg_esprits = esprits.registre(sortie)
     for k, (code, e) in enumerate(sorted(reg.items())):
         m = e['modele']
-        look += ['# %s : armure %s recolorée' % (e['nom'], e['armure']), '[[clothes]]', 'model = %s' % _q(m), 'from = %s' % _q(e['armure']),
-                 'rows = [{ upper_texture = %s }]' % _q('_armd/%s/%s_10.g4tx' % (m, m)), '']
+        tex = '_armd/%s/%s_10.g4tx' % (m, m)
+        lignes = lignes_par_corps(cfg, e['armure'])
+        if lignes:                       # une ligne par groupe de corps : modèles de l'armure d'origine, notre texture
+            look += ['# %s : armure %s recolorée, un modèle par groupe de corps (lignes de CharacterReforged)' % (e['nom'], e['armure']),
+                     '[[clothes]]', 'model = %s' % _q(m), 'rows = [']
+            look += ['  [%s],' % ', '.join(_q(v) if isinstance(v, str) else str(v) for v in ([r[0], tex] + r[2:])) for r in lignes]
+            look += [']', '']
+        else:
+            look += ['# %s : armure %s recolorée' % (e['nom'], e['armure']), '[[clothes]]', 'model = %s' % _q(m), 'from = %s' % _q(e['armure']),
+                     'rows = [{ upper_texture = %s }]' % _q(tex), '']
         ch += ['[[character]]', 'name = %s' % _q('mesesprits_armure_' + m), 'based_on = "c11600010"', 'battle = false', '',
                '  [character.base]', '  id = 0x%08X                                         # crc32("evt_%s")' % (e['id'], m), '  name = %s' % _q('evt_' + m), '',
                '  [character.new_model]', '  id = 0x%08X' % e['id_modele'], '  from = "c11600010"',

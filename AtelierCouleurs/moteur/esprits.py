@@ -277,6 +277,56 @@ def evenements_du_dossier(cfg, dossier):
     return [x for x in n if groupes_scene(cfg, x) != (None, None)] or [dossier]
 
 
+# (23/11, question d'un joueur : « mon esprit guerrier de feu a l'invocation de l'air ») LU dans aura_skill_config,
+# AURA_CMD_INFO : colonne 8 = élément, colonne 12 = crc32 de la cinématique d'invocation. Esprits guerriers (wk*, 437 lignes) :
+# 1 air -> ev80_00020, 2 forêt -> ev80_00030, 3 feu -> ev80_00040, 4 montagne -> ev80_00050, 5 néant -> ev80_00060
+# (ev80_00010 : celle de Pégase, à part). Totems (ws*) : ev83_00010 quel que soit l'élément -> rien à changer.
+# Chaque esprit a SES animations dans la scène (ev80_00040_<esprit>_*.g4pk) : la copie prend celles d'un esprit de cet
+# élément dont tous les os animés existent dans son squelette (comme la technique liée, « emprunt »). VRFW : cellule
+# `event` de [[aura_command]] (InazumaFantasy, ZanUltimateMod) + [[event_env]] de la scène (tag_words / snd_tag_words).
+INVOCATION_ELEMENT = {'wind': 'ev80_00020', 'forest': 'ev80_00030', 'fire': 'ev80_00040', 'mountain': 'ev80_00050', 'void': 'ev80_00060'}
+
+
+def invocation_du_jeu(data_dir, technique):
+    """(élément, nom de la cinématique d'invocation) de la technique d'invocation du jeu (wko00010…)"""
+    from . import cfgbin
+    from .stats import _dernier, ELEMENTS
+    f = _dernier(os.path.join(data_dir, 'common', 'gamedata', 'skill', 'aura_skill_config_*.cfg.bin'))
+    for _, v in cfgbin.lire(open(f, 'rb').read()) if f else []:
+        if len(v) > 12 and v[1] == technique:
+            noms = {zlib.crc32(n.encode()): n for n in set(INVOCATION_ELEMENT.values()) | {'ev80_00010'}}
+            return ELEMENTS.get(v[8], ''), noms.get(v[12] & 0xFFFFFFFF)
+    return '', None
+
+
+def plan_invocation(cfg, c):
+    """invocation d'une copie d'esprit guerrier dont l'élément a été changé : None (celle de l'original) ou
+    {scene, esprit (dont les animations servent), etat: emprunt | incompatible, element}"""
+    from . import coups
+    el = (c.get('stats') or {}).get('element')
+    if c.get('dossier') != '_keshin' or not str(c.get('technique', '')).startswith('wk') or el not in INVOCATION_ELEMENT:
+        return None
+    el0, sc0 = invocation_du_jeu(cfg['data_dir'], c['technique'])
+    scene = INVOCATION_ELEMENT[el]
+    if el == el0 or scene == sc0:
+        return None
+    anc, dd = c['base'], cfg['data_dir']
+    sq = coups.os_squelette(dd, anc)
+    meilleur = None
+    for k in coups.esprits_de_scene(dd, scene):
+        if not k.startswith('k'):
+            continue
+        if k == anc:                                    # l'original a déjà ses animations dans cette scène
+            meilleur = (float('inf'), k)
+            break
+        a = coups.os_animes(dd, scene, k)
+        if sq and not (a - sq) and (meilleur is None or len(a) > meilleur[0]):
+            meilleur = (len(a), k)
+    if not meilleur:
+        return {'scene': scene, 'etat': 'incompatible', 'element': el}
+    return {'scene': scene, 'esprit': meilleur[1], 'etat': 'emprunt', 'element': el}
+
+
 def ecrire_vrfw(cfg, sortie, registre):
     ch, tech, txt, shop = [], [], [], []
     scenes, bases = {}, {}
@@ -297,6 +347,10 @@ def ecrire_vrfw(cfg, sortie, registre):
         if c.get('stats'):
             from . import stats as _st
             cel_lie += _st.cellules_esprit(c['stats'], _st.jeu_esprit(cfg['data_dir'], c['technique']))
+        inv = c.get('invocation') or {}
+        if inv.get('etat') == 'emprunt' and inv.get('scene') and inv.get('esprit'):    # (23/11) invocation de son élément
+            cel_lie += ', event = 0x%08X' % zlib.crc32(inv['scene'].encode())
+            scenes.setdefault(inv['scene'], []).append((neuf, inv['esprit'], inv['esprit']))
         tech += ['# %s : copie de %s (%s), code %s' % (c['nom'], c['nom_base'], anc, neuf),
                  '[[aura_command]]', 'key = %s' % _q(c['key']), 'id = 0x%08X                                  # crc32(key)' % zlib.crc32(c['key'].encode()),
                  'from = %s' % _q(c['technique']), 'manual = true',
@@ -402,7 +456,8 @@ def exporter(cfg, demande, infos):
                  'description': (demande.get('description') or '').strip(), 'prix': demande.get('prix'),
                  'technique': technique, 'key': '%s_mesesprits_%s' % (technique[:3], s), 'scenes': scenes,
                  'date': datetime.datetime.now().isoformat(timespec='seconds'),
-                 **({'technique_liee': reg[neuf]['technique_liee']} if reg.get(neuf, {}).get('technique_liee') else {})}   # gardée si on refait la copie
+                 # gardés si on refait la copie (23/11 : stats et invocation aussi, avant seule la technique liée restait)
+                 **{x: reg[neuf][x] for x in ('technique_liee', 'stats', 'invocation') if reg.get(neuf, {}).get(x)}}
     ecrire_vrfw(cfg, sortie, reg)
     json.dump(reg, open(os.path.join(sortie, 'outil_esprits.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     rapport = ['copie %s → code neuf %s (l\'original ne change pas)' % (anc, neuf)] + ['texture ' + r for r in rapport] \

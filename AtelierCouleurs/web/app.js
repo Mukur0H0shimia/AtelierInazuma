@@ -2740,8 +2740,8 @@ async function supprimerCreation(c) {
   let r;
   try {
     if (c.mod === 'MesMaillots' && c.maillot) {
-      await api('/api/maillot', { action: 'supprimer', id: c.maillot });
-      r = await api('/api/maillot', { action: 'construire' });          // le mod « Mes maillots » refait sans lui
+      r = await api('/api/maillot', { action: 'supprimer', id: c.maillot.id || c.code });   // (23/11) l'id, pas l'objet (rien n'était retiré)
+      if (r.ok) r = await api('/api/maillot', { action: 'construire' });          // le mod « Mes maillots » refait sans lui
       r = r.ok ? { ok: true, rapport: ['maillot supprimé ; le mod « Mes maillots » est refait sans lui'] } : r;
     } else r = await api('/api/supprimer_creation', { mod: c.mod, code: c.mod === 'MesPersonnages' ? c.cle : c.code, genre: c.genre });
   } catch (e) { r = { ok: false, erreur: e.message }; }

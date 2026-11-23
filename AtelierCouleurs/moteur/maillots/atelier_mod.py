@@ -89,10 +89,40 @@ def construire_catalogue(donnees, journal=print):
     return cat
 
 
+def noms_maillots(donnees):
+    """(23/11, en anglais les maillots s'appelaient « Maillot Lions du désert ») noms des maillots du jeu dans la LANGUE de
+    l'Atelier (item_text de cette langue, mêmes lignes que construire_catalogue) ; gardés dans catalogue_noms_<langue>.json"""
+    lg = _langue.code()
+    f = os.path.join(os.path.dirname(CATALOGUE), 'catalogue_noms_%s.json' % lg)
+    if os.path.exists(f):
+        return json.load(open(f, encoding='utf-8'))
+    ic = sorted(glob.glob(os.path.join(donnees, 'common', 'gamedata', 'item', 'item_config_*.cfg.bin')))[-1]
+    txt = {v[0] & 0xffffffff: v[5] for n, v in parse(os.path.join(donnees, 'common', 'text', lg, 'item_text.cfg.bin'))
+           if n == 'NOUN_INFO' and v and v[1] == 0}
+    noms = {}
+    for n, v in parse(ic):
+        if n != 'ITEM_FASHION_INFO' or not v:
+            continue
+        cle = next((x for x in v if isinstance(x, str)), '')
+        if cle.startswith('uni_u'):
+            nom = next((txt[x & 0xffffffff] for x in v[1:5] if isinstance(x, int) and (x & 0xffffffff) in txt), None)
+            if nom:
+                noms[cle] = nom
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    json.dump(noms, open(f, 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
+    return noms
+
+
 def catalogue(donnees, journal=print):
-    if os.path.exists(CATALOGUE):
-        return json.load(open(CATALOGUE, encoding='utf-8'))
-    return construire_catalogue(donnees, journal)
+    cat = json.load(open(CATALOGUE, encoding='utf-8')) if os.path.exists(CATALOGUE) else construire_catalogue(donnees, journal)
+    try:                                       # (23/11) noms dans la langue choisie (le catalogue garde ceux de sa création)
+        noms = noms_maillots(donnees)
+        for e in cat:
+            if noms.get(e['cle']):
+                e['nom'] = noms[e['cle']]
+    except Exception as ex:                    # (jeu illisible : les noms du catalogue restent)
+        journal('noms des maillots : %s' % ex)
+    return cat
 
 
 def planche_icones(donnees):

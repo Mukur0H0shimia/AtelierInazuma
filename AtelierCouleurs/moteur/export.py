@@ -779,6 +779,19 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
     repares = reparer_assignes(cfg, src) if mod_id == 'MesTechniques' else []      # (22/11) copies à totem faites avant
     if mod_id == 'MesTechniques':                       # (22/11) copies sans leur cinématique d'échec (fail_event)
         repares += reparer_echecs(cfg, src)
+    if mod_id == 'MesEsprits':                          # (23/11) armures d'avant : un seul modèle (corps 0) -> un par corps
+        try:
+            from . import armures_copies
+            reg_a = armures_copies.registre(cfg)
+            if reg_a:
+                avant = open(os.path.join(src, 'content', 'looks', 'mes_armures.toml'), encoding='utf-8').read() \
+                    if os.path.isfile(os.path.join(src, 'content', 'looks', 'mes_armures.toml')) else ''
+                armures_copies.ecrire_vrfw(cfg, reg_a)
+                apres = open(os.path.join(src, 'content', 'looks', 'mes_armures.toml'), encoding='utf-8').read()
+                if apres != avant:
+                    repares.append('armures : un modèle pour chaque corps de joueur (avant, seulement le premier)')
+        except Exception as ex:                         # (rien de bloquant : l'installation continue comme avant)
+            print('armures :', ex)
     textes_mod(src, mod_id)                             # (22/11) nom et description du mod : anglais + traductions
     for p in glob.glob(os.path.join(src, '**', '*.toml'), recursive=True):
         tomllib.load(open(p, 'rb'))

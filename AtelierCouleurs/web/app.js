@@ -449,11 +449,72 @@ function texturesNatif() {
     if (r.actif) NATIF.cle = cleNatif().cle;
   }, 250);
 }
+// (24/11, demande d'enhanc3 : « comme les Keshin, isolés dans une pose par défaut pour retoucher leurs textures : et les éléments des
+// techniques, comme les pingouins ? ») OBJET SEUL : l'objet de la texture choisie, montré seul dans l'aperçu de l'Atelier, au repos
+// (son maillage tel qu'il est dans son fichier) ou à l'image courante, caméra libre. Ne change NI la visibilité des pièces, NI le
+// projet, NI ce qui part au lecteur du jeu ou à l'export (Vue3D.isole / repos). Le lecteur du jeu (caméra du jeu) est fermé
+// pendant ce temps ; « ✕ Tout revoir », ▶, une autre technique ou un autre onglet ramènent la technique entière.
+function piecesObjet(o, nomTex) {
+  const V = E.vue, s = new Set(); if (!V || !o) return s;
+  // effet : seulement les pièces qui portent cette texture (la vrille, pas les flashs ni les dômes de tout l'objet)
+  const avec = new Set((o.pieces || []).filter(q => nomTex && (q.textures || []).includes(nomTex)).map(q => o.nom + '/' + q.index));
+  if (nomTex && !avec.size && (o.pieces || []).length) return s;      // texture des seules particules : rien à montrer seul
+  for (const p of V.pieces) if (!p.ptl && !p.peau && !p.versionCachee && p.cle && (avec.size ? avec.has(p.cle) : p.cle.startsWith(o.nom + '/'))) s.add(p);
+  if (!s.size) {     // modèle animé par os (pingouins…) : les maillages d'UN acteur (plusieurs pingouins = le même modèle)
+    const pp = V.pieces.filter(p => p.peau && !p.versionCachee && p.texCle && p.texCle.replace(/^peau:/, '').startsWith(o.nom + '/'));
+    const ac = pp.length ? pp[0].peau.acteur : null;
+    // deux versions du modèle dans le même acteur (dragon clair _10 / sombre _20 de Choc de la vouivre) : celle de la texture choisie
+    const ver = n => (/_(\d\d)[a-z]*$/.exec(n || '') || [])[1], v0 = ver(nomTex);
+    if (ac !== null) for (const p of V.pieces) if (p.peau && p.peau.acteur === ac && !p.versionCachee && (!v0 || !ver(p.texCle) || ver(p.texCle) === v0)) s.add(p);
+  }
+  return s;
+}
+const avecTex = (o, n) => (o.pieces || []).some(q => (q.textures || []).includes(n)) && !(o.pieces || []).every(q => (q.textures || []).includes(n));
+async function isolerObjet(cleTex) {
+  const V = E.vue; if (!V || !E.tech || E.tech.perso) return majRapport('« Voir seul » sert aux techniques (onglet Techniques).');
+  const x = cleTex && E.textures[cleTex], o = x && x.obj;
+  if (!o) return majRapport('Choisis d’abord une texture de l’objet à voir seul (clic sur une vignette).');
+  let s = piecesObjet(o, x.nom);
+  // modèle animé (pingouins…) : chargé avec l'animation, quelques secondes après l'ouverture -> on l'attend
+  if (!s.size && o.modeleActeur) { const t = E.tech; majRapport('Chargement du modèle…');
+    for (let k = 0; k < 60 && !s.size && E.tech === t && E.vue === V; k++) { await new Promise(r => setTimeout(r, 250)); s = piecesObjet(o, x.nom); }
+    if (E.tech !== t || E.vue !== V) return; }
+  if (!s.size) return majRapport('Cet objet n’a pas de maillage à montrer seul (particules ou image).');
+  if (!E.isole) E.isoleAvant = { cameraJeu: V.cameraJeu, centre: V.centre && V.centre.slice(), dist: V.dist, yaw: V.yaw, pitch: V.pitch };
+  finNatif(true);
+  E.isole = avecTex(o, x.nom) ? x.nom : o.nom; V.isole = s; V.repos = !$('iso-image') || !$('iso-image').checked; V.joue = false; V.cameraJeu = false;
+  for (const p of s) if (p.peau) p.peau._repos = false;
+  V.recadrer(true); V.dist *= 1.3; Vue3D.activite = performance.now(); majIsole();
+  majRapport('« ' + (avecTex(o, x.nom) ? x.nom : o.nom) + ' » seul dans l’aperçu de l’Atelier : glisse pour tourner, molette pour zoomer. Tes retouches s’y voient tout de suite. « ✕ Tout revoir » pour revenir à la technique.');
+}
+function quitterIsolement(relancer) {
+  const V = E.vue; if (!E.isole) return; E.isole = null;
+  if (V) { V.isole = null; const a = E.isoleAvant || {}; if (a.cameraJeu !== undefined) V.cameraJeu = a.cameraJeu;
+    if (a.centre) { V.centre = a.centre; V.dist = a.dist; V.yaw = a.yaw; V.pitch = a.pitch; }
+    for (const p of V.pieces) if (p.peau) p.peau._repos = false; Vue3D.activite = performance.now(); }
+  majIsole();
+  if (relancer !== false && E.onglet === 'techniques' && V && V.lecteur) natifSurImage(Math.floor(V.image || 0));
+}
+function majIsole() {
+  const c = $('centre'); if (!c) return;
+  let d = $('iso-vue');
+  if (!d) { d = document.createElement('div'); d.id = 'iso-vue';
+    d.innerHTML = '<span class="iso-titre">Objet seul : <b></b></span><label title="Coché : la pose de l’image courante de l’animation ; décoché : au repos (maillage tel qu’il est dans son fichier)"><input type="checkbox" id="iso-image"> À l’image courante</label>'
+      + '<button id="iso-quitter" title="Revenir à la technique entière (lecteur du jeu)">✕ Tout revoir</button>';
+    c.appendChild(d);
+    d.querySelector('#iso-quitter').onclick = () => quitterIsolement();
+    d.querySelector('#iso-image').onchange = e => { const V = E.vue; if (!V) return; V.repos = !e.target.checked; for (const p of V.pieces) if (p.peau) p.peau._repos = false;
+      if (V.repos) { V.recadrer(true); V.dist *= 1.3; } Vue3D.activite = performance.now(); };
+  }
+  d.hidden = !E.isole; if (E.isole) d.querySelector('b').textContent = E.isole;
+  const b = $('tex-isoler'); if (b) b.classList.toggle('actif', !!E.isole);
+}
+
 // (23/11, muku : « fais tout ce que tu peux en natif ») l'image d'une technique = celle du LECTEUR DU JEU (vrais shaders) :
 // à l'ouverture, au curseur, aux flèches, il s'ouvre en pause sur l'image voulue. L'aperçu WebGL (approché : pas les vraies
 // couleurs du jeu) ne se voit plus que pendant son chargement, ou s'il est fermé / indisponible, avec une mention.
 async function natifSurImage(f) {
-  const V = E.vue; if (!V || !V.lecteur || !E.tech || E.tech.perso || NATIF.hote) return;
+  const V = E.vue; if (!V || !V.lecteur || !E.tech || E.tech.perso || NATIF.hote || E.isole) return;     // (24/11) pas pendant « objet seul »
   if (NATIF.actif && NATIF.cle === cleNatif().cle) { NATIF.imageVoulue = f; cmdNatif('image ' + f); return; }
   NATIF.imageVoulue = f;
   if (NATIF.lance) return;                       // lancement en cours : l'image sera posée à l'ouverture
@@ -463,7 +524,7 @@ async function natifAuto(t) {                   // ouverture d'une technique dan
   for (let k = 0; k < 240 && E.tech === t && !(E.lecteur && E.stadeCode); k++) await new Promise(r => setTimeout(r, 250));
   const stats = $('menu-stats') && $('menu-stats').open;
   if (E.tech !== t || !E.lecteur || !E.stadeCode || E.onglet !== 'techniques' || stats || $('centre').classList.contains('dans-stats')
-    || NATIF.actif || NATIF.lance || NATIF.hote) return;
+    || NATIF.actif || NATIF.lance || NATIF.hote || E.isole) return;
   activerAnimation(true); E.vue.joue = false; E.vue.image = 0;
   natifSurImage(0);
 }
@@ -480,6 +541,7 @@ function majApproche() {                        // mention sur l'aperçu WebGL q
 }
 setInterval(majApproche, 300);
 async function lecteurNatif() {
+  if (E.isole) quitterIsolement(false);           // (24/11) ▶ pendant « objet seul » : la technique entière revient
   const V = E.vue; if (!V || !V.lecteur || !E.tech) return;
   const { caches, cle } = cleNatif();
   // déjà ouvert : lecture / pause. (23/11) ordre EXPLICITE d'après le bouton (« basculer » pendant le chargement, quand le lecteur
@@ -563,6 +625,7 @@ async function ouvrir(code) {
   try { return await ouvrir_(code); } catch (e) { E.chargement = false; throw e; }
 }
 async function ouvrir_(code) {
+  quitterIsolement(false);                         // (24/11) « objet seul » : fini avec l'ancienne technique
   await sauverProjet();                            // (15/11/2026) dernier changement de la technique d'avant gardé
   finNatif(true);
   $('resultats').style.display = 'none';
@@ -1442,7 +1505,7 @@ async function chargerHub() {
 // l'effet est le plus présent (somme des visibilités de chronologie(), même règle que « Localiser »), caméra du jeu, en
 // 16:9, JPEG 640 px. Refaite au plus toutes les 20 s quand le projet change ; gardée avec le projet (etat.vignette).
 async function faireVignette() {
-  const V = E.vue; if (!V || !E.tech || E.avant || !V.cv || !V.cv.width) return null;
+  const V = E.vue; if (!V || !E.tech || E.avant || E.isole || !V.cv || !V.cv.width) return null;   // (24/11) pas d'image « objet seul »
   let f = null;
   // animation pas lancée : posée le temps de la vignette (mêmes visibilités qu'activerAnimation(true)), puis tout est remis
   const anim0 = V.lecteur, vis0 = V.pieces.map(p => p.visible);
@@ -2554,7 +2617,7 @@ window.addEventListener('load', async () => {
   // (commandes « cacher » / « montrer » du lecteur, AtelierNatif/src/incruste.h)
   new MutationObserver(majCacheNatif).observe(res, { attributes: true, attributeFilter: ['style'] });
   const changerOnglet = o => {
-    if (E.onglet !== o) { E.filtreSource = null; E.filtreSerie = null; }   // (17/11/2026) filtres Jeu / Mods et série : par onglet
+    if (E.onglet !== o) { E.filtreSource = null; E.filtreSerie = null; if (o !== 'techniques') quitterIsolement(false); }   // (17/11/2026) filtres Jeu / Mods et série : par onglet
     E.onglet = o; const simple_ = document.body.classList.contains('mode-simple'); document.body.className = 'onglet-' + o + (simple_ ? ' mode-simple' : '');   // (21/11) garde le mode simple
     document.querySelectorAll('.onglets button').forEach(b => b.classList.toggle('actif', b.dataset.onglet === o));
     const c = ONGLETS[o]; cherche.placeholder = c.cherche; cherche.value = ''; res.style.display = 'none';
@@ -2654,6 +2717,7 @@ window.addEventListener('load', async () => {
   $('aleatoire').onclick = () => { for (const c of Object.keys(E.textures)) { const r = reglage('teinte'); r.c1 = hsv2rgb(Math.random() * 360, 1, 1); appliquerA(c, r); } apresRetouche(); };
   $('degrade-tout').onclick = () => { for (const c of Object.keys(E.textures)) appliquerA(c, reglage('degrade')); apresRetouche(); };
   $('remettre').onclick = () => { for (const x of Object.values(E.textures)) if (x.cur && x.orig) { x.cur.getContext('2d').putImageData(x.orig, 0, 0); x.modif = false; x.base = null; x.moyenne = moyenne(x.orig); } apresRetouche(); };
+  if ($('tex-isoler')) $('tex-isoler').onclick = () => E.isole ? quitterIsolement() : isolerObjet([...E.selTex][0]);   // (24/11) objet seul
   if ($('tex-dessiner')) $('tex-dessiner').onclick = () => { const k = [...E.selTex][0]; if (!k) return majRapport('Choisis d\'abord une texture (clic sur une vignette), puis « Dessiner ».'); ouvrirEditeur(k); };
   cherche.addEventListener('focus', () => { if (estPerso() || E.onglet === 'techniques') cherche.dispatchEvent(new Event('input')); });
   document.addEventListener('click', ev => { if (!ev.target.closest('.recherche')) res.style.display = 'none'; });
@@ -3552,6 +3616,7 @@ async function ouvrirStats(c) {
       }
       const raz = !nb && jeu[k] !== undefined ? `<button class="msj-raz msjt-raz" title="Remettre celui de l’original">↺</button>` : '';
       Dt.innerHTML = `<div class="msj-detail"><div class="msj-tete"><span>${echapper(NOMS[k] || k)}</span>${raz}</div>${corpsD}</div><div class="ms-etat"></div>`;
+      Dt.firstElementChild.scrollIntoView({ block: 'nearest' });       // (24/11) petit écran : la case de réglage reste visible
       // branchements
       const regler = v => { const ch = champ(k) || {}; V[k] = Math.max(ch.min ?? 0, Math.min(ch.max ?? 99999, Math.round(v))); dessiner(); };
       if (nb) {
@@ -3706,6 +3771,7 @@ async function ouvrirStats(c) {
       const raz = (k === 'bonus' || k === 'unique') ? `<button class="msj-raz msjk-ef-raz" title="Remettre ceux de l’original">↺</button>`
         : !nb && jeu[k] !== undefined ? `<button class="msj-raz msjt-raz" title="Remettre celui de l’original">↺</button>` : '';
       Dt.innerHTML = `<div class="msj-detail"><div class="msj-tete"><span>${echapper(NOMS[k] || k)}</span>${raz}</div>${corpsD}</div><div class="ms-etat"></div>`;
+      Dt.firstElementChild.scrollIntoView({ block: 'nearest' });       // (24/11) petit écran : la case de réglage reste visible
       const regler = v => { const ch = champ(k) || {}; V[k] = Math.max(ch.min ?? 0, Math.min(ch.max ?? 99999, Math.round(v))); dessiner(); };
       if (nb) {
         Dt.querySelectorAll('.msj-pas').forEach(b => b.onclick = e => regler((V[k] === '' ? 0 : +V[k]) + (+b.dataset.d) * (e.shiftKey ? 10 : 1)));

@@ -15,6 +15,10 @@ window.MODELES_FR = [
 ") visible dans l'Atelier seulement : VRFW n'accepte pas de copie fournie par un mod (essai en jeu du 23/11) -> lumières comme le jeu"
 ],
 [
+"« ",
+" » seul dans l’aperçu de l’Atelier : glisse pour tourner, molette pour zoomer. Tes retouches s’y voient tout de suite. « ✕ Tout revoir » pour revenir à la technique."
+],
+[
 "",
 "  (totem / esprit du joueur : en jeu, c’est celui du joueur qui lance — pour le recolorer, fais une copie dans Totems ou Esprits)"
 ],

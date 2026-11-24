@@ -683,3 +683,31 @@ html[data-theme="jeu"] .ms-ban-perso { background: var(--j-bouton) center / 100%
 .msp-choix { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .msp-choix .tc-choix-tete { color: #2b3a48; font-size: 18px; }
 .msp-choix .tc-liste { min-height: 160px; }
+
+
+/* (24/11, retour d'un joueur : écran plus petit que le full HD de muku, 1366 x 768 ou 125-150 % dans Windows) la case de réglage
+   (élément, bannière…) était la seule partie de la colonne qui pouvait rétrécir : écrasée à ~90 px, impossible de choisir. Elle
+   garde maintenant sa hauteur (elle prend la place libre quand il y en a) et c'est la colonne qui défile ; marges réduites en
+   hauteur. Fiches de technique, d'esprit guerrier, de totem et d'armure. */
+.msjt-detail { flex: 1 0 auto; min-height: auto; }
+@media (max-height: 860px) {
+  .msj-tech .msj-droite { padding-top: 22px; gap: 10px; }
+  .msjt-detail .msj-tete { font-size: 22px; padding: 6px 16px; }
+  .msjt-detail .msj-puces { padding: 10px 18px 12px; }
+}
+
+/* (24/11) écran du joueur sur un écran plus petit et avec la palette « Comme le jeu » (celle des joueurs) : colonne de gauche
+   sans barre de défilement horizontale (carte et poste centrés au-dessus des cases, au lieu de 200 / 150 px de marge fixe),
+   cases des stats claires (le style des boutons de la palette les repeignait en bleu foncé), ligne de réglage qui ne se chevauche plus */
+.msp .msj-gauche { overflow-x: hidden; }
+.msp .msj-carte { margin-left: calc((min(100%, 540px) - 182px) / 2); }
+.msp .msj-poste-ligne { margin-left: 0; width: min(100%, 540px); justify-content: center; }
+html[data-theme] #menu-stats .msp-st { background: rgba(247,250,252,.94); background-image: none; color: #45535f; border: 3px solid transparent; box-shadow: 0 2px 5px rgba(0,0,0,.15); }
+html[data-theme] #menu-stats .msp-st.sel { border-color: #2fe6dc; box-shadow: 0 0 10px rgba(47,230,220,.6); }
+.msp-regler-nom { flex: none; }
+.msp-regler small { flex: none; }
+.msp-regler input[type=range] { flex: 1 1 60px; min-width: 60px; width: auto; }
+/* (24/11, capture d'un joueur : « S… 2000 ») fiche de technique trop étroite : la barre garde au moins 360 px pour le nom,
+   la jauge TENSION passe dessous au lieu d'écraser le nom (en full HD, toujours sur la même ligne) */
+.msj-fiche-ligne { flex-wrap: wrap; row-gap: 8px; }
+.msj-fiche-ligne .tc-barre { flex: 1 1 480px; }

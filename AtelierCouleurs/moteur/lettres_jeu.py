@@ -18,15 +18,20 @@ import numpy as np
 ELEMENTS = {1: 'wind', 2: 'forest', 3: 'fire', 4: 'mountain', 5: 'void'}
 MINUSCULES = set('acemnorsuvwxz')
 XH = 100.0                                   # hauteur des minuscules dans l'alphabet (pixels)
+# (24/11, demande de danifdez : « ajoute le ñ comme le ç, et á í ó ú… ») les lettres absentes des bannières françaises sont prises
+# dans les bannières du jeu des AUTRES langues (telop_waza/es, pt, de, it, en : ñ Cañón…, ó á í ú Á Í Ó Ú ¡ ã õ ä ö ü ß ù…) ;
+# celles du français ne changent pas. Version de l'alphabet : un ancien cache est refait une fois au démarrage.
+VERSION_ALPHABET = 2
+LANGUES_EN_PLUS = ('es', 'pt', 'de', 'it', 'en')
 
 
-def _noms_fr(data_dir):
-    """code -> (nom français, élément) des techniques du jeu (skill_config + text/fr/skill_text)"""
+def _noms_fr(data_dir, langue='fr'):
+    """code -> (nom dans la langue, élément, bannière) des techniques du jeu (skill_config + text/<langue>/skill_text)"""
     from . import techniques
-    noms = techniques._textes(data_dir, 'fr')
+    noms = techniques._textes(data_dir, langue)
     sc = open(sorted(glob.glob(os.path.join(data_dir, 'common', 'gamedata', 'skill', 'skill_config_*.cfg.bin')))[-1], 'rb').read()
     out = {}
-    for p in glob.glob(os.path.join(data_dir, 'dx11', 'menu', '220_img', 'telop_waza', 'fr', 'wh*.g4tx')):
+    for p in glob.glob(os.path.join(data_dir, 'dx11', 'menu', '220_img', 'telop_waza', langue, 'wh*.g4tx')):
         code = os.path.basename(p)[:-5]
         if '_' in code:
             continue
@@ -42,7 +47,7 @@ def _noms_fr(data_dir):
     from . import cfgbin
     try:
         f = sorted(glob.glob(os.path.join(data_dir, 'common', 'gamedata', 'skill', 'aura_skill_config_*.cfg.bin')))[-1]
-        tw = os.path.join(data_dir, 'dx11', 'menu', '220_img', 'telop_waza', 'fr')
+        tw = os.path.join(data_dir, 'dx11', 'menu', '220_img', 'telop_waza', langue)
         par_crc = {zlib.crc32(os.path.basename(p)[:-5].encode()): os.path.basename(p)[:-5] for p in glob.glob(os.path.join(tw, '[ak]0*.g4tx'))}
         for _, v in cfgbin.lire(open(f, 'rb').read()):
             if len(v) > 8 and isinstance(v[1], str) and v[1][:2] in ('wk', 'ws') and isinstance(v[7], int):
@@ -215,7 +220,19 @@ def construire(cfg, cache_dir, max_par_lettre=8, journal=print):
     alpha, signatures = {}, {}
     gardees = 0
     noms = _noms_fr(cfg['data_dir'])
-    for k, (code, (nom, el, p, haut)) in enumerate(sorted(noms.items())):
+    # français d'abord (toutes les lettres), puis les autres langues : seulement les lettres que le français n'a pas
+    taches = [(code, v, None) for code, v in sorted(noms.items())]
+    for lg in LANGUES_EN_PLUS:
+        try:
+            taches += [(code, v, lg) for code, v in sorted(_noms_fr(cfg['data_dir'], lg).items())]
+        except Exception as ex:
+            journal('bannières %s : %s' % (lg, ex))
+    deja = None
+    for k, (code, (nom, el, p, haut), lg) in enumerate(taches):
+        if lg and deja is None:
+            deja = set(signatures)                     # lettres déjà prises dans les bannières françaises
+        if lg and not any(ch not in deja and ch.strip() for ch in nom):
+            continue                                   # rien de nouveau dans ce nom : bannière pas lue
         try:
             _, _, g = ui_jeu.lire_planche(p)
             _, _, a = ui_jeu._rgba(g.blocs[0])
@@ -226,6 +243,8 @@ def construire(cfg, cache_dir, max_par_lettre=8, journal=print):
             continue
         gardees += 1
         for c, im, x0, y0, base, xh in r:
+            if lg and c in deja:
+                continue
             sig = _signature(im, (y0 - base) / xh, im.shape[0] / xh, im.shape[1] / xh)
             signatures.setdefault(c, []).append(sig)
             L = alpha.setdefault(el, {}).setdefault(c, [])
@@ -234,7 +253,7 @@ def construire(cfg, cache_dir, max_par_lettre=8, journal=print):
             L.append({'im': im, 'x': x0, 'haut': (y0 - base) / xh, 'larg': im.shape[1] / xh, 'h': im.shape[0] / xh, 'xh': xh, 'code': code, 'sig': sig})
             L.sort(key=lambda x: -x['xh']); del L[max_par_lettre:]
         if k % 100 == 0:
-            journal('lettres du jeu : %d / %d bannières, %d gardées' % (k, len(noms), gardees))
+            journal('lettres du jeu : %d / %d bannières, %d gardées' % (k, len(taches), gardees))
     # (23/11, essai : un « T » sorti en minuscule = une bannière mal découpée) chaque lettre : la forme MÉDIANE de tous ses
     # exemples (tous éléments) ; les exemples gardés sont triés par ressemblance, les trop différents sont écartés
     for c, S in signatures.items():
@@ -259,7 +278,8 @@ def construire(cfg, cache_dir, max_par_lettre=8, journal=print):
                 im = x['im']
                 _img.ecrire_png(os.path.join(d, f), im.shape[1], im.shape[0], [im[y].tobytes() for y in range(im.shape[0])])
                 index.setdefault(el, {}).setdefault(c, []).append({'f': f, 'haut': x['haut'], 'larg': x['larg'], 'h': x['h'], 'xh': x['xh'], 'code': x['code']})
-    json.dump({'bannieres': len(noms), 'gardees': gardees, 'alphabet': index}, open(os.path.join(d, 'alphabet.json'), 'w', encoding='utf-8'), ensure_ascii=False)
+    json.dump({'version': VERSION_ALPHABET, 'bannieres': len(taches), 'gardees': gardees, 'alphabet': index},
+              open(os.path.join(d, 'alphabet.json'), 'w', encoding='utf-8'), ensure_ascii=False)
     return index
 
 
@@ -270,7 +290,8 @@ _ALPHA = {}
 def _alphabet(cache_dir):
     f = os.path.join(cache_dir, 'lettres_jeu', 'alphabet.json')
     if f not in _ALPHA:
-        _ALPHA[f] = json.load(open(f, encoding='utf-8'))['alphabet'] if os.path.exists(f) else None
+        j = json.load(open(f, encoding='utf-8')) if os.path.exists(f) else {}
+        _ALPHA[f] = j['alphabet'] if j.get('version') == VERSION_ALPHABET else None     # ancien alphabet (français seul) : refait
         fs = os.path.join(cache_dir, 'lettres_jeu', 'styles.json')     # (24/11) + styles esprit guerrier / totem
         if _ALPHA[f] is not None and os.path.exists(fs):
             st = json.load(open(fs, encoding='utf-8'))
@@ -337,6 +358,42 @@ def _recolorer(im, de, vers):
     return out
 
 
+_PALETTES = {}
+
+
+def _palette_element(cache_dir, el):
+    """(24/11) couleurs des lettres de cet élément rangées du plus sombre au plus clair (pixels colorés de ses o, e, a, u, n)"""
+    if el not in _PALETTES:
+        A = (_alphabet(cache_dir) or {}).get(el) or {}
+        px = []
+        for c in 'oeaun':
+            if A.get(c):
+                im = _lire(cache_dir, A[c][0]['f']); rgb, a = im[..., :3], im[..., 3]
+                m = (a > 0.8) & (rgb.max(-1) - rgb.min(-1) > 0.12)
+                px.append(rgb[m])
+        if px:
+            P = np.concatenate(px); P = P[np.argsort(P.mean(-1))]
+            _PALETTES[el] = P[np.linspace(0, len(P) - 1, 256).astype(int)]
+        else:
+            _PALETTES[el] = None
+    return _PALETTES[el]
+
+
+def _vers_palette(im, pal):
+    """(24/11, lettres espagnoles de danifdez) lettre d'un autre élément repeinte à la palette de celui-ci : chaque pixel coloré
+    prend la couleur de même rang de clarté (le plus sombre -> le plus sombre…) ; contour blanc, reflets et ombre grise gardés.
+    Avant : rotation de la teinte (un Á bleu tourné vers le feu sortait olive / vert)."""
+    rgb, a = im[..., :3], im[..., 3]
+    m = (a > 0.05) & (rgb.max(-1) - rgb.min(-1) > 0.12)
+    if not m.any():
+        return im
+    lum = rgb[m].mean(-1)
+    rang = np.argsort(np.argsort(lum)) / max(1, lum.size - 1)
+    out = im.copy()
+    out[..., :3][m] = pal[np.clip((rang * (len(pal) - 1)).astype(int), 0, len(pal) - 1)]
+    return out
+
+
 def _lettre(cache_dir, el, c):
     """(image RGBA float, mesures) de la lettre c : l'alphabet de l'élément ; sinon celle d'un autre élément RECOLORÉE à la
     teinte de cet élément ; sinon None"""
@@ -372,9 +429,13 @@ def _lettre(cache_dir, el, c):
             x = L[0]
             im = _lire(cache_dir, x['f'])
             if e != el:
-                t0, t1 = _teinte(im), _teinte_element(cache_dir, el)
-                if t0 is not None and t1 is not None:
-                    im = _recolorer(im, t0, t1)
+                pal = _palette_element(cache_dir, el)
+                if pal is not None:
+                    im = _vers_palette(im, pal)
+                else:
+                    t0, t1 = _teinte(im), _teinte_element(cache_dir, el)
+                    if t0 is not None and t1 is not None:
+                        im = _recolorer(im, t0, t1)
             return im, x
     return None
 
@@ -442,6 +503,13 @@ def _lettres_de(texte, element, cache_dir, manquantes):
             L = _lettre(cache_dir, 'wind', c) or _lettre(cache_dir, 'wind', c.lower()) or _lettre(cache_dir, 'wind', c.upper())
         if L is None and c in '()[]':
             L = _parenthese(cache_dir, 'wind' if element == 'totem' else element, c)
+        if L is None:                                   # (24/11) lettre accentuée qu'aucune bannière n'a (ì, ò…) : la lettre sans accent
+            import unicodedata
+            b_ = unicodedata.normalize('NFD', c)[0]
+            if b_ != c and b_.strip():
+                L = _lettre(cache_dir, element, b_) or _lettre(cache_dir, element, b_.lower())
+                if L is None and element == 'totem':
+                    L = _lettre(cache_dir, 'wind', b_)
         if L is None:
             manquantes.append(c); continue
         lettres.append(L)
@@ -651,12 +719,17 @@ def _composer_ligne(texte, element, cache_dir, largeur=1728, hauteur=352):
         L = _lettre(cache_dir, element, c) or _lettre(cache_dir, element, c.lower()) or _lettre(cache_dir, element, c.upper())
         if L is None and c in '()[]':
             L = _parenthese(cache_dir, element, c)
+        if L is None:                                   # (24/11) lettre accentuée qu'aucune bannière n'a (ì, ò…) : la lettre sans accent
+            import unicodedata
+            b_ = unicodedata.normalize('NFD', c)[0]
+            if b_ != c and b_.strip():
+                L = _lettre(cache_dir, element, b_) or _lettre(cache_dir, element, b_.lower())
         if L is None:
             manquantes.append(c); continue
         lettres.append(L)
     if not any(lettres):
         raise ValueError('aucune lettre du jeu pour « %s »' % texte)
-    chev = 0.12                                   # recouvrement des contours (les lettres du jeu se touchent ; réglé à l'œil sur les bannières du jeu)
+    chev = 0.12                                  # recouvrement des contours (les lettres du jeu se touchent ; réglé à l'œil sur les bannières du jeu)
     if element == 'armure':                       # (24/11) lettres AVEC leur contour d'origine : leurs contours se chevauchent
         chev = _CHEV_ARMURE
     espace = 0.45

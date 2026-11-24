@@ -807,6 +807,10 @@
       this.yaw = 0.6; this.pitch = 0.25; this.dist = 30; this.centre = [0, 0, 0];
       // animation : this.lecteur (Lecteur de anim3d.js), this.image, this.joue, this.cameraJeu, this.surImage(image, res)
       this.lecteur = null; this.image = 0; this.joue = false; this.cameraJeu = true; this.surImage = null; this._t = 0;
+      // (24/11, demande d'enhanc3) « objet seul » : this.isole = pièces montrées (Set), à la place de leur visibilité ; this.repos =
+      // pose de repos (maillage tel qu'il est dans son fichier) au lieu de l'image de l'animation. p.visible n'est JAMAIS touché
+      // (pièces cachées, projet, lecteur du jeu et export restent comme avant).
+      this.isole = null; this.repos = true;
       this._souris(); this._boucle();
     }
     // texture (canvas) partagée par les pièces : créée ou mise à jour
@@ -1244,7 +1248,7 @@
         gl.cullFace(passe ? gl.FRONT : gl.BACK);
         if (!passe) gl.disable(gl.CULL_FACE);
         for (const p of liste) {
-          if (!p.visible || !p.ni || (this.lecteur && p.animCachee)) continue;
+          if (!this._vis(p) || !p.ni || (this.lecteur && p.animCachee)) continue;
           if (p.ptl && (!this.lecteur || !p.jeu)) continue;          // particules : seulement pendant l'animation
           if (passe && !p.contour) continue;
           { const S = this._statut, on = !passe && S && p.peau && (p.peau.acteur === S.acteur || (p.peau.acteur.startsWith('b000001') && String(S.acteur).startsWith('b000001')));
@@ -1381,7 +1385,7 @@
       for (let k = 0; k < 3; k++) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this._fbO[k].fb); gl.viewport(0, 0, T, T); gl.clearColor(1, 1, 1, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         gl.uniformMatrix4fv(this.loc.mvp, false, C.vp[k]);
-        for (const p of this.pieces) { if (!(p.terrain || p.peau) || !p.visible || !p.ni || p.animCachee) continue;
+        for (const p of this.pieces) { if (!(p.terrain || p.peau) || !this._vis(p) || !p.ni || p.animCachee) continue;
           gl.bindBuffer(gl.ARRAY_BUFFER, p.bp); gl.enableVertexAttribArray(this.loc.p); gl.vertexAttribPointer(this.loc.p, 3, gl.FLOAT, false, 0, 0);
           if (this.loc.c >= 0) { gl.disableVertexAttribArray(this.loc.c); gl.vertexAttrib4f(this.loc.c, 1, 1, 1, 1); }
           if (this.loc.t >= 0) { gl.disableVertexAttribArray(this.loc.t); gl.vertexAttrib2f(this.loc.t, 0, 0); }
@@ -1452,7 +1456,7 @@
       gl.useProgram(this.prog); gl.uniformMatrix4fv(this.loc.mvp, false, mvp); gl.uniform1f(this.loc.profPack, 1);
       gl.uniform4fv(this.loc.uvx, [1, 1, 0, 0]); gl.uniform1f(this.loc.aTex, 0); gl.uniform1f(this.loc.aNuage, 0); if (this.loc.aPL) gl.uniform1f(this.loc.aPL, 0);
       gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.disable(gl.CULL_FACE);
-      for (const p of opaques) { if (!(p.terrain || p.peau) || !p.visible || !p.ni || p.animCachee) continue;
+      for (const p of opaques) { if (!(p.terrain || p.peau) || !this._vis(p) || !p.ni || p.animCachee) continue;
         gl.uniformMatrix4fv(this.loc.modele, false, (this.lecteur && p.modele) || ID);
         gl.bindBuffer(gl.ARRAY_BUFFER, p.bp); gl.enableVertexAttribArray(this.loc.p); gl.vertexAttribPointer(this.loc.p, 3, gl.FLOAT, false, 0, 0);
         if (this.loc.c >= 0) { gl.disableVertexAttribArray(this.loc.c); gl.vertexAttrib4f(this.loc.c, 1, 1, 1, 1); }
@@ -1540,10 +1544,17 @@
     _boite(pos) { const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
       for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], pos[i + k]); mx[k] = Math.max(mx[k], pos[i + k]); } return [mn, mx]; }
     _rayon(p) { return Math.hypot(p.boite[1][0] - p.boite[0][0], p.boite[1][1] - p.boite[0][1], p.boite[1][2] - p.boite[0][2]) / 2; }
+    _vis(p) { return this.isole ? this.isole.has(p) : p.visible; }
+    // (24/11) pièce animée par os, au repos : son maillage tel quel (envoyé une fois, jusqu'à la prochaine image animée)
+    _peauRepos(p) {
+      if (p.peau._repos) return; p.peau._repos = true;
+      const gl = this.gl; gl.bindBuffer(gl.ARRAY_BUFFER, p.bp); gl.bufferSubData(gl.ARRAY_BUFFER, 0, p.peau.pos0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, p.bn); gl.bufferSubData(gl.ARRAY_BUFFER, 0, p.peau.nor0);
+    }
     recadrer(seulementVisibles) {
       // les pièces d'un effet sont posées autour de l'origine (le squelette de la cinématique les place en jeu) :
       // centre = milieu des boîtes visibles, caméra à l'extérieur de la plus grande pièce visible
-      const ps = this.pieces.filter(p => (!seulementVisibles || p.visible) && p.boite[0][0] < 1e8);
+      const ps = this.pieces.filter(p => (!seulementVisibles || this._vis(p)) && p.boite[0][0] < 1e8);
       if (!ps.length) return 0;
       const mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
       for (const p of ps) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], p.boite[0][k]); mx[k] = Math.max(mx[k], p.boite[1][k]); }
@@ -1606,7 +1617,8 @@
           p.animCachee = !p.ptlVisible || !p.ptl.parts.length; continue; }
         if (p.terrain) { p.animCachee = res.decor === false; continue; }
         if (p.balle) { p.modele = res.balle || null; p.animCachee = !res.balle; continue; }
-        if (p.peau) { const mats = res.peaux && res.peaux[p.peau.acteur]; p.animCachee = !mats; p.modele = null; if (mats) this._peau(p, mats); continue; }
+        if (p.peau && this.isole && this.repos && this.isole.has(p)) { p.animCachee = false; p.modele = null; this._peauRepos(p); continue; }
+        if (p.peau) { const mats = res.peaux && res.peaux[p.peau.acteur]; p.animCachee = !mats; p.modele = null; if (mats) { p.peau._repos = false; this._peau(p, mats); } continue; }
         if (!p.anim) continue;
         const o = res.objets[p.anim.acteur];
         if (!o || p.anim.os === undefined) { p.animCachee = !o || !o.visible; p.modele = o ? o.racine : null; continue; }
@@ -1688,6 +1700,7 @@
             rim: c1 ? [0, 1, 2].map(j => (c1[j] - 1) * w + 1) : [0, 0, 0], rim_w: c1 ? c1[3] * w : 0,
             pow: c2 ? (c2[0] - 10) * w + 10 : 1 }; } }
       if (this.surImage) this.surImage(f, res);
+      if (this.isole) for (const p of this.isole) { p.animCachee = false; if (this.repos && !p.peau) { p.modele = null; p.opacite = 1; } }   // (24/11) objet seul
       return res;
     }
     _boucle() {
@@ -1751,12 +1764,12 @@
           try { this._carteOmbre(cib); } catch (e) { console.error('ombres', e); this._ombreSoleil = null; }
           gl.viewport(0, 0, w, h); gl.useProgram(this.prog); gl.uniformMatrix4fv(this.loc.mvp, false, mvp); }
         else this._ombreSoleil = null;
-        if (vraiStade) this._dessinerStade(liste.filter(p => p.terrain && p.jeuStade && p.visible && p.ni && !p.animCachee), mvp);
+        if (vraiStade) this._dessinerStade(liste.filter(p => p.terrain && p.jeuStade && this._vis(p) && p.ni && !p.animCachee), mvp);
         gl.useProgram(this.prog);
         for (const p of liste) {
           if (opaque && this.style && p.peau) continue;
           if (vraiStade && p.terrain && p.jeuStade) continue;
-          if (!p.visible || !p.ni || (this.lecteur && p.animCachee)) continue;
+          if (!this._vis(p) || !p.ni || (this.lecteur && p.animCachee)) continue;
           if (p.ptl && (!this.lecteur || !p.jeu)) continue;          // particules : seulement pendant l'animation
           if (this.lecteur && p.jeu && p.jeu.mode < 0) continue;
           if (this.lecteur && p.jeu && !opaque && p.melange) { let m = mvp;

@@ -2,6 +2,12 @@
 
 *English below.*
 
+## 3.0.1
+- **Écrans plus petits que le full HD** (portable 1366 × 768, ou écran à 125-150 % dans Windows) : en cliquant sur l'élément, la bannière… d'une fiche (technique, esprit guerrier, totem, armure), la case de réglage était écrasée et on ne pouvait rien choisir. Elle garde maintenant sa taille et la fiche défile. Le nom de la technique n'est plus coupé (« S… »), et l'écran du joueur n'a plus de barre de défilement en travers.
+- **◎ Voir seul** (onglet Techniques → Textures) : l'objet de la texture choisie, seul, au repos, pour le retoucher comme un esprit guerrier (les pingouins, le dragon…). Pour une pièce d'effet : seulement les pièces qui portent cette texture. Marche aussi en mode dessin ; « ✕ Tout revoir » ramène la technique entière.
+- **Lettres accentuées dans les bannières** (style « Lettres du jeu ») : ñ, á, í, ó, ú, Á, Í, Ó, Ú, ¡, ü, ä, ö, ß, ã, õ… découpées dans les bannières du jeu en espagnol, portugais, allemand et italien (Cañón…). Une lettre qui n'existe que dans un autre élément prend maintenant les vraies couleurs de l'élément choisi ; une lettre qu'aucune bannière n'a (ì, ò…) s'écrit sans accent au lieu de disparaître.
+- Au 1er lancement après la mise à jour, l'Atelier refait ses lettres du jeu (environ 5 minutes, en arrière-plan) : les bannières « Lettres du jeu » arrivent quand c'est fini.
+
 ## 3.0
 ### Joueurs : l'écran du Tableau des compétences
 - **Stats** d'un joueur (Mes créations) s'ouvre maintenant sur un écran fait comme le **Tableau des compétences du jeu** :
@@ -172,6 +178,12 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 3.0.1
+- **Screens smaller than full HD** (1366 × 768 laptop, or a screen at 125-150 % in Windows): clicking the element, the banner… of a sheet (technique, Keshin, totem, armour) squashed its setting box and nothing could be chosen. It now keeps its size and the sheet scrolls. The technique name is no longer cut (“S…”), and the player screen no longer has a sideways scrollbar.
+- **◎ View alone** (Techniques tab → Textures): the object of the chosen texture, alone, at rest, to retouch it like a Keshin (the penguins, the dragon…). For an effect part: only the pieces using that texture. Works in drawing mode too; “✕ Show everything” brings the whole technique back.
+- **Accented letters in banners** (“Game lettering” style): ñ, á, í, ó, ú, Á, Í, Ó, Ú, ¡, ü, ä, ö, ß, ã, õ… cut from the game's Spanish, Portuguese, German and Italian banners (Cañón…). A letter that only exists in another element now takes the real colours of the chosen element; a letter no banner has (ì, ò…) is written without its accent instead of disappearing.
+- On the first launch after the update, the Atelier rebuilds its game letters (about 5 minutes, in the background): “Game lettering” banners come once it's done.
 
 ## 3.0
 ### Players: the Skill board screen

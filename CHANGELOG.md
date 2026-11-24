@@ -2,6 +2,10 @@
 
 *English below.*
 
+## 3.0.2
+- **⚙ Paramètres coupé** : avec la palette « Comme le jeu » (celle par défaut), la fenêtre ne défilait pas ; le bas (Dossier du jeu, Corbeille, Cache) était caché, même en plein écran à 100 %. Elle défile maintenant jusqu'en bas.
+- **Mode dessin sur un petit écran** : la barre de lecture de la vue 3D passe à la ligne ; « Bannière », « Son » et le bouton vidéo ne sortent plus de l'écran.
+
 ## 3.0.1
 - **Écrans plus petits que le full HD** (portable 1366 × 768, ou écran à 125-150 % dans Windows) : en cliquant sur l'élément, la bannière… d'une fiche (technique, esprit guerrier, totem, armure), la case de réglage était écrasée et on ne pouvait rien choisir. Elle garde maintenant sa taille et la fiche défile. Le nom de la technique n'est plus coupé (« S… »), et l'écran du joueur n'a plus de barre de défilement en travers.
 - **◎ Voir seul** (onglet Techniques → Textures) : l'objet de la texture choisie, seul, au repos, pour le retoucher comme un esprit guerrier (les pingouins, le dragon…). Pour une pièce d'effet : seulement les pièces qui portent cette texture. Marche aussi en mode dessin ; « ✕ Tout revoir » ramène la technique entière.
@@ -178,6 +182,10 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 3.0.2
+- **⚙ Settings cut off**: with the "Like the game" palette (the default one), the window didn't scroll; its bottom (Game folder, Trash, Cache) was hidden, even full screen at 100 %. It now scrolls all the way down.
+- **Drawing mode on a small screen**: the 3D view's playback bar wraps onto a second line; "Banner", "Sound" and the video button no longer go off-screen.
 
 ## 3.0.1
 - **Screens smaller than full HD** (1366 × 768 laptop, or a screen at 125-150 % in Windows): clicking the element, the banner… of a sheet (technique, Keshin, totem, armour) squashed its setting box and nothing could be chosen. It now keeps its size and the sheet scrolls. The technique name is no longer cut (“S…”), and the player screen no longer has a sideways scrollbar.

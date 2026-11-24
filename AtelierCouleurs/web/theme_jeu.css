@@ -711,3 +711,8 @@ html[data-theme] #menu-stats .msp-st.sel { border-color: #2fe6dc; box-shadow: 0 
    la jauge TENSION passe dessous au lieu d'écraser le nom (en full HD, toujours sur la même ligne) */
 .msj-fiche-ligne { flex-wrap: wrap; row-gap: 8px; }
 .msj-fiche-ligne .tc-barre { flex: 1 1 480px; }
+
+/* (24/11, retour de danifdez : « à 125 % je ne peux pas descendre, ce n'est pas complet ») la palette « Comme le jeu » mettait
+   overflow: hidden sur la fenêtre ⚙ Paramètres (coins arrondis) : plus grande que l'écran = coupée, sans barre de défilement.
+   Elle défile maintenant en hauteur (coins toujours arrondis). Pareil pour la Corbeille. */
+html[data-theme="jeu"] #parametres .p-boite, html[data-theme="jeu"] #corbeille .cb-boite { overflow-x: hidden; overflow-y: auto; }

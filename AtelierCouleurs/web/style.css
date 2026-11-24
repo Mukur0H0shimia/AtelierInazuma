@@ -1036,3 +1036,5 @@ canvas, #atelier-dessin, #centre { touch-action: none; }
 #iso-vue { flex-wrap: wrap; max-width: calc(100% - 24px); row-gap: 4px; }
 #iso-vue { top: 52px; }
 body:not(.onglet-techniques) #tex-isoler { display: none; }
+/* (24/11) mode dessin sur un petit écran : la vue 3D est étroite, la barre de lecture passe à la ligne (Bannière, Son, vidéo n'étaient plus visibles) */
+body.dessin #lecteur { flex-wrap: wrap; row-gap: 4px; }

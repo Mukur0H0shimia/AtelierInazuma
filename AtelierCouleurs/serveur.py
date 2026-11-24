@@ -2862,6 +2862,9 @@ def main():
                     police_image.construire(k_, CACHE, journal=print)
             if not lettres_jeu.styles_disponibles(CACHE):      # (24/11) styles esprit guerrier / totem / ARMED (~30 s)
                 lettres_jeu.construire_styles(CFG, CACHE, journal=lambda *a: None)
+                # (24/11, essai du paquet 3.0) une bannière demandée PENDANT la construction gardait en mémoire l'alphabet sans
+                # les styles (armure en lettres Néant teintées) jusqu'au redémarrage : on l'oublie, relu à la prochaine demande
+                lettres_jeu._ALPHA.clear()
                 print('bannières : styles esprit guerrier / totem prêts')
         except Exception as ex:
             print('lettres du jeu :', ex)

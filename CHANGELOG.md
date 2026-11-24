@@ -2,6 +2,10 @@
 
 *English below.*
 
+## 3.0.4
+- **La lueur des joueurs change vraiment de couleur** (Main céleste de l'amitié, Requin ténébreux…) : une aura a deux couleurs dans le jeu, la teinte du joueur et la **lueur de son contour**. L'Atelier ne changeait que la teinte, donc la lueur restait d'origine en jeu. Il change maintenant les deux, à la même force que le jeu. Une aura dont la teinte était neutre (grise) le reste : seule la lueur prend la couleur choisie.
+- Pour l'essayer : recolore l'aura (bloc « Auras (ballon et joueurs) »), puis « Créer » et « Installer » : ça se voit en jeu (l'aperçu ne montre pas encore les couleurs d'aura).
+
 ## 3.0.3
 - **47 techniques en plus** : celles qui n'ont pas de bannière à elles dans le jeu manquaient (Météore géant A, Volée de manchots, Dernier recours, Frappe du loup argenté et les autres variantes des totems, les « Rêve : … », Tempête de feu, Impact lumineux…). Elles sont maintenant dans la liste, avec leur cinématique.
 - **Lueurs des joueurs** (Main céleste de l'amitié, Requin ténébreux…) : elles n'étaient pas bloquées, mais leur bloc s'appelait « Aura du ballon » et était caché en mode simple. Il s'appelle maintenant **« Auras (ballon et joueurs) »** et se voit en mode simple : coche une aura et choisis sa couleur. Elle se voit en jeu ; l'aperçu ne la montre pas encore. Seule l'aura du ballon choisie par le match reste grisée.
@@ -186,6 +190,10 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 3.0.4
+- **Player glows really change colour now** (God Hand of Friendship, Shark Shooter…): in the game an aura has two colours, the player's tint and the **glow of their outline**. The Atelier only changed the tint, so the glow stayed the original one in game. It now changes both, at the game's own strength. An aura whose tint was neutral (grey) keeps it: only the glow takes the chosen colour.
+- To try it: recolour the aura ("Auras (ball and players)" block), then "Create" and "Install": it shows in game (the preview doesn't show aura colours yet).
 
 ## 3.0.3
 - **47 more techniques**: the ones without their own banner in the game were missing (Meteor Blade A, Penguin Volley, Last Resort, Silver Wolf Strike and the other totem variants, the "Dreamscape: …" ones, Fireball Storm, Luminous Orb…). They are now in the list, with their cutscene.

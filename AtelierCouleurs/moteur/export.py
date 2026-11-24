@@ -448,6 +448,34 @@ def copie_modele(cfg, sortie, nom, acteur, anc, imgs):
     return neuf, info, perso
 
 
+def _cles_aura(cfg, aura, rvb):
+    """(24/11) lignes `color = [...]` et `rim = [...]` d'un [[recolor]] aura : les clés des courbes 1 (couleur) et 2 (lueur) de
+    l'aura du jeu (effect_status_define / effect_define, moteur/aura_balle.py), recolorées : chaque clé garde son temps, sa
+    force (plus grande composante, souvent > 1) et sa 5e valeur ; seule la teinte devient celle choisie"""
+    r, g, b = (float(c) for c in rvb)
+    m0 = max(r, g, b) or 1.0
+    def cles(ks, w_defaut, garder_gris=False):
+        out = []
+        for k in ks:
+            t, x, y, z = (float(v) for v in k[:4]); w = float(k[4]) if len(k) > 4 else w_defaut
+            f = max(x, y, z) or 1.0
+            if garder_gris and f - min(x, y, z) < 0.05 * f:      # teinte neutre (0,9 0,9 0,9) : le modèle n'était pas teinté
+                out.append('[%.3f, %.3f, %.3f, %.3f, %.3f]' % (t, x, y, z, w)); continue
+            out.append('[%.3f, %.3f, %.3f, %.3f, %.3f]' % (t, r / m0 * f, g / m0 * f, b / m0 * f, w))
+        return '[%s]' % ', '.join(out)
+    try:
+        from . import aura_balle as _ab
+        defs, courbes = _ab._lire(cfg['data_dir'])
+        d = defs.get(aura) or {}
+        c = [courbes.get(x) for x in (d.get('courbes') or [])[:2]] + [None, None]
+    except Exception:
+        c = [None, None]
+    if not c[0] and not c[1]:              # aura introuvable : l'ancienne écriture (couleur seule)
+        return ['color = [[0.0, %.3f, %.3f, %.3f, 0.0]]' % (r, g, b)]
+    # (VRFW : « the copy must keep … exactly when the aura has it ») chaque animation seulement si l'aura du jeu l'a
+    return (['color = %s' % cles(c[0], 0.0, garder_gris=True)] if c[0] else []) + (['rim = %s' % cles(c[1], 1.0)] if c[1] else [])
+
+
 def exporter(cfg, demande, infos_technique):
     """demande : {code, nom, description, couleur_tir, prix, banniere:{texte, couleur, contour}, trainee:{famille, element},
                  objets:{acteur:{textures:{nom: dataURL}, lueurs:{hue, saturation, value} | None}}, auras:{nom:[r,v,b]}}"""
@@ -651,8 +679,11 @@ def exporter(cfg, demande, infos_technique):
             rapport.append('aura %s : choisie par le match (balise), pas recolorable -> ignorée' % aura)
             continue
         copie = nom_copie_aura(nom, aura, k)
-        e += ['[[recolor]]', 'aura = %s' % _q(aura), 'copy = %s' % _q(copie),
-              'color = [[0.0, %.3f, %.3f, %.3f, 0.0]]' % tuple(float(c) for c in rvb), '']
+        # (24/11, retour d'enhanca / muku : « la lueur du joueur de Main céleste de l'amitié ne change pas ») LU dans VRFW
+        # (winmm.dll) : une aura a DEUX animations, `color` (charaStatusColor : teinte du modèle) et `rim` (la LUEUR du contour,
+        # « the keys of the new glow animation, as color »). Avant : `color` seul, plafonné à 1 -> la lueur restait d'origine.
+        # Maintenant les deux, en gardant les clés du jeu (temps, intensité > 1, 5e valeur) : la couleur choisie à la même force.
+        e += ['[[recolor]]', 'aura = %s' % _q(aura), 'copy = %s' % _q(copie)] + _cles_aura(cfg, info.get('origine') or aura, rvb) + ['']
         for acteur in info['acteurs']:
             e += ['[[event_command]]', 'event = %s' % _q(ev), 'command = "CMD_C3FB5CC5"', 'args = [%s, %s]' % (_q(acteur), _q(aura)),
                   'set = [%s, %s]' % (_q(acteur), _q(copie)), '']

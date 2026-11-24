@@ -24,9 +24,22 @@ static class Lanceur
     public static string Dossier, Libs;
     public static int PortDemande;                  // (22/11) --port N : serveur déjà lancé (python serveur.py / .bat) sur ce port
 
+    // (23/11, retour d'un joueur : écran à 125 %, la vidéo du lecteur natif s'ouvrait décalée et trop petite au milieu, impossible
+    // à fermer) le lanceur ne déclarait pas gérer la mise à l'échelle de Windows : Windows agrandissait sa fenêtre en image,
+    // la page (WebView2) se croyait à 100 % et donnait au lecteur (qui, lui, compte en vrais pixels) des tailles 1,25 fois trop
+    // petites. Comme le lecteur : « par écran, v2 » (vrais pixels partout), à défaut l'ancien réglage du système.
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr ctx);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+    static void GererEchelle()
+    {
+        try { if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return; } catch (Exception) { }   // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        try { SetProcessDPIAware(); } catch (Exception) { }
+    }
+
     [STAThread]
     static void Main()
     {
+        GererEchelle();                             // (23/11) avant toute fenêtre
         Dossier = AppDomain.CurrentDomain.BaseDirectory;
         string[] arg = Environment.GetCommandLineArgs();
         for (int i = 1; i + 1 < arg.Length; i++)
@@ -462,8 +475,10 @@ class Fenetre : Form
     {
         Text = Lanceur.TitreComplet();
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
-        ClientSize = new Size(1500, 900);
-        MinimumSize = new Size(1000, 640);
+        // (23/11) vrais pixels (GererEchelle) : tailles mises à l'échelle de l'écran (125 % -> × 1,25)
+        float k = 1f; try { using (var g = CreateGraphics()) k = Math.Max(1f, g.DpiX / 96f); } catch (Exception) { }
+        ClientSize = new Size((int)(1500 * k), (int)(900 * k));
+        MinimumSize = new Size((int)(1000 * k), (int)(640 * k));
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(15, 17, 23);
         attente = new Label();

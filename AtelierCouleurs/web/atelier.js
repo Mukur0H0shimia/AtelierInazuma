@@ -48,6 +48,7 @@ function atDessinOuvrir(cle) {
 function atDessinFermer() {
   document.body.classList.remove('dessin'); if (A.reglage) atReglageFermer(false);
   if (E.vue) { E.vue.outil = null; E.vue.clicOutil = null; E.vue.cv.style.cursor = ''; }
+  if (window.mmDessinFini) mmDessinFini();             // (24/11) icône / emblème d'un maillot : le dessin va dans le formulaire
   setTimeout(() => { dispatchEvent(new Event('resize')); atCadrer3D(); }, 60);
 }
 // la vue 3D est étroite en mode dessin : on recule la caméra pour voir le modèle en entier (champ vertical fixe)
@@ -480,6 +481,7 @@ function atPanneau() {
   const d = A.doc, sel = $('at-texture');
   if (sel) { const cles = E.tech ? (E.tech.perso ? Object.keys(Z.tex).concat(Object.keys(Z.tex).map(k => k + 'spm').filter(k => E.textures[k])) :
       Object.keys(E.textures).filter(k => E.textures[k].cur && !E.textures[k].info.donnees)) : [];
+    if (d && E.textures[d.cle] && !cles.includes(d.cle)) cles.push(d.cle);      // (24/11) icône / emblème d'un maillot (hors des pièces)
     sel.innerHTML = cles.map(k => `<option value="${echapper(k)}"${d && d.cle === k ? ' selected' : ''}>${echapper(E.textures[k].nom)}${E.textures[k].modif ? ' •' : ''}</option>`).join('') || '<option>(aucune texture)</option>'; }
   atCalques(); atHistorique(); atDessinerListes();
 }

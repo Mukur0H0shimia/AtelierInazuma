@@ -10,6 +10,11 @@ window.MODELES_FR = [
 ")"
 ],
 [
+"objet ",
+" : intensité des lumières (× ",
+") visible dans l'Atelier seulement : VRFW n'accepte pas de copie fournie par un mod (essai en jeu du 23/11) -> lumières comme le jeu"
+],
+[
 "",
 "  (totem / esprit du joueur : en jeu, c’est celui du joueur qui lance — pour le recolorer, fais une copie dans Totems ou Esprits)"
 ],
@@ -122,6 +127,11 @@ window.MODELES_FR = [
 ") : réenregistre en PNG 24 ou 32 bits"
 ],
 [
+"# ",
+" : armure ",
+" recolorée, un modèle par groupe de corps (lignes de CharacterReforged)"
+],
+[
 "Cinématique faite pour l'esprit ",
 " : ses os ne sont pas tous dans ",
 ", il y sera caché."
@@ -230,6 +240,11 @@ window.MODELES_FR = [
 " jetons"
 ],
 [
+"effet commun ",
+" : aucune commande ne le cite dans ",
+" -> copie non chargée"
+],
+[
 "technique supprimée : ",
 " fichiers de l'Atelier et ",
 " du jeu rangés dans ",
@@ -242,6 +257,12 @@ window.MODELES_FR = [
 [
 "Le nom « ",
 " » est déjà pris par une autre copie : choisis-en un autre."
+],
+[
+"# ",
+" : scène à part ",
+" (copie de ",
+", pas de conflit avec les autres mods)"
 ],
 [
 "# mise en armure de ",
@@ -271,6 +292,12 @@ window.MODELES_FR = [
 " : choisie par le match (balise), pas recolorable -> ignorée"
 ],
 [
+"os ",
+" canal ",
+" : échelle n° ",
+" partagée avec d'autres pistes -> laissée"
+],
+[
 "cinématique ",
 " copiée par VRFW alors que ",
 " la livre déjà en fichiers"
@@ -291,6 +318,11 @@ window.MODELES_FR = [
 [
 "portrait : recoloriage du dessin impossible (",
 "), photo à la place"
+],
+[
+"os ",
+" canal ",
+" : valeurs partagées avec d'autres pistes -> laissées"
 ],
 [
 "cinématique : ",
@@ -346,10 +378,24 @@ window.MODELES_FR = [
 ")"
 ],
 [
+"police-image ",
+" : ",
+" caractères, capitales ",
+" px, écart ",
+" px"
+],
+[
 "",
 " (",
 ") : modèle et ",
 " scène(s) refaits, textures gardées"
+],
+[
+"objet ",
+" : lumières × ",
+" (",
+") via la copie intermédiaire ",
+""
 ],
 [
 "Animation : ",
@@ -384,6 +430,11 @@ window.MODELES_FR = [
 ")"
 ],
 [
+"objet ",
+" : intensité des lumières NON appliquée (",
+")"
+],
+[
 "bannière ",
 " sans image (celle du jeu sera montrée)"
 ],
@@ -392,6 +443,12 @@ window.MODELES_FR = [
 " : bustes des portraits (domicile ",
 ", extérieur ",
 ")…"
+],
+[
+"",
+" piste(s) de couleur de lumière, ",
+" échelle(s) × ",
+""
 ],
 [
 "copie ",
@@ -474,6 +531,12 @@ window.MODELES_FR = [
 ")"
 ],
 [
+"lettres du jeu : ",
+" / ",
+" bannières, ",
+" gardées"
+],
+[
 "objet supprimé (",
 " fichiers rangés dans ",
 ")"
@@ -503,6 +566,11 @@ window.MODELES_FR = [
 ],
 [
 "Armure créée (pas encore installée) : ",
+""
+],
+[
+"mise en armure : ",
+", avec les gestes de ",
 ""
 ],
 [
@@ -557,6 +625,16 @@ window.MODELES_FR = [
 ],
 [
 "",
+" : pas de bannière dans le jeu pour ",
+""
+],
+[
+"",
+" : image de la bannière non faite (",
+")"
+],
+[
+"",
 " : image ",
 " (visible des images ",
 " à ",
@@ -573,6 +651,13 @@ window.MODELES_FR = [
 [
 "techniques de la carte d'origine (",
 ")"
+],
+[
+"",
+" ligne ",
+" : ",
+" caractères trouvés pour ",
+""
 ],
 [
 "Clic : particules de ",
@@ -603,6 +688,11 @@ window.MODELES_FR = [
 " au lieu de 1728x352"
 ],
 [
+"noms du paquet introuvables (",
+" / ",
+")"
+],
+[
 "",
 " : pas de texture, copie laissée"
 ],
@@ -631,6 +721,14 @@ window.MODELES_FR = [
 ") déjà utilisé : réessaie"
 ],
 [
+"aucune lumière ponctuelle dans ",
+""
+],
+[
+"armure ",
+" : lettres non découpées"
+],
+[
 "Supprimer le préréglage « ",
 " » ?"
 ],
@@ -641,6 +739,10 @@ window.MODELES_FR = [
 [
 " ». L’original ne change pas. ",
 ""
+],
+[
+"aucune lettre du jeu pour « ",
+" »"
 ],
 [
 "Lecteur natif lancé (",
@@ -746,9 +848,17 @@ window.MODELES_FR = [
 ") remplacée"
 ],
 [
+"aucun caractère pour « ",
+" »"
+],
+[
 "",
 " : relief du tissu (",
 ") : ",
+""
+],
+[
+"Techniques illisibles : ",
 ""
 ],
 [
@@ -766,6 +876,10 @@ window.MODELES_FR = [
 [
 "",
 " (techniques du joueur)"
+],
+[
+"couleurs des esprits : ",
+""
 ],
 [
 "son ",
@@ -858,6 +972,10 @@ window.MODELES_FR = [
 ""
 ],
 [
+"bannière ARMED de ",
+""
+],
+[
 "",
 " : technique liée ",
 ""
@@ -887,6 +1005,10 @@ window.MODELES_FR = [
 ],
 [
 "Rien à retirer : ",
+""
+],
+[
+"Lettres du jeu — ",
 ""
 ],
 [
@@ -960,6 +1082,10 @@ window.MODELES_FR = [
 ""
 ],
 [
+"dégradé du o : ",
+""
+],
+[
 "Clic : pièce ",
 "."
 ],
@@ -1011,6 +1137,10 @@ window.MODELES_FR = [
 ""
 ],
 [
+"bannière « ",
+" »"
+],
+[
 "matériau ",
 " (",
 ")"
@@ -1019,6 +1149,10 @@ window.MODELES_FR = [
 "",
 " : ",
 " émetteur",
+""
+],
+[
+"bannière de ",
 ""
 ],
 [
@@ -1061,8 +1195,16 @@ window.MODELES_FR = [
 ""
 ],
 [
+"",
+" remplacée"
+],
+[
 "Celles de ",
 ""
+],
+[
+"Case ",
+" vide"
 ],
 [
 "pièces : ",

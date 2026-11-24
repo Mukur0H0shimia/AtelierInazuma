@@ -122,6 +122,19 @@ body.panneau #survol { display: none; }
 <script src="/web/i18n_es.js"></script>
 <script src="/web/i18n_modeles.js"></script>
 <script src="/web/i18n.js"></script>
+<!-- (23/11) palette « Jeu » de l'Atelier (refonte comme le jeu) : couleurs claires des menus du jeu + police du jeu -->
+<script>try { var th = parent && parent !== window ? parent.document.documentElement.getAttribute('data-theme') : null; if (th) document.documentElement.setAttribute('data-theme', th); } catch (e) { }</script>
+<style>
+@font-face { font-family: "Inazuma Jeu"; src: url(/ui_jeu/inazuma_jeu.ttf) format("truetype"); }
+html[data-theme="jeu"] { --fond: #cfe2ef; --panneau: #eef4f8; --carte: #ffffff; --bord: #b7d3e8; --texte: #2b3a48; --doux: #5b6c7a; --accent: #1f8fe8; --accent2: #1d5fd0; }
+html[data-theme="jeu"] body { font-family: "Inazuma Jeu", "Segoe UI", sans-serif; background: #8fc3e3 url(/ui_jeu/fond.png) center / cover; }
+html[data-theme="jeu"] header { background: linear-gradient(#46545f, #36424c); color: #fff; border-bottom: 3px solid #78b8e6; }
+html[data-theme="jeu"] header #nom { color: #dfe8ee; }
+html[data-theme="jeu"] .onglet { color: #e9f2f8; border-color: rgba(255,255,255,.25); }
+html[data-theme="jeu"] .onglet.actif { background: rgba(150,175,195,.4); color: #fff; border-color: transparent; }
+html[data-theme="jeu"] .bt { background: url(/ui_jeu/zone/cmn03_07/cmd_btn_slot01_off.png) center / 100% 100% no-repeat; color: #fff; border: 0; border-radius: 0; }
+html[data-theme="jeu"] .bt:hover { background-image: url(/ui_jeu/zone/cmn03_07/cmd_btn_slot01_on.png); }
+</style>
 </head>
 <body>
 <header>

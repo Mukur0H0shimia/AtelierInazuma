@@ -140,17 +140,20 @@ def code_shader(nom, ext):
     return _code[cle]
 
 
-def teinter_hsv(c, H, C):
-    """(14/11/2026) teinte de l'Atelier (opération « set » de VRFW) : même formule que particules.js / animation.h"""
+def teinter_hsv(c, H, C, S=1.0, V=1.0):
+    """(14/11/2026) teinte de l'Atelier (opération « set » de VRFW) : même formule que particules.js / animation.h
+    (23/11) S = `saturation` de VRFW, multiplicateur appliqué après colorize (émulé dans nie_outils/emu_vrfw.py)"""
+    V = 1.0 if V is None else V                    # (23/11) `value` de VRFW : luminosité × V, gris compris (émulé)
     v, mn = max(c), min(c)
     if not v > 0:
         return c
     s = (v - mn) / v
     if s < 0.08:                                   # (15/11/2026) LU dans VRFW : seuil des gris 0,08 ; colorize pour eux seuls
         if not C > 0:
-            return c
+            return [x * V for x in c]
         s = max(s, C)
-    s = min(1.0, s)
+    s = min(1.0, s * (1.0 if S is None else S))
+    v = v * V
     h = (H % 360) / 60.0; i = int(h) % 6; f = h - int(h)
     p, q, t = v * (1 - s), v * (1 - s * f), v * (1 - s * (1 - f))
     return [(v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q)][i]
@@ -159,7 +162,7 @@ def teinter_hsv(c, H, C):
 def couleurs_teintees(col, t):
     b = bytearray(col)
     for i in range(0, len(b) - 3, 4):
-        r = teinter_hsv([b[i] / 255, b[i + 1] / 255, b[i + 2] / 255], t[0], t[1])
+        r = teinter_hsv([b[i] / 255, b[i + 1] / 255, b[i + 2] / 255], t[0], t[1], t[2] if len(t) > 2 else 1.0, t[3] if len(t) > 3 else 1.0)
         for k in range(3):
             b[i + k] = max(0, min(255, int(r[k] * 255 + 0.5)))
     return bytes(b)

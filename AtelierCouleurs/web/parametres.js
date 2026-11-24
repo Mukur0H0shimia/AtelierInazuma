@@ -5,13 +5,13 @@
 // Chargé dans <head> : la palette est posée avant le premier affichage (pas d'éclair de l'ancienne couleur).
 (function () {
   'use strict';
-  var P = { theme: 'or', musique: false, volume: 0.35 };
+  var P = { theme: 'jeu', musique: false, volume: 0.35 };
   try {
     var x = new XMLHttpRequest();
     x.open('GET', '/api/parametres', false); x.send();
     if (x.status === 200) { P = JSON.parse(x.responseText); }
   } catch (e) { /* serveur absent : palette d'origine */ }
-  function poserTheme() { document.documentElement.setAttribute('data-theme', P.theme || 'or'); }
+  function poserTheme() { document.documentElement.setAttribute('data-theme', P.theme || 'jeu'); }
   poserTheme();
 
   function garder(changes) {
@@ -84,7 +84,8 @@
 
   // ------------------------------------------------------------------ fenêtre ⚙ Paramètres
   var PALETTES = [
-    { id: 'or', nom: "Doré (d'origine)", c: ['#f26a17', '#b8903f', '#2cc35c', '#2f86ff'] },
+    { id: 'jeu', nom: 'Comme le jeu', c: ['#9fd2ee', '#1d6fd6', '#2fe6dc', '#f26a17'] },     // (23/11) refonte : menus du jeu
+    { id: 'or', nom: "Doré (ancien)", c: ['#f26a17', '#b8903f', '#2cc35c', '#2f86ff'] },
     { id: 'sobre', nom: 'Sobre, comme le jeu', c: ['#1c2226', '#2a353b', '#e9eef0', '#b8903f'] },
     { id: 'bleu', nom: 'Bleu Inazuma', c: ['#1c2226', '#1561c9', '#2aa6f2', '#b8903f'] },
     { id: 'turquoise', nom: 'Ardoise et turquoise', c: ['#1c2226', '#17534d', '#23a08f', '#3fe3c6'] }];
@@ -155,7 +156,7 @@
   function majFenetre() {
     var f = fenetre();
     f.querySelectorAll('.p-langue').forEach(function (b) { b.classList.toggle('sel', b.dataset.langue === (window.ATELIER_LANGUE || 'fr')); });
-    f.querySelectorAll('.p-palette').forEach(function (b) { b.classList.toggle('sel', b.dataset.theme === (P.theme || 'or')); });
+    f.querySelectorAll('.p-palette').forEach(function (b) { b.classList.toggle('sel', b.dataset.theme === (P.theme || 'jeu')); });
     f.querySelector('#p-musique').checked = !!P.musique;
     f.querySelector('#p-volume').value = P.volume;
     etatMusique(M.etat);
@@ -371,7 +372,7 @@
     var remplir = function () {
       var garde = sel.value;
       Array.prototype.slice.call(sel.querySelectorAll('.mes-polices')).forEach(function (o) { o.remove(); });
-      var g = document.createElement('optgroup'); g.label = 'Mes polices'; g.className = 'mes-polices';
+      var g = document.createElement('optgroup'); g.label = window.trad ? window.trad('Mes polices') : 'Mes polices'; g.className = 'mes-polices';
       PP.forEach(function (p) { g.appendChild(new Option(p.nom, valeur(p))); });
       g.appendChild(new Option('➕ Importer une police…', '__importer__'));
       sel.appendChild(g);

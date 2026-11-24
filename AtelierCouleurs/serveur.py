@@ -259,7 +259,8 @@ def polices_du_pc():
     seul (%LOCALAPPDATA%\\Microsoft\\Windows\\Fonts) ; les polices d'Office (Cooper Black, Jokerman…) ne sont pas partout"""
     out = {}
     for d in (os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'Fonts'),
-              os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Windows', 'Fonts'), POLICES_PERSO):
+              os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Windows', 'Fonts'), POLICES_PERSO,
+              os.path.join(WEB, 'polices')):                 # (24/11) polices livrées avec l'Atelier (Armure Style Color)
         try:
             for f in os.listdir(d):
                 if f.lower().endswith(('.ttf', '.otf')):
@@ -325,9 +326,79 @@ if __name__ != '__mp_main__':        # (23/11) pas dans les processus de travail
     threading.Thread(target=mods_liste, kwargs={'frais': True}, daemon=True).start()   # (17/11/2026) lu dès le démarrage
 
 
+def technique_invocation(code):
+    """(23/11, demande de muku : « la preview des Keshin = l'animation d'invocation en match ») « invoc_<copie> » : la
+    scène d'invocation d'une copie d'esprit guerrier (celle de l'élément choisi, sinon celle de l'original ; ses scènes sont
+    copiées dans sortie/MesEsprits sous le code de la copie), lue dans la racine superposée de la SORTIE de l'Atelier
+    (« atelier:MesEsprits » : pas besoin d'installer), l'esprit <ASSIGN> = la copie"""
+    copie, _, choix = code.split('_', 1)[1].partition('~')
+    c = esprits.registre(os.path.join(ICI, 'sortie', 'MesEsprits')).get(copie)
+    if not c:
+        return None
+    inv = c.get('invocation') or {}
+    donneur = inv.get('esprit') if inv.get('etat') == 'emprunt' else None
+    if code.startswith('armure_') and choix:         # (23/11) fiche d'armure : mise en armure choisie / de l'élément, avant « Enregistrer »
+        from moteur import armures_copies
+        a = armures_copies.registre(CFG).get(copie)
+        if not a:
+            return None
+        k0, scene_c = armures_copies.esprit_et_scene(CFG['data_dir'], a['was'])
+        donneur = None if scene_c == 'ev81_00010' else k0
+        if choix.startswith('@'):
+            pl = armures_copies.plan_mise(CFG, dict(a, mise=None, stats=dict(a.get('stats') or {}, element=choix[1:])), copie)
+            if pl:
+                scene_c, donneur = pl['scene'], pl['esprit']
+        else:
+            scene_c, _, donneur = choix.partition('~')
+        if not scene_c:
+            return None
+        return {'code': code, 'nom': a.get('nom'), 'genre': 'Invocation', 'cinematique': scene_c, 'racine_mod': 'atelier:MesEsprits',
+                'vrfw_event': {'assigned': [copie]}, 'anim_assign': donneur, 'couleur_tir': 0, 'invocation_de': copie}
+    if choix.startswith('@'):                        # (23/11) « Selon l'élément » : l'invocation de CET élément, avant « Enregistrer »
+        essai = dict(c, stats=dict(c.get('stats') or {}, element=choix[1:]))
+        essai.pop('invocation', None)                # (comme regler_stats : plan_invocation sur la copie modifiée)
+        try:
+            pl = esprits.plan_invocation(CFG, essai)
+        except Exception as ex:
+            print('invocation :', ex); pl = None
+        if pl:
+            scene_c, donneur = pl['scene'], pl.get('esprit')
+        else:                                        # élément d'origine (ou pas un esprit wk) : l'invocation de l'original
+            scene_c, donneur = esprits.invocation_du_jeu(CFG['data_dir'], c.get('technique'))[1], None
+        if not scene_c:
+            return None
+        return {'code': code, 'nom': c.get('nom'), 'genre': 'Invocation', 'cinematique': scene_c, 'racine_mod': 'atelier:MesEsprits',
+                'vrfw_event': {'assigned': [copie]}, 'anim_assign': donneur, 'couleur_tir': 0, 'invocation_de': copie}
+    if choix:                                        # (23/11) aperçu d'une apparition choisie, avant « Enregistrer »
+        scene_c, _, donneur = choix.partition('~')
+        if scene_c in ('ev83_00010', 'ev83_00010_1'):                # (23/11) totem : la partie où il apparaît
+            scene_c = 'ev83_00010_2'
+        return {'code': code, 'nom': c.get('nom'), 'genre': 'Invocation', 'cinematique': scene_c, 'racine_mod': 'atelier:MesEsprits',
+                'vrfw_event': {'assigned': [copie]}, 'anim_assign': donneur, 'couleur_tir': 0, 'invocation_de': copie}
+    if code.startswith('armure_'):                   # (23/11) « armure_<copie> » : sa mise en armure (vérifications)
+        from moteur import armures_copies
+        e = armures_copies.registre(CFG).get(copie)
+        scene = armures_copies.esprit_et_scene(CFG['data_dir'], e['was'])[1] if e else None
+        pl = armures_copies.plan_mise(CFG, e, copie) if e else None      # (23/11) mise en armure enregistrée dans la fiche
+        if pl and pl.get('scene') and pl.get('esprit'):
+            scene, donneur = pl['scene'], pl['esprit']
+            return {'code': code, 'nom': c.get('nom'), 'genre': 'Invocation', 'cinematique': scene, 'racine_mod': 'atelier:MesEsprits',
+                    'vrfw_event': {'assigned': [copie]}, 'anim_assign': donneur, 'couleur_tir': 0, 'invocation_de': copie}
+    else:
+        scene = (c.get('invocation') or {}).get('scene') or esprits.invocation_du_jeu(CFG['data_dir'], c.get('technique'))[1]
+        # (23/11, totems) invocation des totems = ev83_00010_1 (l'aura du joueur) + ev83_00010_2 (le TOTEM apparaît, plan c0020,
+        # VU dans le lecteur du jeu : loup bleu de la copie) -> l'aperçu joue la 2e partie
+        if scene in ('ev83_00010', 'ev83_00010_1'):
+            scene = 'ev83_00010_2'
+    if not scene:
+        return None
+    return {'code': code, 'nom': c.get('nom'), 'genre': 'Invocation', 'cinematique': scene, 'racine_mod': 'atelier:MesEsprits',
+            'vrfw_event': {'assigned': [copie]}, 'anim_assign': donneur if code.startswith('invoc_') else None, 'couleur_tir': 0, 'invocation_de': copie}
+
+
 def technique(code):
     """technique du jeu ou d'un mod (17/11/2026)"""
-    t = PAR_CODE.get(code) or entree_mod(code)
+    t = PAR_CODE.get(code) or entree_mod(code) or (technique_invocation(code) if str(code).startswith(('invoc_', 'armure_')) else None)
     if t is None:
         raise KeyError(code)
     return t
@@ -351,7 +422,13 @@ def racine_avec_modele(code):
     import glob as _g, re
     from moteur import racines
     mods_dir = os.path.join(CFG.get('jeu_dir') or '', 'mods')
-    if not code or not os.path.isdir(mods_dir) or not re.fullmatch(r'[\w~-]+', str(code)):
+    if not code or not re.fullmatch(r'[\w~-]+', str(code)):
+        return None
+    # (23/11) copie d'esprit de l'Atelier : sa version de la SORTIE d'abord (la dernière faite, même pas encore installée)
+    for mod in ('MesEsprits', 'MesPersonnages'):
+        if _g.glob(os.path.join(ICI, 'sortie', mod, 'assets', 'chr', '**', code, code + '.g4pkm'), recursive=True):
+            return racines.racine(CFG, CACHE, 'atelier:' + mod)
+    if not os.path.isdir(mods_dir):
         return None
     for mod in sorted(os.listdir(mods_dir), key=str.lower):
         if _g.glob(os.path.join(mods_dir, mod, 'assets', 'chr', '**', code, code + '.g4pkm'), recursive=True):
@@ -464,7 +541,7 @@ def anim_de(t):
     mod (sound_cue, sound_delay) ; renvoie (dossier data, cinématique, animation)"""
     from moteur import vrfw_anim
     D_, cin, pre = cinematique_de(t, pour_anim=True)
-    r = anim.cinematique(D_, t['cinematique'], cin['objets'])
+    r = anim.cinematique(D_, t['cinematique'], cin['objets'], assign_anim=t.get('anim_assign'))
     ev = t.get('vrfw_event')
     if ev and ev.get('cuts'):
         r = vrfw_anim.recomposer(r, ev, os.path.join(CFG['jeu_dir'], 'mods', t.get('vrfw_mod') or ''), t.get('vrfw_cameras') or [])
@@ -608,7 +685,8 @@ def lecteur_natif(demande):
     n = X.ecrire_modifs(r['dossier'], demande.get('modifs'))
     # (14/11/2026) + couleurs de matériau choisies dans l'Atelier : {pièce : [r, v, b]} (remplacent u_diffuse.rgb)
     json.dump({'caches': demande.get('caches') or [], 'couleurs': demande.get('couleurs') or {},
-               'sommets': demande.get('sommets') or {}, 'particules': demande.get('particules') or {}},   # (14/11/2026) teintes
+               'sommets': demande.get('sommets') or {}, 'particules': demande.get('particules') or {},   # (14/11/2026) teintes
+               'lumieres': demande.get('lumieres') or {}},   # (23/11) intensité des lumières de l'effet
               open(os.path.join(r['dossier'], 'options.json'), 'w', encoding='utf-8'))
     exe = os.path.join(d, 'lecteur.exe')
     if not os.path.exists(exe):
@@ -658,9 +736,17 @@ def _lancer_natif(demande, exe, d, s, r, n, t0):
         NATIF['port'] = None
     NATIF['proc'] = subprocess.Popen(args, cwd=d); NATIF['tous'].append(NATIF['proc'])
     if demande.get('incruste') and demande.get('rect'):
-        rc = demande['rect']
-        threading.Thread(target=lambda: [time.sleep(k) or natif_commande('rect %d %d %d %d %d %d' % tuple(int(v) for v in rc)) for k in (0.3, 0.7, 1.5)],
-                         daemon=True).start()
+        rc, proc = demande['rect'], NATIF['proc']
+        # (23/11, retour de muku : lecteur posé à côté de l'aperçu, plus petit) zone de CE lancement envoyée à CE lecteur seulement :
+        # avant, un lecteur lancé dans la seconde suivante (choix déjà en cache) recevait la zone de l'ancien (ex. la vue de
+        # l'éditeur derrière la fenêtre) et la page ne la corrigeait plus (elle croyait l'avoir déjà envoyée)
+        def _rect_lance():
+            for k in (0.3, 0.4, 0.8):
+                time.sleep(k)
+                if NATIF['proc'] is not proc:
+                    return
+                natif_commande('rect %d %d %d %d %d %d' % tuple(int(v) for v in rc))
+        threading.Thread(target=_rect_lance, daemon=True).start()
     return dict(r, pid=NATIF['proc'].pid, decor=s.get('decor', 'exporté'), retouches=n, secondes=round(time.time() - t0, 2), incruste=bool(demande.get('incruste')))
 
 
@@ -739,6 +825,22 @@ def exporter_technique_natif(code):
     with _verrou:
         v = _verrous_tech.setdefault(code, threading.Lock())
     with v:
+        if str(code).startswith('armure_'):         # (23/11) aperçu de mise en armure : refait quand l'armure a changé
+            a_ = armures_copies.registre(CFG).get(code[len('armure_'):].split('~')[0]) or {}
+            f_ = os.path.join(os.path.dirname(X.__file__), 'scenes', 'tech_' + code, 'copie_date.txt')
+            neuf = json.dumps([a_.get('date'), a_.get('mise'), (a_.get('stats') or {}).get('element')])
+            vieux = open(f_, encoding='utf-8').read() if os.path.exists(f_) else None
+            r = X.exporter_technique(code, force=vieux != neuf)
+            open(f_, 'w', encoding='utf-8').write(neuf)
+            return r
+        if str(code).startswith('invoc_'):          # (23/11) aperçu d'invocation : refait quand la copie a changé
+            c = esprits.registre(os.path.join(ICI, 'sortie', 'MesEsprits')).get(code[len('invoc_'):].split('~')[0]) or {}
+            f_ = os.path.join(os.path.dirname(X.__file__), 'scenes', 'tech_' + code, 'copie_date.txt')
+            neuf = json.dumps([c.get('date'), c.get('invocation'), (c.get('stats') or {}).get('element')])
+            vieux = open(f_, encoding='utf-8').read() if os.path.exists(f_) else None
+            r = X.exporter_technique(code, force=vieux != neuf)
+            open(f_, 'w', encoding='utf-8').write(neuf)
+            return r
         return X.exporter_technique(code)
 
 
@@ -1044,6 +1146,15 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
         if cle in _modeles:
             return _modeles[cle]
     D = CFG['data_dir']
+    code_reg = code
+    # (24/11, retour de muku : « pour l'armure il y a l'animation mais à la fin le personnage n'a pas l'armure ») « armure:<copie> » :
+    # le joueur (mannequin) qui PORTE l'armure de ma copie. LU : la scène de mise en armure (ev81_*) charge un 2e joueur
+    # « c00<TYPE><NO>_s01 » (plan c0020) = le joueur en armure ; l'armure est un vêtement (chara_parts CHARA_PARTS_CLOTHES
+    # « ka000101 » : [maillage _armd/ka000101/ka000101.g4md, texture, ligne de corps…]) ; ma copie = la même forme avec SA
+    # texture (sortie/MesEsprits/assets/chr/_armd/<modèle>/<modèle>_10.g4tx, noms internes ceux de l'armure du jeu).
+    armure = code[len('armure:'):] if quoi == 'joueur' and code and str(code).startswith('armure:') else None
+    if armure:
+        code = None
     if quoi == 'joueur':
         # joueur générique, ou le vrai personnage « code » : sa tête + maillot / chaussures / squelette de sa corpulence
         info = personnages.joueur(D, code) if code else None
@@ -1080,6 +1191,18 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
                 parties.insert(1, (cm(rs[0]), cx(ch[0][1])))
             else:
                 parties.insert(1, ('common/chr/_uniform/s000101/s00010%d.g4md' % t, 'dx11/chr/c000101/c000101.g4tx'))
+        md_arm, tx_arm, D_arm, rel_arm = None, None, None, None
+        if armure:
+            a_ = armures_copies.registre(CFG).get(armure) or {}
+            P_ = copies_tenues._parties(D)
+            rows = P_['clothes'].get(a_.get('armure') or '') or []
+            if rows:
+                md_arm, tx_arm = 'common/chr/' + rows[0][0], 'dx11/chr/' + rows[0][1]
+                parties = [(md_arm, tx_arm)] + [x for x in parties if '/_uniform/s000101/' in x[0]]     # armure (sans maillot) + chaussures
+                D_arm = os.path.join(ICI, 'sortie', 'MesEsprits', 'assets')
+                rel_arm = 'chr/_armd/%s/%s_10.g4tx' % (a_.get('modele'), a_.get('modele'))
+                if not os.path.isfile(os.path.join(D_arm, rel_arm)):
+                    D_arm = rel_arm = None                       # pas de texture à moi : celle de l'armure du jeu
         if info:
             tete = 'common/chr/' + info['tete']
             tx = [os.path.relpath(f, D).replace('\\', '/') for f in sorted(glob.glob(os.path.join(D, 'dx11', 'chr', os.path.dirname(info['tete']), '*.g4tx')))]
@@ -1088,8 +1211,14 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
             tx = ['dx11/chr/_face/21_MANNEQUIN/c21000010/c21000010.g4tx']
             parties.append(('common/chr/_face/21_MANNEQUIN/c21000010/c21000010.g4md', None))
         dossier = 'joueur_' + (code or 'generique') + ('_' + maillot + '_' + cote if lignes else '')
-        liste_tx = sorted({x for _, x in parties if x} | set(tx))
+        if md_arm:                                       # (24/11) dossier à part, refait quand la texture de ma copie change
+            dossier = 'joueur_armure_%s_%d' % (armure, int(os.path.getmtime(os.path.join(D_arm, rel_arm))) if rel_arm else 0)
+        liste_tx = sorted({x for _, x in parties if x and not (rel_arm and x == tx_arm)} | set(tx))
         noms = _textures_png(dossier, liste_tx)
+        if rel_arm:                                      # (24/11) + ses masques (msk / sp / spm) : les shaders du jeu les lisent
+            noms = noms + _textures_png(dossier, [rel_arm], tout=True, data_dir=D_arm)
+        elif md_arm:
+            _textures_png(dossier, [tx_arm], tout=True)
         tete_code = os.path.basename(parties[-1][0])[:-5]
         alias = [(r'^u0001\d\d', 'u000101'), (r'^s00010\d', 's000101'), (r'^sk0001\d\d', 'sk000101'), (r'^(eye|mouth)_10$', tete_code + '_10')]
         ms = []
@@ -1103,7 +1232,8 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
             # l'ordre des maillages et la planche d'expressions allait sur les cheveux.
             _texture_par_materiau(md, dict(parties).get(md) or (tx[0] if tx else None), lot, noms)
             # joueur mannequin : ENTIÈREMENT noir (maillot, chaussures, peau, tête ; choix de l'utilisateur, 13/11/2026)
-            if not info:
+            # (24/11) sauf l'armure qu'il porte (aperçu de mise en armure)
+            if not info and md != md_arm:
                 for m in lot:
                     m['noir'] = True
             ms += lot
@@ -1152,7 +1282,7 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
         for m in ms:
             m['_dossier'], m['_noms'] = dossier, noms
         threading.Thread(target=_textures_png, args=(dossier, liste_tx, True, D), daemon=True).start()   # masques (une fois)
-        _act.enregistrer('joueur' if quoi == 'joueur' else 'chr', code, ms, _shm.table(D))
+        _act.enregistrer('joueur' if quoi == 'joueur' else 'chr', code_reg, ms, _shm.table(D))
         # (15/11/2026) maillage sans texture du même nom (objets de technique : maillage « ev60_01030_20 », texture
         # « ev60_00830_20 ») : la 1re texture de SON matériau (case 0, comme le rendu Direct3D)
         if quoi != 'joueur' and any(not m.get('texture') for m in ms):
@@ -1347,6 +1477,16 @@ def _creation_stats(mod, code):
     if mod == 'MesEsprits':
         sortie = os.path.join(ICI, 'sortie', 'MesEsprits')
         reg = esprits.registre(sortie)
+        # (23/11, demande de muku : « les armures maintenant ») ARMURE (carte « Armure de … », code = son modèle kz…) : sa
+        # ligne AURA_CMD_INFO (wao…/was…) comme un esprit ; registre outil_armures.json (clé = code de ma copie d'esprit)
+        ra = armures_copies.registre(CFG)
+        ka = next((x for x, a in ra.items() if a.get('modele') == code or x == code and code not in reg), None)
+        if ka is not None and code not in reg:
+
+            def sauver_a():
+                json.dump(ra, open(os.path.join(sortie, 'outil_armures.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+                armures_copies.ecrire_vrfw(CFG, ra)
+            return 'armure', ra, ka, ra[ka], st.jeu_esprit(CFG['data_dir'], ra[ka]['was']), sauver_a
         if code not in reg:
             return None
 
@@ -1366,12 +1506,84 @@ def _creation_stats(mod, code):
     return None
 
 
-def stats_creation(mod, code):
+def bannieres_esprits():
+    """(23/11, muku : « tu n'as pas fait les bannières pour les totems et les armures ») éditeur de bannières : mes copies
+    d'esprits et de totems (bannière = leur nom, faite automatiquement ; modèle = celle de l'original) et mes armures
+    (bannière ARMED, commune dans le jeu : la leur à part)"""
+    sortie = os.path.join(ICI, 'sortie', 'MesEsprits')
+    reg = esprits.registre(sortie)
+    out = []
+    for k, c in sorted(reg.items()):
+        totem = esprits.est_totem(c)
+        el = (c.get('stats') or {}).get('element') or (None if totem else esprits.invocation_du_jeu(CFG['data_dir'], c.get('technique'))[0])
+        out.append({'genre': 'totem' if totem else 'esprit', 'id': k, 'nom': c.get('nom') or k, 'base': c.get('base'),
+                    'style': 'totem' if totem else 'esprit:' + (el or 'wind')})       # (24/11) police conseillée : celle du jeu
+    for k, a in sorted(armures_copies.registre(CFG).items()):
+        out.append({'genre': 'armure', 'id': armures_copies.id_banniere_armee(k), 'cle': k, 'nom': a.get('nom') or k, 'base': 'aura_armed01', 'style': 'armure'})   # (24/11) lettres du jeu (formes de la bannière d'armure)
+    return out
+
+
+def banniere_de(genre, k, e):
+    """bannière d'un esprit / totem (son nom : automatique, ou faite dans l'éditeur) ou d'une armure (ARMED : celle du jeu,
+    ou la sienne faite dans l'éditeur) : {id, base, editeur}"""
+    sortie = os.path.join(ICI, 'sortie', 'MesEsprits')
+    if genre == 'armure':
+        return {'id': armures_copies.id_banniere_armee(k), 'base': 'aura_armed01', 'editeur': armures_copies.banniere_armee_faite(CFG, k)}
+    try:
+        suivi = json.load(open(os.path.join(sortie, 'outil_bannieres.json'), encoding='utf-8'))
+    except (OSError, ValueError):
+        suivi = {}
+    return {'id': k, 'base': e.get('base'), 'editeur': suivi.get(k) == 'editeur'}
+
+
+def telop_invocation(code_tech, code_telop):
+    """(24/11, retour de muku : « pas de bannière sur la preview de l'esprit guerrier, le totem aussi ») bannière montrée par
+    l'aperçu d'invocation / de mise en armure : « <CHARA_ID> » = ma copie (sa bannière de la sortie MesEsprits : son nom ou
+    celle de l'éditeur ; sinon celle de l'original) ; « aura_armed01 » = la bannière ARMED de mon armure si je l'ai faite"""
+    copie = str(code_tech).split('_', 1)[1].split('~')[0]
+    if code_telop == '<CHARA_ID>':
+        base = (esprits.registre(os.path.join(ICI, 'sortie', 'MesEsprits')).get(copie) or {}).get('base')
+        return banniere_esprit_png(copie, base or copie)
+    if code_telop == 'aura_armed01' and str(code_tech).startswith('armure_'):
+        return banniere_esprit_png(armures_copies.id_banniere_armee(copie), 'aura_armed01')
+    return telop_png(code_telop)
+
+
+def banniere_esprit_png(id_, base):
+    """image de la bannière actuelle : celle de la sortie MesEsprits si elle existe, sinon celle du jeu (modèle)"""
+    f = os.path.join(ICI, 'sortie', 'MesEsprits', 'content', 'telops', 'any', os.path.basename(id_ or '') + '.png')
+    return f if id_ and os.path.isfile(f) else telop_png(os.path.basename(base or ''))
+
+
+def enregistrer_banniere_esprit(d):
+    sortie = os.path.join(ICI, 'sortie', 'MesEsprits')
+    cible = next((x for x in bannieres_esprits() if x['id'] == d.get('id') and x['genre'] == d.get('genre')), None)
+    if not cible or not d.get('image'):
+        return {'ok': False, 'erreur': 'création inconnue'}
+    dos = os.path.join(sortie, 'content', 'telops', 'any'); os.makedirs(dos, exist_ok=True)
+    export.ecrire_png_banniere(d['image'], os.path.join(dos, cible['id'] + '.png'))
+    if cible['genre'] == 'armure':
+        armures_copies.ecrire_vrfw(CFG, armures_copies.registre(CFG))     # scène copiée -> bannière à part, [[telop]]
+        quoi = 'bannière ARMED de %s' % cible['nom']
+    else:
+        f_suivi = os.path.join(sortie, 'outil_bannieres.json')     # « editeur » : plus refaite automatiquement depuis le nom
+        try:
+            suivi = json.load(open(f_suivi, encoding='utf-8'))
+        except (OSError, ValueError):
+            suivi = {}
+        suivi[cible['id']] = 'editeur'
+        json.dump(suivi, open(f_suivi, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        esprits.ecrire_bannieres(CFG, sortie, esprits.registre(sortie))
+        quoi = 'bannière de %s' % cible['nom']
+    return {'ok': True, 'rapport': ['%s remplacée' % quoi, 'pas encore dans le jeu : « Installer » sur sa carte dans Mes créations']}
+
+
+def stats_creation(mod, code, langue='fr'):
     from moteur import stats as st
     c = _creation_stats(mod, code)
     if not c:
         return {'ok': False, 'erreur': 'création inconnue'}
-    genre, _, _, e, jeu, _ = c
+    genre, _, k_reg, e, jeu, _ = c
     # (22/11) l'original COMME EN JEU pour le menu (l'écriture garde les valeurs du jeu de base : _creation_stats) :
     # technique = jeu + mods activés (HissatsuReforged…) ; joueur = carte de l'original (chara_param + mods qui la redéfinissent)
     try:
@@ -1382,10 +1594,69 @@ def stats_creation(mod, code):
     except Exception as ex:
         print('stats : original illisible', ex)
     src = jeu.pop('_source', None) if isinstance(jeu, dict) else None
-    return {'ok': True, 'genre': genre, 'nom': e.get('nom'), 'champs': st.CHAMPS[genre], 'jeu': jeu, 'stats': e.get('stats'), 'source': src}
+    r = {'ok': True, 'genre': genre, 'nom': e.get('nom'), 'champs': st.CHAMPS[genre], 'jeu': jeu, 'stats': e.get('stats'), 'source': src}
+    if genre == 'technique':               # (23/11) « En attente de stats / cosmétique » : couleur du tir, traînée, prix, bannière
+        r['cosmetique'] = export.cosmetique_actuelle(os.path.join(ICI, 'sortie', 'MesTechniques'), k_reg)
+        r['tir'] = str(e.get('base', '')).startswith('whs')
+        r['degrades_tir'] = st.degrades_tir(CFG)       # (23/11) images des couleurs du tir (dégradé du jeu)
+    if genre == 'esprit':       # (23/11, muku : carte Keshin du Tableau des compétences) sa technique (liée, sinon d'origine)
+        try:
+            lie = e.get('technique_liee')
+            if not lie:
+                cat = coups.catalogue(CFG['data_dir'], cache_txt())
+                o = next((x for x in cat if x['code'] == e.get('technique')), {})
+                lie = next((x for x in cat if x['id'] == o.get('liee')), None)
+            if lie:
+                r['technique'] = {'nom': lie.get('nom'), 'code': lie.get('code')}
+        except Exception as ex:
+            print('technique de l\'esprit :', ex)
+    if genre in ('esprit', 'armure'):       # (24/11, muku : « un bouton comme les techniques pour faire sa bannière ») sa bannière
+        r['banniere'] = banniere_de(genre, k_reg, e)
+    if genre in ('esprit', 'armure'):       # (23/11, muku : « tout sauf compatible ») BONUS et EFFET UNIQUE (moteur/effets_esprits.py)
+        try:
+            from moteur import effets_esprits as EE
+            lg = langue if langue in ('fr', 'en', 'es') else 'fr'     # textes des effets dans la langue de l'Atelier (textes du jeu)
+            r['effets_origine'] = EE.de_l_original(CFG, e.get('was') if genre == 'armure' else e.get('technique'), lg)
+            r['catalogue_effets'] = EE.catalogue(CFG, lg)
+            r['effets'] = e.get('effets')
+        except Exception as ex:
+            print('effets de l\'esprit :', ex)
+    if genre == 'esprit' and (e.get('dossier') == '_keshin' or esprits.est_totem(e)):      # (23/11) apparitions possibles (+ totems)
+        try:
+            noms = {p['code']: p['nom'] for p in PERSOS}
+            el0, sc0 = esprits.invocation_du_jeu(CFG['data_dir'], e.get('technique'))
+            sc0 = esprits.scene_invocation_choix(CFG, e)           # (23/11) totem : ev83_00010
+            r['invocations'] = [dict(x, nom=noms.get(x['esprit'], x['esprit'])) for x in esprits.invocations_possibles(CFG, e)]
+            r['invocation_origine'] = {'scene': sc0, 'esprit': e.get('base'), 'element': el0}
+            inv = e.get('invocation') or {}
+            r['invocation'] = {'scene': inv['scene'], 'esprit': inv['esprit'], 'choisie': bool(inv.get('choisie'))} if inv.get('etat') == 'emprunt' else None
+        except Exception as ex:
+            print('invocations :', ex)
+    if genre == 'armure':       # (23/11) mises en armure possibles (scène ev81 + esprit dont ma copie prend les gestes)
+        try:
+            noms = {p['code']: p['nom'] for p in PERSOS}
+            k0, sc0 = armures_copies.esprit_et_scene(CFG['data_dir'], e['was'])
+            r['invocations'] = [dict(x, nom=noms.get(x['esprit'], x['esprit'])) for x in armures_copies.mises_possibles(CFG, e, k_reg)]
+            r['invocation_origine'] = {'scene': sc0, 'esprit': armures_copies.base_esprit(CFG, k_reg) if sc0 == 'ev81_00010' else k0}
+            m = e.get('mise') or {}
+            r['invocation'] = {'scene': m['scene'], 'esprit': m['esprit'], 'choisie': True} if m.get('choisie') else None
+            r['esprit'] = k_reg                    # ma copie d'esprit (portrait, aperçu « armure_<copie> »)
+            # nom de l'armure du jeu (sa commande d'aura wao… / was…, dans la langue de l'Atelier), sinon celui de l'onglet Armures
+            o_ = next((x for x in coups.catalogue(CFG['data_dir'], cache_txt()) if x['code'] == e.get('was')), {})
+            r['nom_origine'] = o_.get('nom') or (JEU_CODE.get(('armures', e.get('armure'))) or {}).get('nom') or e.get('armure')
+            r['esprit_origine'] = armures_copies.base_esprit(CFG, k_reg)
+            r['element_origine_scene'] = {v: k for k, v in armures_copies.SCENES_ARMURE.items()}.get(sc0, '')
+        except Exception as ex:
+            print('mises en armure :', ex)
+    return r
 
 
-def regler_stats(mod, code, brut):
+def _telop_origine(base):
+    t = PAR_CODE.get(base or '')
+    return (techniques.lire_cinematique(CFG['data_dir'], t['cinematique'])['telop'] if t else None) or base
+
+
+def regler_stats(mod, code, brut, cosm=None, invoc=None, effets=None):
     from moteur import stats as st
     c = _creation_stats(mod, code)
     if not c:
@@ -1396,6 +1667,14 @@ def regler_stats(mod, code, brut):
     except ValueError as ex:
         return {'ok': False, 'erreur': str(ex)}
     inv = None
+    if genre == 'esprit' and isinstance(invoc, dict):       # (23/11) apparition choisie (ou « auto » : selon l'élément)
+        reg[k].pop('invocation', None)
+        if invoc.get('scene') and invoc.get('esprit'):
+            ok = [x for x in esprits.invocations_possibles(CFG, reg[k]) if x['scene'] == invoc['scene'] and x['esprit'] == invoc['esprit']]
+            if not ok:
+                return {'ok': False, 'erreur': 'apparition impossible pour cette copie'}
+            if not (ok[0]['esprit'] == reg[k]['base'] and ok[0]['scene'] == esprits.scene_invocation_choix(CFG, reg[k])):
+                reg[k]['invocation'] = dict(ok[0], etat='emprunt', choisie=True)
     if genre == 'esprit':                  # (23/11) élément changé : l'invocation de cet élément (moteur/esprits.py)
         try:
             inv = esprits.plan_invocation(CFG, reg[k])
@@ -1405,6 +1684,20 @@ def regler_stats(mod, code, brut):
             reg[k]['invocation'] = inv
         else:
             reg[k].pop('invocation', None)
+    if genre == 'armure' and isinstance(invoc, dict):       # (23/11) mise en armure choisie (ou « auto » : selon l'élément)
+        reg[k].pop('mise', None)
+        if invoc.get('scene') and invoc.get('esprit'):
+            ok = [x for x in armures_copies.mises_possibles(CFG, reg[k], k) if x['scene'] == invoc['scene'] and x['esprit'] == invoc['esprit']]
+            if not ok:
+                return {'ok': False, 'erreur': 'mise en armure impossible pour cette copie'}
+            reg[k]['mise'] = dict(ok[0], choisie=True)
+    if genre in ('esprit', 'armure') and isinstance(effets, dict):     # (23/11) bonus / effet unique : {bonus: [lignes], uniques: [lignes]} ou {} = l'original
+        propres = {x: [[int(v) for v in l][:9] for l in effets.get(x) or [] if isinstance(l, list) and l]
+                   for x in ('bonus', 'uniques') if effets.get(x) is not None}
+        if propres:
+            reg[k]['effets'] = propres
+        else:
+            reg[k].pop('effets', None)
     sauver()
     ch = st._changes(reg[k]['stats'], jeu) if genre != 'personnages' else reg[k]['stats']
     rapport = ['%s : %s' % (e.get('nom'), ', '.join('%s = %s' % (x, y) for x, y in ch.items()) if ch else "valeurs de l'original gardées")]
@@ -1413,6 +1706,23 @@ def regler_stats(mod, code, brut):
         rapport.append('invocation : celle de l’élément %s (%s), avec les animations de %s' % (nom_el, inv['scene'], inv['esprit']))
     elif inv:
         rapport.append('invocation : aucun esprit de l’élément %s n’a les mêmes os, l’invocation d’origine reste' % nom_el)
+    if genre == 'armure':
+        try:
+            pl = armures_copies.plan_mise(CFG, reg[k], k)
+        except Exception as ex:
+            print('mise en armure :', ex); pl = None
+        if pl:
+            rapport.append('mise en armure : %s, avec les gestes de %s' % (pl['scene'], pl['esprit']))
+    if genre in ('esprit', 'armure') and reg[k].get('effets'):
+        from moteur import effets_esprits as EE
+        for x, nom in (('bonus', 'bonus'), ('uniques', 'effet unique')):
+            if x in reg[k]['effets']:
+                rapport.append('%s : %s' % (nom, ', '.join(EE.libelle(CFG, l[0]) for l in reg[k]['effets'][x]) or 'aucun'))
+    if genre == 'technique' and isinstance(cosm, dict):
+        rc = export.appliquer_cosmetique(CFG, k, cosm, _telop_origine(e.get('base')))
+        if not rc.get('ok'):
+            return rc
+        rapport += rc['rapport'] or ['cosmétique : rien de changé']
     return {'ok': True, 'mod': mod, 'rapport': rapport}
 
 
@@ -1732,7 +2042,7 @@ def portrait(code):
 def icone_esprit(code):
     code = os.path.basename(code)
     f = []
-    for dos in ('aura_fs', 'aura_armed', 'aura'):
+    for dos in ('aura_fs', 'aura_armed', 'aura_soul', 'aura'):      # (23/11) aura_soul = totems
         f += [os.path.join(CFG['outil_dir'], 'sortie', 'MesEsprits', 'assets', 'menu', '200_icon', '10_icon_chr', dos, code + '_l.g4tx'),
               os.path.join(CFG['data_dir'], 'dx11', 'menu', '200_icon', '10_icon_chr', dos, code + '_l.g4tx')]
     return _png_icone('icones_esprits', f, code)
@@ -1901,7 +2211,7 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/langue':                    # FR / EN
                 return self._envoyer(200, {'langue': langue.code()})
             if u.path == '/api/stats':                     # (22/11) « En attente de stats » : champs, valeurs du jeu, valeurs réglées
-                return self._envoyer(200, stats_creation(q.get('mod', [''])[0], q.get('code', [''])[0]))
+                return self._envoyer(200, stats_creation(q.get('mod', [''])[0], q.get('code', [''])[0], q.get('langue', ['fr'])[0]))
             if u.path == '/api/parametres':                # (22/11) ⚙ Paramètres (palette, musique) : gardés dans config.json
                 return self._envoyer(200, parametres())
             if u.path == '/api/dossier_jeu':               # (22/11) ⚙ Paramètres : dossier du jeu où « Installer » met les mods
@@ -1992,10 +2302,19 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, JEU.get(cat, []) + sans_chemins(mods_liste(cat)))
             if u.path == '/api/mes_maillots':
                 return self._envoyer(200, mes_maillots.liste(CFG))
+            if u.path == '/api/maillot_icone_base':        # (24/11) icône de boutique du maillot de base (dessin de l'icône)
+                f = mes_maillots.icone_base(CFG, q.get('base', [''])[0])
+                return self._fichier(f) if f else self._envoyer(404, {'erreur': 'icône introuvable'})
             if u.path == '/api/maillot_etat':
                 return self._envoyer(200, mes_maillots.etat())
             if u.path == '/api/menus_jeu':               # (15/11/2026) images des menus du jeu pour le hub (moteur/menus_jeu.py)
                 return self._envoyer(200, menus_jeu.tout(CFG['data_dir'], CACHE))
+            if u.path.startswith('/ui_jeu/'):              # (23/11) refonte « comme le jeu » : morceaux exacts des menus du jeu
+                from moteur import ui_jeu
+                if u.path == '/ui_jeu/liste':
+                    return self._envoyer(200, ui_jeu.liste(CFG, q.get('planche', [''])[0]))
+                f = ui_jeu.servir(CFG, CACHE, unquote(u.path[len('/ui_jeu/'):]))
+                return self._fichier(f) if f else self._envoyer(404, {'erreur': 'image du jeu introuvable'})
             if u.path.startswith('/menu_jeu/'):
                 f = menus_jeu.image(CFG['data_dir'], CACHE, os.path.basename(unquote(u.path))[:-4])
                 return self._fichier(f) if f else self._envoyer(404, {'erreur': 'image introuvable'})
@@ -2064,12 +2383,51 @@ class Gestion(BaseHTTPRequestHandler):
                 if p_ not in range(0, 7):
                     return self._envoyer(404, {'erreur': 'police inconnue'})
                 return self._fichier(_num.planche_png(CFG['data_dir'], p_, os.path.join(CACHE, 'numeros')))
+            if u.path == '/api/banniere_jeu':              # (23/11) bannière écrite avec les lettres du jeu (éditeur, aperçus)
+                from moteur import lettres_jeu
+                el_ = (q.get('element') or ['wind'])[0]
+                if el_.startswith('image:'):                # (24/11) polices-images (planches de muku : moteur/police_image.py)
+                    from moteur import police_image
+                    cle_ = el_[len('image:'):]
+                    if cle_ not in police_image.PLANCHES or not police_image.disponible(cle_, CACHE):
+                        return self._envoyer(503, {'erreur': 'police pas encore prête (construction au démarrage, ~1 min)'})
+                    import tempfile
+                    fd_, f_ = tempfile.mkstemp(prefix='atelier_banniere_', suffix='.png'); os.close(fd_)
+                    try:
+                        police_image.ecrire((q.get('texte') or [''])[0] or ' ', cle_, CACHE, f_)
+                        return self._envoyer(200, open(f_, 'rb').read(), 'image/png')
+                    finally:
+                        try:
+                            os.remove(f_)
+                        except OSError:
+                            pass
+                if not lettres_jeu.disponible(CACHE):
+                    return self._envoyer(503, {'erreur': 'lettres du jeu pas encore prêtes (construction au démarrage, ~3 min)'})
+                # (24/11) fichier PROPRE à cette demande : deux Atelier ouverts (ou deux demandes) écrivaient le même fichier temporaire
+                # -> image coupée, l'éditeur passait à une police ordinaire
+                import tempfile
+                fd_, f_ = tempfile.mkstemp(prefix='atelier_banniere_', suffix='.png'); os.close(fd_)
+                try:
+                    lettres_jeu.ecrire((q.get('texte') or [''])[0] or ' ', (q.get('element') or ['wind'])[0], CACHE, f_)
+                    return self._envoyer(200, open(f_, 'rb').read(), 'image/png')
+                finally:
+                    try:
+                        os.remove(f_)
+                    except OSError:
+                        pass
+            if u.path == '/api/banniere_esprit_png':      # (24/11) bannière actuelle d'un esprit / totem / armure (fiche)
+                return self._fichier(banniere_esprit_png(q.get('id', [''])[0], q.get('base', [''])[0]))
+            if u.path == '/api/texture_armure':           # (24/11) remplissage de l'armure (style « Armure », police Armure Style)
+                from moteur import lettres_jeu
+                return self._fichier(lettres_jeu.texture_armure(CACHE, CFG['data_dir']))
             if u.path == '/api/telop_png':
                 return self._fichier(telop_png(q['code'][0]))
             if u.path == '/api/telop_apercu':              # bannière des aperçus : la perso si elle existe, sinon celle du jeu
                 return self._fichier(telop_apercu(q.get('tech', [''])[0], q.get('telop', [''])[0], q.get('projet', [''])[0]))
             if u.path == '/api/telop_apercu_version':
                 return self._envoyer(200, {'v': telop_apercu_version(q.get('tech', [''])[0], q.get('projet', [''])[0])})
+            if u.path == '/api/bannieres_esprits':        # (23/11) copies d'esprits, de totems et armures pour l'éditeur de bannières
+                return self._envoyer(200, bannieres_esprits())
             if u.path == '/api/etat':
                 return self._envoyer(200, {'jeu_ouvert': export.jeu_ouvert(), 'deja': export._deja_dans_le_mod(os.path.join(ICI, 'sortie', export.MOD_ID)),
                                        'esprits': esprits.contenu(CFG), 'maillots': os.path.isfile(MAILLOTS),
@@ -2091,7 +2449,7 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, {'ok': False, 'erreur': 'Cet élément vient d’un mod : la copie n’est pas encore possible '
                                                                   '(aperçu et recoloration seulement).'})
             if u.path == '/api/stats':                     # (22/11) régler les stats d'une création (ou garder celles de l'original)
-                return self._envoyer(200, regler_stats(demande.get('mod'), demande.get('code'), demande.get('stats') or {}))
+                return self._envoyer(200, regler_stats(demande.get('mod'), demande.get('code'), demande.get('stats') or {}, demande.get('cosmetique'), demande.get('invocation'), demande.get('effets')))
             if u.path == '/api/supprimer_creation':        # (22/11) « Supprimer » d'une carte de Terminées
                 return self._envoyer(200, supprimer_creation(demande.get('mod'), str(demande.get('code') or ''), demande.get('genre')))
             if u.path == '/api/corbeille':                 # (23/11) Restaurer / Supprimer définitivement / Vider la corbeille
@@ -2133,6 +2491,8 @@ class Gestion(BaseHTTPRequestHandler):
                                 ('volume', lambda v: isinstance(v, (int, float)) and 0 <= v <= 1)):
                     if k_ in demande and ok_(demande[k_]):
                         p_[k_] = demande[k_]
+                if 'theme' in demande:
+                    p_['theme_v2'] = True                   # (23/11) palette choisie après la refonte « Jeu »
                 CFG['parametres'] = p_
                 sauver_cfg()
                 return self._envoyer(200, dict(p_, ok=True))
@@ -2200,7 +2560,13 @@ class Gestion(BaseHTTPRequestHandler):
                 c = os.path.basename(demande.get('projet') or '')       # (21/11) rangée sous le PROJET, pas sous le code du jeu
                 if not c:
                     return self._envoyer(200, {'ok': False, 'erreur': 'projet inconnu'})
-                export.ecrire_png_banniere(demande['image'], os.path.join(CACHE, 'bannieres_apercu', c + '.png'))
+                f_ap = os.path.join(CACHE, 'bannieres_apercu', c + '.png')
+                if demande.get('image'):
+                    export.ecrire_png_banniere(demande['image'], f_ap)
+                else:                                   # (23/11) depuis un texte (fenêtre de la technique : lettres du jeu / simple)
+                    os.makedirs(os.path.dirname(f_ap), exist_ok=True)
+                    export.banniere(str(demande.get('texte') or ' '), demande.get('couleur') or '#f5c842', demande.get('contour') or '#0d1a4a',
+                                    f_ap, element=demande.get('element'), style=demande.get('style') or 'jeu')
                 # (22/11, retour de muku : « faire sa bannière, puis recharger la technique : pas intuitif ») le lecteur natif ouvert
                 # reçoit la nouvelle bannière TOUT DE SUITE : telop.bin de la scène réécrit, puis commande « telop » (relue sans relancer)
                 X = _natif()
@@ -2214,6 +2580,8 @@ class Gestion(BaseHTTPRequestHandler):
                     except Exception as ex:
                         print('bannière du lecteur natif :', ex)
                 return self._envoyer(200, {'ok': True})
+            if u.path == '/api/banniere_esprit':          # (23/11) bannière d'un esprit / totem (son nom) ou ARMED d'une armure, depuis l'éditeur
+                return self._envoyer(200, enregistrer_banniere_esprit(demande))
             if u.path == '/api/banniere':
                 t = PAR_CODE.get(demande.get('base', ''))
                 telop = techniques.lire_cinematique(CFG['data_dir'], t['cinematique'])['telop'] if t else demande.get('base')
@@ -2243,7 +2611,7 @@ class Gestion(BaseHTTPRequestHandler):
                     return self._envoyer(200, {'actif': False})
                 dos = os.path.join(os.path.dirname(X.__file__), 'scenes', 'tech_' + os.path.basename(str(demande['technique'])))
                 if os.path.isdir(dos):
-                    json.dump({k: demande.get(k) or ([] if k == 'caches' else {}) for k in ('caches', 'couleurs', 'sommets', 'particules')},
+                    json.dump({k: demande.get(k) or ([] if k == 'caches' else {}) for k in ('caches', 'couleurs', 'sommets', 'particules', 'lumieres')},
                               open(os.path.join(dos, 'options.json'), 'w', encoding='utf-8'))
                 return self._envoyer(200, natif_commande('options'))
             if u.path == '/api/natif':                   # lecteur natif (C++ / Direct3D 11) : export de la scène + lancement
@@ -2333,14 +2701,16 @@ class Gestion(BaseHTTPRequestHandler):
 EDGE = [r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', r'C:\Program Files\Microsoft\Edge\Application\msedge.exe']
 
 
-THEMES = ('or', 'sobre', 'bleu', 'turquoise')
+THEMES = ('jeu', 'or', 'sobre', 'bleu', 'turquoise')
 
 
 def parametres():
     """(22/11, idée de muku : « des paramètres, les gens pourront choisir ») réglages de l'interface, dans config.json
-    (pas dans le navigateur : sa mémoire change avec le port). Palette « or » = l'habillage d'origine ; musique coupée d'office."""
+    (pas dans le navigateur : sa mémoire change avec le port). Musique coupée d'office.
+    (23/11) palette « jeu » (refonte : les menus du jeu) par défaut ; une palette choisie AVANT la refonte ne compte plus."""
     p = dict(CFG.get('parametres') or {})
-    return {'theme': p.get('theme') if p.get('theme') in THEMES else 'or', 'musique': p.get('musique') is True,
+    th = p.get('theme') if p.get('theme') in THEMES and p.get('theme_v2') else 'jeu'
+    return {'theme': th, 'musique': p.get('musique') is True, 'theme_v2': bool(p.get('theme_v2')),
             'volume': p['volume'] if isinstance(p.get('volume'), (int, float)) and 0 <= p['volume'] <= 1 else 0.35}
 
 
@@ -2478,6 +2848,24 @@ def main():
     port = int(sys.argv[sys.argv.index('--port') + 1]) if '--port' in sys.argv else CFG.get('port', 8765)   # --port N : autre port (essais)
     srv = ThreadingHTTPServer(('127.0.0.1', port), Gestion)
     threading.Thread(target=preparer_index, daemon=True).start()
+
+    def _lettres_jeu():                  # (23/11) alphabet des bannières du jeu (moteur/lettres_jeu.py) : fait une fois, ~3 min
+        try:
+            from moteur import lettres_jeu
+            if not lettres_jeu.disponible(CACHE):
+                lettres_jeu.construire(CFG, CACHE, journal=lambda *a: None)
+                lettres_jeu._ALPHA.clear()
+                print('bannières : lettres du jeu prêtes')
+            from moteur import police_image             # (24/11) polices-images des planches de muku (~1 min, une fois)
+            for k_ in police_image.PLANCHES:
+                if not police_image.disponible(k_, CACHE):
+                    police_image.construire(k_, CACHE, journal=print)
+            if not lettres_jeu.styles_disponibles(CACHE):      # (24/11) styles esprit guerrier / totem / ARMED (~30 s)
+                lettres_jeu.construire_styles(CFG, CACHE, journal=lambda *a: None)
+                print('bannières : styles esprit guerrier / totem prêts')
+        except Exception as ex:
+            print('lettres du jeu :', ex)
+    threading.Thread(target=_lettres_jeu, daemon=True).start()
     url = 'http://127.0.0.1:%d/' % port
     print('Atelier Inazuma : %s  (%d techniques, %d esprits et totems)  -  fermer cette fenêtre pour arrêter' % (url, len(INDEX), len(PERSOS)))
     if '--sans-navigateur' not in sys.argv:

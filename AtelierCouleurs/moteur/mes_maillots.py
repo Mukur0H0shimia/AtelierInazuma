@@ -181,3 +181,18 @@ def construire(cfg, installer=False):
 
 def etat():
     return dict(_etat, journal=_etat['journal'][-40:])
+
+
+def icone_base(cfg, cle):
+    """(24/11) icône de boutique du maillot du jeu « cle » (uni_…), en PNG dans maillots/cache_icones : point de départ
+    du dessin de l'icône dans l'onglet Maillots (comme l'onglet Icône du studio de l'Atelier Maillots)"""
+    cle = os.path.basename(str(cle or ''))
+    d = os.path.join(DOSSIER, 'cache_icones'); os.makedirs(d, exist_ok=True)
+    f = os.path.join(d, cle + '.png')
+    if not os.path.exists(f):
+        from .maillots import images
+        ic = images.icone_planche(A.planche_icones(cfg['data_dir']), cle)
+        if not ic:
+            return None
+        images.ecrire_png(f, *ic)
+    return f

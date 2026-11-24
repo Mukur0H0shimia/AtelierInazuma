@@ -14,12 +14,17 @@
   // 0x3da3d70a) -> inchangé si colorize = 0, sinon s = max(s, colorize) ; teinte -> H ; valeur gardée (pas de plafond à 1).
   // Avant : saturation au moins C pour TOUTES les couleurs (les couleurs pâles sortaient trop vives).
   // Même formule : AtelierNatif/src/animation.h (teinter_hsv), AtelierD3D/rendu_image.py.
-  function teinterHSV(c, H, C) {
-    const v = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]);
-    if (!(v > 0)) return c;
-    let s = (v - mn) / v;
-    if (s < 0.08) { if (!(C > 0)) return c; s = Math.max(s, C); }
-    s = Math.min(1, s);
+  // (23/11, retour d'un joueur : « tigre jaunâtre en lecture ») S = `saturation` de VRFW, un MULTIPLICATEUR appliqué après
+  // colorize (émulé : orange × 0,12 -> presque blanc ; gris colorisé 0,5 × 0,5 -> 0,25) ; sans S : 1 (comme avant)
+  // (23/11) Vl = `value` de VRFW : multiplie la luminosité de TOUTES les couleurs (gris et blancs compris), sans plafond (émulé)
+  function teinterHSV(c, H, C, S, Vl) {
+    const k = Vl === undefined || Vl === null ? 1 : Vl;
+    const v0 = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]);
+    if (!(v0 > 0)) return c;
+    let s = (v0 - mn) / v0;
+    if (s < 0.08) { if (!(C > 0)) { if (k !== 1) for (let i = 0; i < 3; i++) c[i] *= k; return c; } s = Math.max(s, C); }
+    s = Math.min(1, s * (S === undefined || S === null ? 1 : S));
+    const v = v0 * k;
     let h = H % 360; if (h < 0) h += 360; h /= 60; const i = Math.floor(h) % 6, f = h - Math.floor(h);
     const p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
     const r = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i];
@@ -357,7 +362,7 @@
         else { X = [Rq[0][0], Rq[1][0], Rq[2][0]]; Y = [Rq[0][1], Rq[1][1], Rq[2][1]]; Z = [Rq[0][2], Rq[1][2], Rq[2][2]]; }
         const sx = L * s[0], sy = H * s[1];
         const c = [p.col[0], p.col[1], p.col[2], p.col[3] * (opacite === undefined ? 1 : opacite)];
-        if (this.teinte) teinterHSV(c, this.teinte[0], this.teinte[1]);      // (14/11/2026) teinte de l'Atelier
+        if (this.teinte) teinterHSV(c, this.teinte[0], this.teinte[1], this.teinte[2], this.teinte[3]);      // (14/11/2026) teinte de l'Atelier (23/11 : + saturation)
         for (let j = 0; j < 4; j++) { const [cx, cy] = COINS[j], o = (4 * m + j);
           for (let k = 0; k < 3; k++) pos[3 * o + k] = p.monde[k] + X[k] * cx * sx + Y[k] * cy * sy;
           // NORMAL (bit 0x20) = R x (0, 0, 1), TANGENT (bit 0x40) = R x (1, 0, 0), tables 0x141a7a5f0 / 0x141a7a5b0, R = repère du

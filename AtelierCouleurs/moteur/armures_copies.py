@@ -42,13 +42,18 @@ def copies_esprits(cfg):
 
 
 def armure_du_jeu(data_dir, esprit):
-    """1re armure (« was… ») du jeu de cet esprit : aura_skill_config, colonne 7 = crc32(esprit)"""
+    """1re armure du jeu de cet esprit : aura_skill_config, colonne 7 = crc32(esprit). (23/11, retour de muku : « on voit
+    l'esprit guerrier trop tôt » dans l'armure de Pégase (couleurs)) LU : l'armure de Pégase est « wao00010 » (scène
+    ev81_00010), pas une « was… » ; on ne cherchait que « was » -> Reine sorcière (was00220) par défaut, dont les animations
+    empruntées laissaient les ailes de Pégase visibles derrière le joueur. Ordre : was, puis wao / wad / wak."""
     c = os.path.join(data_dir, 'common')
     crc = zlib.crc32(esprit.encode())
+    trouves = []
     for k, v in cfgbin.lire(open(_dernier(os.path.join(c, 'gamedata', 'skill', 'aura_skill_config_*.cfg.bin')), 'rb').read()):
-        if len(v) > 13 and isinstance(v[1], str) and v[1].startswith('was') and isinstance(v[7], int) and (v[7] & 0xFFFFFFFF) == crc:
-            return v[1]
-    return None
+        if len(v) > 13 and isinstance(v[1], str) and v[1][:3] in ('was', 'wao', 'wad', 'wak') and isinstance(v[7], int) and (v[7] & 0xFFFFFFFF) == crc:
+            trouves.append(v[1])
+    trouves.sort(key=lambda w: ('was', 'wao', 'wad', 'wak').index(w[:3]))
+    return trouves[0] if trouves else None
 
 
 def esprit_et_scene(data_dir, was):
@@ -179,8 +184,16 @@ def ecrire_vrfw(cfg, reg):
     entete = '# Écrit par l\'Atelier Inazuma : armures de mes copies d\'esprits (réécrit à chaque export).\n'
     ch, look, tech, txt, tr, env, par_scene = [], [], [], [], [], [], {}
     reg_esprits = esprits.registre(sortie)
+    pris = set()                                     # (23/11) scènes de mise en armure à part (esprits.copier_scene)
+    telops_a = ['schema = "VRFW.telop_list/2"', entete.strip(), "# bannières « ARMED » faites dans l'éditeur de bannières (une par armure)", '']
     for k, (code, e) in enumerate(sorted(reg.items())):
         m = e['modele']
+        # (23/11) armure faite avant la correction (« was00220 » par défaut alors que l'esprit d'origine a la sienne, ex.
+        # Pégase -> wao00010) : celle de l'esprit d'origine
+        base_ = (reg_esprits.get(code) or {}).get('base')
+        w_ = armure_du_jeu(cfg['data_dir'], base_) if base_ else None
+        if w_ and e.get('was') == 'was00220' and w_ != 'was00220':
+            e['was'] = w_
         tex = '_armd/%s/%s_10.g4tx' % (m, m)
         lignes = lignes_par_corps(cfg, e['armure'])
         if lignes:                       # une ligne par groupe de corps : modèles de l'armure d'origine, notre texture
@@ -196,10 +209,37 @@ def ecrire_vrfw(cfg, reg):
                '  [character.new_model]', '  id = 0x%08X' % e['id_modele'], '  from = "c11600010"',
                '  [character.new_model.cells]', '  clothes = 0x%08X                                    # crc32("%s")' % (zlib.crc32(m.encode()), m),
                '  shoes = 0', '  gloves = 0', '  force_kit = 1', '', '  [[character.cards]]', '  id = 0x%08X' % e['carte'], '']
+        # (23/11, demande de muku) MISE EN ARMURE dans SA scène : copie de celle de l'armure « from » sous un numéro neuf
+        # (comme ZanUltimateMod) ; ma copie y prend ses animations copiées, sinon celles de l'esprit de cette armure (comme
+        # Michael : k002090 = "k000220") ; plus de [[event_env]] sur la scène du jeu partagée (conflits avec Mukuro…)
+        k_from, scene = esprit_et_scene(cfg['data_dir'], e['was'])
+        try:                                         # (23/11) mise en armure choisie dans la fiche, ou celle de l'élément réglé
+            pl = plan_mise(cfg, e, code)
+        except Exception as ex:
+            print('mise en armure :', ex); pl = None
+        if pl and pl.get('scene') and pl.get('esprit'):
+            scene, k_from = pl['scene'], pl['esprit']
+        cel_ev = ''
+        if scene and k_from:
+            ev = esprits.id_scene_copie(cfg, scene[:4], code, pris)
+            if esprits.copier_scene(cfg, sortie, scene, ev):
+                cel_ev = ', event = 0x%08X' % zlib.crc32(ev.encode())
+                if banniere_armee_faite(cfg, code):      # (23/11) bannière ARMED faite dans l'éditeur : la scène copiée la cite
+                    citer_banniere_armee(sortie, ev, code)
+                    telops_a += ['[[telop]]', 'id = %s' % _q(id_banniere_armee(code)), 'from = "aura_armed01"', '']
+                mot = code if scene in ((reg_esprits.get(code) or {}).get('scenes') or []) and k_from == base_ else k_from
+                son = (base_ or k_from) if mot == code else mot      # sons : ceux de l'original (la copie n'en a pas)
+                env += esprits.env_scene_copie(cfg, ev, scene, {code: mot}, {code: son}, 'mise en armure de %s (%s)' % (e['nom'], code))
         tech += ['# forme en armure de %s (%s)' % (e['nom'], code), '[[aura_command]]', 'key = %s' % _q(e['key']),
                  'id = 0x%08X                                  # crc32(key)' % zlib.crc32(e['key'].encode()), 'from = %s' % _q(e['was']),
-                 'cells = { name_text = 0x%08X, desc_text = 0x%08X, aura_chara = 0x%08X, chara_param = 0x%08X, order = %d }'
-                 % (e['nom_txt'], e['desc_txt'], zlib.crc32(code.encode()), e['carte'], 190 + k), 'charas = []', '']
+                 'cells = { name_text = 0x%08X, desc_text = 0x%08X, aura_chara = 0x%08X, chara_param = 0x%08X%s, order = %d }'
+                 % (e['nom_txt'], e['desc_txt'], zlib.crc32(code.encode()), e['carte'], cel_ev + _cel_stats(cfg, e), 190 + k), 'charas = []']
+        ef = e.get('effets') or {}                   # (23/11) bonus / effet unique choisis dans la fiche (lignes brutes du jeu)
+        if 'bonus' in ef:
+            tech.append('effects = %s' % _lignes_ef(ef['bonus']))
+        if 'uniques' in ef:
+            tech.append('unique_effects = %s' % _lignes_ef(ef['uniques']))
+        tech.append('')
         for nid, variant, texte, genre in ((e['nom_txt'], None, e['nom'], 'noun'), (e['nom_txt'], 11, e['nom'], 'noun'), (e['desc_txt'], None, e['nom'], 'text')):
             txt += ['[[row]]', 'id = 0x%08X  # %s armure %s' % (nid, MOD_ID, m), 'kind = "%s"' % genre] + (['variant = %d' % variant] if variant else []) \
                 + ['%s = %s' % (l, _q(texte)) for l in ('de', 'en', 'es', 'fr', 'it', 'ja', 'pt', 'zh_hans', 'zh_hant')] + ['']
@@ -207,11 +247,7 @@ def ecrire_vrfw(cfg, reg):
                'techniques = { keep_spirit = true }', 'trigger = { cpu = true }', 'stats = { mode = "own" }', 'look = { no_uniform = true }',
                'audio = { voice = "wearer" }', 'ui = { plate = "armour" }',
                'text = { de = { tag = "Rüstung" }, en = { tag = "Armour" }, es = { tag = "Armadura" }, fr = { tag = "Armure" }, it = { tag = "Armatura" }, ja = { tag = "アームド" }, pt = { tag = "Armadura" }, zh_hans = { tag = "化身武装" }, zh_hant = { tag = "化身武裝" } }', '']
-        # scène de mise en armure = celle de l'armure « from » ; ma copie y prend les animations et sons de l'esprit de cette
-        # armure (comme Michael : k002090 = "k000220" sur ev81_00030), sauf si ses propres animations y sont déjà copiées
-        k_from, scene = esprit_et_scene(cfg['data_dir'], e['was'])
-        if scene and k_from and scene not in ((reg_esprits.get(code) or {}).get('scenes') or []):
-            par_scene.setdefault(scene, {})[code] = k_from
+        # (23/11) plus de réglage de la scène partagée : voir la scène à part plus haut
     # une seule entrée par scène (VRFW n'en garde qu'une) : les mots des autres mods sont gardés ; une scène déjà écrite par
     # mes_esprits.toml (animations copiées d'une de mes copies) n'est pas réécrite ici
     deja = {s for v in reg_esprits.values() for s in (v.get('scenes') or [])}
@@ -228,6 +264,7 @@ def ecrire_vrfw(cfg, reg):
     _ecrire(os.path.join(sortie, 'content', 'characters', 'mes_armures.toml'), 'schema = "VRFW.character/2"\n' + entete + 'default_lang = "en"\n\n' + '\n'.join(ch))
     _ecrire(os.path.join(sortie, 'content', 'techniques', 'mes_armures.toml'), 'schema = "VRFW.technique/3"\n' + entete + '\n' + '\n'.join(tech + env))
     _ecrire(os.path.join(sortie, 'text', 'rows', 'mes_armures.toml'), 'schema = "VRFW.text/2"\ntable = "skill_text"\n' + entete + '\n' + '\n'.join(txt))
+    _ecrire(os.path.join(sortie, 'content', 'telops', 'any', 'armures.toml'), '\n'.join(telops_a))
     _ecrire(os.path.join(sortie, 'addons', 'CharacterReforged', 'content', 'transforms', 'mes_armures.toml'), 'schema = "VRFW.transform/2"\n' + entete + '\n' + '\n'.join(tr))
     mt = os.path.join(sortie, 'mod.toml')                    # CharacterReforged : la forme en armure passe par ses « transforms »
     if os.path.exists(mt):
@@ -241,3 +278,103 @@ def ecrire_vrfw(cfg, reg):
 
 def contenu(cfg):
     return [dict(e, cle=k) for k, e in registre(cfg).items()]
+
+
+# ------------------------------------------------------------------ (23/11, demande de muku : « les armures maintenant »)
+# FICHE D'ARMURE comme celle des esprits : l'armure du jeu a SA ligne AURA_CMD_INFO (wao00010, was00220…) : puissance, élément,
+# bonus / effet unique (AURA_CMD_EFFECT / UNIQUE_EFFECT) et colonne 12 = scène de MISE EN ARMURE. LU : ev81_00010 = Pégase
+# (k000010, k000330) ; ev81_00020…60 = une par élément (wind 20, forest 30, fire 40, mountain 50, void 60 ; was00220 forêt ->
+# ev81_00030, was00100 feu -> ev81_00040), chacune avec les gestes de plusieurs esprits (comme les invocations ev80).
+SCENES_ARMURE = {'wind': 'ev81_00020', 'forest': 'ev81_00030', 'fire': 'ev81_00040', 'mountain': 'ev81_00050', 'void': 'ev81_00060'}
+
+
+def base_esprit(cfg, code):
+    """esprit d'origine de ma copie d'esprit (k000010…)"""
+    return (esprits.registre(_sortie(cfg)).get(code) or {}).get('base')
+
+
+def mises_possibles(cfg, e, code):
+    """toutes les mises en armure : [{scene, esprit, element, os_ok}] (os_ok : tous ses os animés existent chez l'esprit
+    d'origine de ma copie ; les autres sont proposées aussi, comme pour les invocations)"""
+    from . import coups
+    dd, anc = cfg['data_dir'], base_esprit(cfg, code)
+    sq = coups.os_squelette(dd, anc) if anc else set()
+    el_de = {v: k for k, v in SCENES_ARMURE.items()}
+    out = []
+    for scene in ['ev81_00010'] + list(SCENES_ARMURE.values()):
+        L = []
+        for k in coups.esprits_de_scene(dd, scene):
+            if k.startswith('k'):
+                ok = k == anc or bool(sq and not (coups.os_animes(dd, scene, k) - sq))
+                L.append({'scene': scene, 'esprit': k, 'element': el_de.get(scene, ''), 'os_ok': ok})
+        out += sorted(L, key=lambda x: not x['os_ok'])
+    return out
+
+
+def plan_mise(cfg, e, code):
+    """mise en armure de ma copie : choisie dans l'Atelier, sinon celle de l'élément réglé s'il a changé (un esprit de
+    cette scène dont tous les os existent), sinon None (celle de l'armure d'origine)"""
+    from . import coups, stats as st
+    m = e.get('mise') or {}
+    if m.get('choisie'):
+        return m
+    el = (e.get('stats') or {}).get('element')
+    el0 = st.jeu_esprit(cfg['data_dir'], e['was']).get('element')
+    if el not in SCENES_ARMURE or el == el0:
+        return None
+    scene, dd, anc = SCENES_ARMURE[el], cfg['data_dir'], base_esprit(cfg, code)
+    sq = coups.os_squelette(dd, anc) if anc else set()
+    meilleur = None
+    for k in coups.esprits_de_scene(dd, scene):
+        if not k.startswith('k'):
+            continue
+        if k == anc:
+            meilleur = (float('inf'), k)
+            break
+        a = coups.os_animes(dd, scene, k)
+        if sq and not (a - sq) and (meilleur is None or len(a) > meilleur[0]):
+            meilleur = (len(a), k)
+    if not meilleur:
+        return None
+    return {'scene': scene, 'esprit': meilleur[1], 'element': el}
+
+
+def _cel_stats(cfg, e):
+    """(23/11) puissance / élément réglés dans la fiche : colonnes de AURA_CMD_INFO (comme les esprits)"""
+    if not e.get('stats'):
+        return ''
+    from . import stats as st
+    return st.cellules_esprit(e['stats'], st.jeu_esprit(cfg['data_dir'], e['was']))
+
+
+def _lignes_ef(L):
+    from .effets_esprits import lignes_toml
+    return lignes_toml(L)
+
+
+
+# ------------------------------------------------------------------ (23/11, muku : « tu n'as pas fait les bannières des totems et
+# des armures ») BANNIÈRE « ARMED » d'une armure. LU : la scène de mise en armure (ev81_*.cfg.bin, evt) affiche
+# « soccer10_01_<CHARA_ID> » (la bannière de l'esprit : celle de ma copie) PUIS « soccer10_01_aura_armed01 », la bannière
+# ARMED COMMUNE à toutes les armures (7 fois le nom en clair, aucun crc). Ma copie a sa scène à part : on y remplace ce nom par
+# « soccer10_01_aura_<code de ma copie> » (même longueur : 12 lettres -> fichier identique au reste près) et [[telop]] id =
+# aura_<code>, from = aura_armed01, image = celle de l'éditeur. Sans bannière faite : la bannière ARMED du jeu reste.
+def id_banniere_armee(code):
+    i = 'aura_' + code
+    return i if len(i) == len('aura_armed01') else i[:12].ljust(12, '0')
+
+
+def banniere_armee_faite(cfg, code):
+    return os.path.exists(os.path.join(_sortie(cfg), 'content', 'telops', 'any', id_banniere_armee(code) + '.png'))
+
+
+def citer_banniere_armee(sortie, ev, code):
+    f = os.path.join(sortie, 'assets', 'event_cfg', 'evt', ev + '.cfg.bin')
+    if not os.path.exists(f):
+        return False
+    b = open(f, 'rb').read()
+    a, n = b'soccer10_01_aura_armed01', ('soccer10_01_' + id_banniere_armee(code)).encode()
+    if len(a) != len(n) or a not in b:
+        return False
+    open(f, 'wb').write(b.replace(a, n))
+    return True

@@ -294,15 +294,55 @@ def invocation_du_jeu(data_dir, technique):
     f = _dernier(os.path.join(data_dir, 'common', 'gamedata', 'skill', 'aura_skill_config_*.cfg.bin'))
     for _, v in cfgbin.lire(open(f, 'rb').read()) if f else []:
         if len(v) > 12 and v[1] == technique:
-            noms = {zlib.crc32(n.encode()): n for n in set(INVOCATION_ELEMENT.values()) | {'ev80_00010'}}
+            # (23/11, totems) + ev83_00010_1 : LU, colonne 12 des totems (wss000020…) = crc32("ev83_00010_1"), 1re partie de
+            # l'invocation des totems (ev83_00010 = _1 + _2, gestes de 20 totems)
+            noms = {zlib.crc32(n.encode()): n for n in set(INVOCATION_ELEMENT.values()) | {'ev80_00010', 'ev83_00010_1', 'ev83_00010_2'}}
             return ELEMENTS.get(v[8], ''), noms.get(v[12] & 0xFFFFFFFF)
     return '', None
+
+
+# (23/11, totems) invocation des totems : dossier ev83_00010 (scènes _1 aura du joueur, _2 le totem), gestes de 20 totems
+TOTEM_SCENE = 'ev83_00010'
+
+
+def est_totem(c):
+    return c.get('dossier') == '_waza' and str(c.get('technique', '')).startswith('ws')
+
+
+def scene_invocation_choix(cfg, c):
+    """scène sous laquelle les apparitions de cette copie sont rangées (Keshin : celle du jeu ; totem : le dossier ev83_00010)"""
+    return TOTEM_SCENE if est_totem(c) else invocation_du_jeu(cfg['data_dir'], c.get('technique'))[1]
+
+
+def invocations_possibles(cfg, c):
+    """(23/11, demande de muku : « changer l'animation d'apparition », « c'est selon l'esprit guerrier ») chaque scène
+    d'invocation (une par élément + celle de Pégase) contient les gestes de PLUSIEURS esprits (paquets <scène>_<k>_*.g4pk) :
+    une apparition = (scène, esprit dont on prend les gestes). Possibles pour ma copie : les esprits dont tous les os animés
+    existent dans le squelette de l'original (sinon des pièces restent figées). -> [{scene, esprit, element, os_ok}]
+    (23/11, muku : « propose-les toutes même si les os ne collent pas, les gens ne prendront pas une buggée ») TOUS les
+    esprits des scènes sont proposés ; os_ok dit seulement si tous leurs os existent chez la copie (ceux-là d'abord)."""
+    from . import coups
+    dd, anc = cfg['data_dir'], c['base']
+    sq = coups.os_squelette(dd, anc)
+    el_de = {v: k for k, v in INVOCATION_ELEMENT.items()}
+    out = []
+    totem = est_totem(c)       # (23/11) totem : les 20 totems de ev83_00010 (codes a…)
+    for scene in ([TOTEM_SCENE] if totem else ['ev80_00010'] + list(INVOCATION_ELEMENT.values())):
+        L = []
+        for k in coups.esprits_de_scene(dd, scene):
+            if k.startswith('a' if totem else 'k'):
+                ok = k == anc or bool(sq and not (coups.os_animes(dd, scene, k) - sq))
+                L.append({'scene': scene, 'esprit': k, 'element': el_de.get(scene, ''), 'os_ok': ok})
+        out += sorted(L, key=lambda x: not x['os_ok'])
+    return out
 
 
 def plan_invocation(cfg, c):
     """invocation d'une copie d'esprit guerrier dont l'élément a été changé : None (celle de l'original) ou
     {scene, esprit (dont les animations servent), etat: emprunt | incompatible, element}"""
     from . import coups
+    if (c.get('invocation') or {}).get('choisie'):    # (23/11) apparition choisie dans l'Atelier : gardée
+        return c['invocation']
     el = (c.get('stats') or {}).get('element')
     if c.get('dossier') != '_keshin' or not str(c.get('technique', '')).startswith('wk') or el not in INVOCATION_ELEMENT:
         return None
@@ -327,9 +367,51 @@ def plan_invocation(cfg, c):
     return {'scene': scene, 'esprit': meilleur[1], 'etat': 'emprunt', 'element': el}
 
 
+# ------------------------------------------------------------------ (23/11) SCÈNES À PART (plus de conflits entre mods)
+# Demande de muku (journal VRFW : « technique conflict … event_env (ev81_00030).tag_words: mod Mukuro = …, mod MesEsprits =
+# … (winner: …) ») : deux mods qui règlent la MÊME scène du jeu se battent, VRFW n'en garde qu'un. Comme ZanUltimateMod
+# (LU : assets/event_cfg/{evt,eff,snd}/ev81_87100* = les fichiers du jeu de ev81_00020, tels quels ; [[event_env]] event =
+# "ev81_87100", from = "ev81_00020" ; [[aura_command]] cells.event = crc32("ev81_87100")) : chaque copie a SA scène
+# d'invocation / de mise en armure, un nouveau numéro qui reprend les fichiers de la scène du jeu. Les animations restent
+# lues dans le dossier de la scène d'origine (common/event/evNN/<scène>), sous le code de la copie (tag_words).
+def id_scene_copie(cfg, prefixe, code, pris):
+    """numéro neuf « <prefixe>_9<4 chiffres du code> » (k002910 -> ev81_92910), libre dans le jeu et dans « pris »"""
+    n = int(re.sub(r'\D', '', str(code)) or 0) % 10000
+    for _ in range(10000):
+        ev = '%s_9%04d' % (prefixe, n)
+        if ev not in pris and not os.path.exists(os.path.join(cfg['data_dir'], 'common', 'event_cfg', 'evt', ev + '.cfg.bin')):
+            pris.add(ev)
+            return ev
+        n = (n + 1) % 10000
+    raise ValueError('plus de numéro de scène libre')
+
+
+def copier_scene(cfg, sortie, scene, neuf):
+    """fichiers de la scène du jeu (event_cfg evt / eff / snd) copiés tels quels sous le numéro neuf ; False sans scène"""
+    ok = False
+    for sous, suf in (('evt', ''), ('eff', '_eff'), ('snd', '_snd')):
+        src = os.path.join(cfg['data_dir'], 'common', 'event_cfg', sous, scene + suf + '.cfg.bin')
+        if os.path.exists(src):
+            d = os.path.join(sortie, 'assets', 'event_cfg', sous)
+            os.makedirs(d, exist_ok=True)
+            shutil.copyfile(src, os.path.join(d, neuf + suf + '.cfg.bin'))
+            ok = ok or sous == 'evt'
+    return ok
+
+
+def env_scene_copie(cfg, neuf, scene, tags, snd, titre):
+    """[[event_env]] de la scène à part : seulement MES codes (personne d'autre ne joue cette scène)"""
+    g_tag, g_snd = groupes_scene(cfg, scene)
+    f = lambda d: '{ ' + ', '.join('%s = %s' % (k, _q(v)) for k, v in sorted(d.items())) + ' }'
+    return ['# %s : scène à part %s (copie de %s, pas de conflit avec les autres mods)' % (titre, neuf, scene),
+            '[[event_env]]', 'event = %s' % _q(neuf), 'from = %s' % _q(scene)] \
+        + (['tag_words = { set = %s }' % f(tags)] if g_tag != 0 else []) + (['snd_tag_words = { set = %s }' % f(snd)] if g_snd != 0 else []) + ['']
+
+
 def ecrire_vrfw(cfg, sortie, registre):
     ch, tech, txt, shop = [], [], [], []
     scenes, bases = {}, {}
+    pris, env_copies = set(), []                   # (23/11) scènes d'invocation à part
     for k, (neuf, c) in enumerate(sorted(registre.items())):
         anc, dossier = c['base'], c['dossier']
         ch += ['[[character]]', 'name = %s' % _q('mesesprits_' + c['slug']), 'based_on = %s' % _q(anc), 'battle = false', '',
@@ -348,16 +430,45 @@ def ecrire_vrfw(cfg, sortie, registre):
             from . import stats as _st
             cel_lie += _st.cellules_esprit(c['stats'], _st.jeu_esprit(cfg['data_dir'], c['technique']))
         inv = c.get('invocation') or {}
-        if inv.get('etat') == 'emprunt' and inv.get('scene') and inv.get('esprit'):    # (23/11) invocation de son élément
-            cel_lie += ', event = 0x%08X' % zlib.crc32(inv['scene'].encode())
-            scenes.setdefault(inv['scene'], []).append((neuf, inv['esprit'], inv['esprit']))
+        # (23/11) INVOCATION : sa propre scène (copie de celle de son élément si elle a été changée, sinon de celle de
+        # l'original), jamais la scène partagée du jeu
+        s_inv, tag_inv, son_inv = None, neuf, anc
+        # (23/11) TOTEM : apparition empruntée à un autre totem = ses gestes et ses sons dans les deux scènes de ev83_00010
+        # (mots de la scène : copie -> totem choisi), pas de scène à part (la scène d'invocation des totems a deux parties)
+        totem_don = inv.get('esprit') if est_totem(c) and inv.get('etat') == 'emprunt' and inv.get('scene') == TOTEM_SCENE else None
+        if totem_don:
+            pass
+        elif inv.get('etat') == 'emprunt' and inv.get('scene') and inv.get('esprit'):
+            s_inv, tag_inv, son_inv = inv['scene'], inv['esprit'], inv['esprit']
+        elif dossier == '_keshin' and str(c.get('technique', '')).startswith('wk'):
+            s_inv = invocation_du_jeu(cfg['data_dir'], c['technique'])[1]
+            if s_inv and s_inv not in (c.get('scenes') or []):     # ses animations ne sont pas dans cette scène : l'original
+                tag_inv = anc
+        if s_inv:
+            ev_inv = id_scene_copie(cfg, s_inv[:4], neuf, pris)
+            if copier_scene(cfg, sortie, s_inv, ev_inv):
+                cel_lie += ', event = 0x%08X' % zlib.crc32(ev_inv.encode())
+                env_copies += env_scene_copie(cfg, ev_inv, s_inv, {neuf: tag_inv}, {neuf: son_inv}, 'invocation de %s (%s)' % (c['nom'], neuf))
+            else:
+                s_inv = None
         tech += ['# %s : copie de %s (%s), code %s' % (c['nom'], c['nom_base'], anc, neuf),
                  '[[aura_command]]', 'key = %s' % _q(c['key']), 'id = 0x%08X                                  # crc32(key)' % zlib.crc32(c['key'].encode()),
                  'from = %s' % _q(c['technique']), 'manual = true',
                  'cells = { name_text = 0x%08X, desc_text = 0x%08X%s, aura_chara = 0x%08X, order = %d }   # aura_chara = crc32("%s")'
                  % (id_nom, id_desc, cel_lie, zlib.crc32(neuf.encode()), 150 + k, neuf)
                  + ('\n# technique liée : %s (%s)' % (lie.get('nom', ''), lie.get('code', '')) if lie else ''),
-                 'charas = []', '']
+                 # (23/11, muku : « tout le monde doit pouvoir avoir l'esprit ») charas = [] : aucune restriction de personnage
+                 'charas = []']
+        # (23/11) BONUS / EFFET UNIQUE choisis dans « En attente de stats » (moteur/effets_esprits.py) : lignes brutes AURA_CMD_EFFECT /
+        # AURA_CMD_UNIQUE_EFFECT telles que le jeu les écrit (VRFW : effects / unique_effects, la liste remplace celle de l'original)
+        ef = c.get('effets') or {}
+        if 'bonus' in ef:
+            from .effets_esprits import lignes_toml
+            tech.append('effects = %s' % lignes_toml(ef['bonus']))
+        if 'uniques' in ef:
+            from .effets_esprits import lignes_toml
+            tech.append('unique_effects = %s' % lignes_toml(ef['uniques']))
+        tech.append('')
         for nid, variant, texte, genre in ((id_nom, None, c['nom'], 'noun'), (id_nom, 11, c['nom'], 'noun'), (id_desc, None, c['description'] or c['nom'], 'text')):
             txt += ['[[row]]', 'id = 0x%08X  # %s.%s' % (nid, MOD_ID, c['slug']), 'kind = "%s"' % genre] + (['variant = %d' % variant] if variant else []) \
                 + ['%s = %s' % (l, _q(texte)) for l in ('de', 'en', 'es', 'fr', 'it', 'ja', 'pt', 'zh_hans', 'zh_hant')] + ['']
@@ -365,6 +476,11 @@ def ecrire_vrfw(cfg, sortie, registre):
             shop += ['  [[edit.entry]]', '  item = %s' % _q(c['key']), '  after = "wks_fantasy_k002011"',
                      '  price = %d' % int(c['prix']), '  currency = "tk_bb000001"', '']
         for s in c['scenes']:
+            if s == s_inv:                                         # (23/11) son invocation a sa scène à part
+                continue
+            if totem_don and s == TOTEM_SCENE:                     # (23/11) totem : gestes et sons du totem choisi
+                scenes.setdefault(s, []).append((neuf, totem_don, totem_don))
+                continue
             scenes.setdefault(s, []).append((neuf, neuf, anc))      # ses animations copiées, les sons de l'original
         # (15/11/2026) cinématique de la technique liée : l'esprit y prend les animations (et les sons) de l'esprit de cette
         # technique quand tous ses os animés existent dans son squelette (comme Michael -> Reine sorcière dans ev81_00030)
@@ -406,7 +522,7 @@ def ecrire_vrfw(cfg, sortie, registre):
     _ecrire(os.path.join(sortie, 'content', 'characters', 'mes_esprits.toml'), 'schema = "VRFW.character/2"\n' + entete + 'default_lang = "en"\n\n' + '\n'.join(ch))
     _ecrire(os.path.join(sortie, 'content', 'techniques', 'mes_esprits.toml'), 'schema = "VRFW.technique/3"\n' + entete
             + '# scènes : animations copiées sous le code neuf ; sons = ceux de l\'original ; les mots des autres mods sont gardés\n\n'
-            + '\n'.join(tech + env))
+            + '\n'.join(tech + env + env_copies))
     _ecrire(os.path.join(sortie, 'text', 'rows', 'mes_esprits.toml'), 'schema = "VRFW.text/2"\ntable = "skill_text"\n' + entete + '\n' + '\n'.join(txt))
     f_shop = os.path.join(sortie, 'addons', 'InazumaFantasy', 'content', 'shops', 'mes_esprits.toml')
     if shop:
@@ -421,6 +537,44 @@ def ecrire_vrfw(cfg, sortie, registre):
         'requires = ["VRFW>=0.3.0"]', 'optional = ["InazumaFantasy", "CharacterReforged"%s]' % (', "MesTechniques"' if any(
             (c.get('technique_liee') or {}).get('mod') == 'MesTechniques' for c in registre.values()) else ''),
         'conflicts = []', '']))   # (CharacterReforged : armures ; MesTechniques : technique liée faite dans l'Atelier)
+    ecrire_bannieres(cfg, sortie, registre)
+
+
+def ecrire_bannieres(cfg, sortie, registre):
+    """(23/11, retour de joueurs : « les Keshin et armures custom n'ont pas de bannière ») LU dans les scènes d'invocation
+    (ev80_*) et de mise en armure (ev81_*) : elles affichent « soccer10_01_<CHARA_ID> », la bannière au code du modèle (base
+    name de la copie : k002910, totem a000910). Une copie n'en a pas -> rien ne s'affichait. Comme ZanUltimateMod (k000291
+    from k000290) : [[telop]] id = <copie>, from = <original> (objet du jeu soccer10_01_<original>), image <copie>.png = le
+    nom de la copie (même dessin que les bannières des techniques ; refaite quand le nom change)."""
+    from . import export as _ex
+    d = os.path.join(sortie, 'content', 'telops', 'any')
+    os.makedirs(d, exist_ok=True)
+    f_suivi = os.path.join(sortie, 'outil_bannieres.json')
+    try:
+        suivi = json.load(open(f_suivi, encoding='utf-8'))
+    except (OSError, ValueError):
+        suivi = {}
+    t = ['schema = "VRFW.telop_list/2"', "# Écrit par l'Atelier Inazuma : bannières (nom) des copies d'esprits et de totems, invocation et armure.", '']
+    rapport = []
+    for neuf, c in sorted(registre.items()):
+        anc = c['base']
+        if not os.path.exists(os.path.join(cfg['data_dir'], 'common', 'gamedata', 'menu', 'obj', 'soccer10_01_%s.objbin' % anc)):
+            rapport.append('%s : pas de bannière dans le jeu pour %s' % (c.get('nom'), anc))
+            continue
+        png = os.path.join(d, neuf + '.png')
+        marque = '%s|jeu3' % c.get('nom')             # (23/11) lettres des bannières du jeu ; (24/11) jeu3 : style esprit / totem
+        if suivi.get(neuf) != 'editeur' and (suivi.get(neuf) != marque or not os.path.exists(png)):
+            try:
+                el_ = (c.get('stats') or {}).get('element') or invocation_du_jeu(cfg['data_dir'], c.get('technique'))[0] or None
+                st_ = 'totem' if est_totem(c) else 'esprit:' + (el_ or 'wind')
+                _ex.banniere(c.get('nom') or neuf, '#f5c842', '#0d1a4a', png, element=st_ if _styles_prets(cfg) else el_)
+                suivi[neuf] = marque
+            except Exception as ex:          # sans image : la bannière de l'original (son nom) reste affichée
+                rapport.append('%s : image de la bannière non faite (%s)' % (c.get('nom'), ex))
+        t += ['[[telop]]', 'id = %s' % _q(neuf), 'from = %s' % _q(anc), '']
+    _ecrire(os.path.join(d, 'telops.toml'), '\n'.join(t))
+    json.dump(suivi, open(f_suivi, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    return rapport
 
 
 # ------------------------------------------------------------------ export
@@ -536,3 +690,13 @@ def reparer_copies(cfg):
     ecrire_vrfw(cfg, sortie, reg)
     json.dump(reg, open(os.path.join(sortie, 'outil_esprits.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     return {'ok': True, 'dossier': sortie, 'rapport': rapport}
+
+
+
+def _styles_prets(cfg):
+    """(24/11) styles de bannières esprit guerrier / totem construits (moteur/lettres_jeu.construire_styles)"""
+    try:
+        from . import lettres_jeu
+        return lettres_jeu.styles_disponibles(os.path.join(cfg['outil_dir'], 'cache'))
+    except Exception:
+        return False

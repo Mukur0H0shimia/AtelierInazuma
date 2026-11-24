@@ -18,6 +18,13 @@ import glob, os, struct, zlib
 ELEMENTS = {1: 'wind', 2: 'forest', 3: 'fire', 4: 'mountain', 5: 'void'}
 NUM_ELEMENT = {v: k for k, v in ELEMENTS.items()}
 CHOIX_ELEMENT = [['wind', 'Air'], ['forest', 'Forêt'], ['fire', 'Feu'], ['mountain', 'Montagne'], ['void', 'Néant']]
+# (23/11) SPÉCIALITÉ : bits de skillEffectBitFlag (clé VRFW `effect_flags`, « raw bits ») LUS dans le jeu
+# (personal_plate_inc : tir + 4 -> icon_sp_sub01 + gtxt_longshoot01 ; tir + 16 -> icon_sp_sub03 + gtxt_counter01 ;
+# défense + 16 -> icon_sp_sub02 + gtxt_shootblock01) ; VRFW : « effect_flags = 4 makes it a long shot ».
+CHOIX_SPECIALITE = [['aucune', 'Aucune'], ['long', 'Tir lointain'], ['contre', 'Tir de contre'], ['bloque', 'Bloque-tir']]
+BITS_SPECIALITE = {'aucune': 0, 'long': 4, 'contre': 16, 'bloque': 16}
+CHOIX_CATEGORIE = [['shoot', 'Tir'], ['dribble', 'Dribble'], ['block', 'Défense'], ['catch', 'Arrêt']]
+CATEGORIE_PREFIXE = {'whs': 'shoot', 'who': 'dribble', 'whd': 'block', 'whk': 'catch'}
 CHOIX_POSTE = [['fw', 'Attaquant'], ['mf', 'Milieu'], ['df', 'Défenseur'], ['gk', 'Gardien']]
 STATS_JOUEUR = [('kick', 'Frappe'), ('control', 'Contrôle'), ('technique', 'Technique'), ('pressure', 'Pression'),
                 ('physical', 'Physique'), ('intelligence', 'Intelligence'), ('agility', 'Agilité'), ('freedom', 'Liberté')]
@@ -30,7 +37,11 @@ CHAMPS = {
         {'cle': 'element', 'nom': 'Élément', 'type': 'choix', 'choix': CHOIX_ELEMENT},
         {'cle': 'users', 'nom': 'Joueurs pour la lancer', 'type': 'nombre', 'min': 1, 'max': 4,
          'aide': 'Plus de 1 : n\'importe quels coéquipiers'},
-        {'cle': 'growth', 'nom': 'Courbe de progression (0-7)', 'type': 'nombre', 'min': 0, 'max': 7}],
+        {'cle': 'growth', 'nom': 'Courbe de progression (0-7)', 'type': 'nombre', 'min': 0, 'max': 7},
+        # (23/11, demande de muku) TYPE : clé `category` de VRFW (« What the move does: shoot, dribble, block or catch »,
+        # LU dans winmm.dll) ; utilisée par IECross (who00220 -> category = "block")
+        {'cle': 'category', 'nom': 'Type', 'type': 'choix', 'choix': CHOIX_CATEGORIE},
+        {'cle': 'specialite', 'nom': 'Spécialité', 'type': 'choix', 'choix': CHOIX_SPECIALITE}],
     'esprit': [
         {'cle': 'power_min', 'nom': 'Puissance au niveau 1', 'type': 'nombre', 'min': 0, 'max': 32767},
         {'cle': 'power_max', 'nom': 'Puissance au niveau max', 'type': 'nombre', 'min': 0, 'max': 32767},
@@ -41,6 +52,7 @@ CHAMPS = {
         {'cle': 'element', 'nom': 'Élément', 'type': 'choix', 'choix': CHOIX_ELEMENT, 'vide': True}]
     + [{'cle': 'stats.' + k, 'nom': n, 'type': 'nombre', 'min': 0, 'max': 999, 'vide': True, 'groupe': 'stats'} for k, n in STATS_JOUEUR],
 }
+CHAMPS['armure'] = CHAMPS['esprit']      # (23/11, demande de muku) armure = sa propre ligne AURA_CMD_INFO (wao…/was…) : mêmes colonnes
 
 
 # ------------------------------------------------------------------ valeurs du jeu
@@ -83,12 +95,52 @@ def jeu_technique(data_dir, code):
     if not f:
         return {}
     t = _rdbn_lignes(open(f, 'rb').read(), 'm_skillInfoList',
-                     ['skillID', 'power_min', 'power_max', 'element', 'growthType', 'consumeTp', 'partnerType'])
+                     ['skillID', 'power_min', 'power_max', 'element', 'growthType', 'consumeTp', 'partnerType', 'skillEffectBitFlag', 'colorIdx'])
     r = t.get(zlib.crc32(str(code).encode()))
     if not r:
         return {}
     return {'power_min': r['power_min'], 'power_max': r['power_max'], 'tp': r['consumeTp'],
-            'element': ELEMENTS.get(r['element'], ''), 'users': max(1, r['partnerType']), 'growth': r['growthType']}
+            'element': ELEMENTS.get(r['element'], ''), 'users': max(1, r['partnerType']), 'growth': r['growthType'],
+            'category': CATEGORIE_PREFIXE.get(str(code)[:3], ''), 'effect_flags': r['skillEffectBitFlag'],
+            'specialite': _specialite(CATEGORIE_PREFIXE.get(str(code)[:3], ''), r['skillEffectBitFlag']),
+            'couleur_tir_jeu': r['colorIdx']}
+
+
+def _specialite(cat, bits):
+    if cat == 'shoot':
+        return 'long' if bits & 4 else 'contre' if bits & 16 else 'aucune'
+    if cat == 'block':
+        return 'bloque' if bits & 16 else 'aucune'
+    return 'aucune'
+
+
+_DEGRADES = {}
+
+
+def degrades_tir(cfg):
+    """(23/11) « couleur du tir » = ligne de m_skillColorInfoList (skill_config) -> gradationX = colonne de la texture
+    BallAura0010 (effCmnTex) qui colore l'aura du ballon. -> {colorIdx: [[r, v, b] x 32, du haut (clair) au bas (foncé)]}"""
+    if cfg['data_dir'] in _DEGRADES:
+        return _DEGRADES[cfg['data_dir']]
+    out = {}
+    try:
+        from . import ui_jeu
+        f = _dernier(os.path.join(cfg['data_dir'], 'common', 'gamedata', 'skill', 'skill_config_*.cfg.bin'))
+        lignes = _rdbn_lignes(open(f, 'rb').read(), 'm_skillColorInfoList', ['colorIdx', 'gradationX'])
+        p = os.path.join(cfg['data_dir'], 'dx11', 'effect', 'battle', 'common', 'effCmnTex', 'effCmnTex.g4tx')
+        _, zones, g = ui_jeu.lire_planche(p)
+        i, x0, y0, w, h = zones['BallAura0010']
+        _, _, a = ui_jeu._rgba(g.blocs[i])
+        for idx, r in lignes.items():
+            gx = r['gradationX']
+            if isinstance(gx, int):          # colonne en flottant (t13) : relue
+                gx = struct.unpack('<f', struct.pack('<I', gx & 0xFFFFFFFF))[0]
+            col = min(w - 1, int(gx * w))
+            out[idx] = [[int(v) for v in a[y0 + y, x0 + col, :3]] for y in range(h)]
+    except Exception as ex:
+        print('dégradés du tir :', ex)
+    _DEGRADES[cfg['data_dir']] = out
+    return out
 
 
 def jeu_esprit(data_dir, technique):
@@ -196,6 +248,15 @@ def lignes_technique(stats, jeu):
             out.append('%s = %d' % (k, int(c[k])))
     if c.get('element') in NUM_ELEMENT:
         out.append('element = "%s"' % c['element'])
+    if c.get('category') in dict(CHOIX_CATEGORIE):
+        out.append('category = "%s"' % c['category'])
+    if c.get('specialite') in BITS_SPECIALITE:        # les autres bits de l'original sont gardés
+        out.append('effect_flags = %d' % ((int(jeu.get('effect_flags') or 0) & ~(4 | 16)) | BITS_SPECIALITE[c['specialite']]))
+    # (23/11, demande de muku) un TIR LOINTAIN est proposé dans TOUS les duels : clé VRFW `range` (« At which duel
+    # distance it can be used: both, middle, close or technic », LU dans winmm.dll) = skill_config cmdOptIdx ;
+    # « both » = ligne 0 de m_skillOptionInfoList (duels à mi-distance ET rapprochés). Pas de case à part (trop confus).
+    if (c.get('specialite') or jeu.get('specialite')) == 'long':
+        out.append('range = "both"')
     if 'users' in c:
         out += ['users = %d' % int(c['users']), 'partners = []']
     return out
@@ -253,7 +314,7 @@ def nettoyer(genre, brut):
 
 
 # ------------------------------------------------------------------ réglage d'une création déjà faite
-CLES_TECHNIQUE = ('power_min', 'power_max', 'tp', 'element', 'users', 'partners', 'growth')
+CLES_TECHNIQUE = ('power_min', 'power_max', 'tp', 'element', 'users', 'partners', 'growth', 'category', 'effect_flags', 'range')
 
 
 def appliquer_technique(fichier_toml, lignes):

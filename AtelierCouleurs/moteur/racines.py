@@ -112,17 +112,20 @@ def _fusion(dest, jeu, noeud):
 def racine(cfg, cache_dir, mod):
     """dossier « data » superposé (jeu + mod) ; None si le mod n'apporte aucun fichier de cinématique"""
     mods_dir = os.path.join(cfg.get('jeu_dir') or '', 'mods')
+    nom_mod = mod
+    if str(mod).startswith('atelier:'):        # (23/11) mod de la SORTIE de l'Atelier (pas forcément installé) : aperçus
+        mods_dir, nom_mod = os.path.join(cfg['outil_dir'], 'sortie'), str(mod).split(':', 1)[1]
     import time
     with _verrou:
         if mod in _memo and time.time() - _vu.get(mod, 0) < 10:      # (signature relue au plus toutes les 10 s)
             return _memo[mod][1]
         _vu[mod] = time.time()
-        fichiers = _fichiers_du_mod(mods_dir, mod)
+        fichiers = _fichiers_du_mod(mods_dir, nom_mod)
         # (17/11/2026) modèles .glb du mod convertis au format du jeu (moteur/glb_vrfw.py), comme VRFW au lancement ;
         # un fichier que le mod fournit déjà garde la priorité
         try:
             from . import glb_vrfw
-            for k, v in glb_vrfw.fichiers_du_mod(cfg, cache_dir, mod).items():
+            for k, v in (glb_vrfw.fichiers_du_mod(cfg, cache_dir, mod).items() if nom_mod == mod else ()):
                 fichiers.setdefault(k, v)
         except Exception as ex:
             print('glb du mod', mod, ex)
@@ -132,7 +135,7 @@ def racine(cfg, cache_dir, mod):
                           .encode()).hexdigest()[:10]
         if _memo.get(mod, (None,))[0] == sig:
             return _memo[mod][1]
-        r = os.path.join(cache_dir, 'racines', '%s_%s' % (mod, sig))
+        r = os.path.join(cache_dir, 'racines', '%s_%s' % (str(mod).replace(':', '_'), sig))
         fait = os.path.join(r, '_fini.json')
         if not os.path.exists(fait):
             if os.path.exists(r):                         # construction interrompue : on recommence ailleurs, sans effacer

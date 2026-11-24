@@ -1333,7 +1333,9 @@
           (A[m] || (A[m] = [])).push([s.setShaderParamIdx, s.refParamType & 15, v.slice()]); }
         if (this.lumieresActives === false) continue;
         for (const l of def.lumieres || []) { const p = P[l.posParamCrc >>> 0], c = P[l.colorParamCrc >>> 0]; if (!p || !c) continue;
-          out.push({ pos: p.slice(0, 3), att: p[3], col: c.slice(0, 4), masque: l.type || 0xF7 }); }
+          // (23/11) intensité réglée dans l'Atelier (Lumières de l'effet) : couleur × k, comme l'animation que l'export écrit
+          const kL = this.lumK && this.lumK[acteur] !== undefined ? this.lumK[acteur] : 1;
+          out.push({ pos: p.slice(0, 3), att: p[3], col: [c[0] * kL, c[1] * kL, c[2] * kL, c[3]], masque: l.type || 0xF7 }); }
       }
     }
     // cubemap du stade : {taille, niveaux} + octets RGBA (6 faces x niveaux)
@@ -1486,7 +1488,7 @@
       if (!p || !p.col0 || !p.bc) return; const gl = this.gl;
       let c = p.col0;
       if (t) { c = new Uint8Array(p.col0); const x = [0, 0, 0];
-        for (let i = 0; i + 3 < c.length; i += 4) { x[0] = c[i] / 255; x[1] = c[i + 1] / 255; x[2] = c[i + 2] / 255; teinterHSV(x, t[0], t[1]);
+        for (let i = 0; i + 3 < c.length; i += 4) { x[0] = c[i] / 255; x[1] = c[i + 1] / 255; x[2] = c[i + 2] / 255; teinterHSV(x, t[0], t[1], t[2], t[3]);   // (23/11) t[2] = saturation (multiplicateur)
           for (let k = 0; k < 3; k++) c[i + k] = Math.max(0, Math.min(255, Math.floor(x[k] * 255 + 0.5))); } }
       gl.bindBuffer(gl.ARRAY_BUFFER, p.bc); gl.bufferData(gl.ARRAY_BUFFER, c, gl.STATIC_DRAW); p.teinteSom = t || null;
     }

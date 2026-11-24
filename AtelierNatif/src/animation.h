@@ -522,13 +522,15 @@ struct Part {
 // (14/11/2026) TEINTE choisie dans l'Atelier pour les couleurs de sommets / de particules : opération « set » de VRFW
 // ([[recolor]] hue + colorize, saturation = valeur = 1) : teinte remplacée par H (degrés), saturation au moins C, valeur gardée.
 // Même formule dans app.js / particules.js (teinterHSV) et AtelierD3D/rendu_image.py (teinter_hsv). APPROCHÉ : formule de VRFW non lue.
-static inline void teinter_hsv(double* c, double H, double C) {
-    const double v = std::max(c[0], std::max(c[1], c[2])), mn = std::min(c[0], std::min(c[1], c[2]));
-    if (!(v > 0)) return;
+// (23/11) S = `saturation` de VRFW : multiplicateur après colorize (émulé, nie_outils/emu_vrfw.py) ; 1 = gardée
+static inline void teinter_hsv(double* c, double H, double C, double S = 1.0, double Vl = 1.0) {   // (23/11) Vl = `value` de VRFW (luminosité ×, gris compris)
+    const double v0 = std::max(c[0], std::max(c[1], c[2])), mn = std::min(c[0], std::min(c[1], c[2]));
+    if (!(v0 > 0)) return;
+    const double v = v0 * Vl;
     // (15/11/2026) LU dans VRFW (FUN_1827bccd0, émulée : nie_outils/emu_vrfw.py) : seuil des gris 0,08 ; colorize pour eux seuls
-    double s = (v - mn) / v;
-    if (s < 0.08) { if (!(C > 0)) return; s = std::max(s, C); }
-    s = std::min(1.0, s);
+    double s = (v0 - mn) / v0;
+    if (s < 0.08) { if (!(C > 0)) { for (int k = 0; k < 3; k++) c[k] *= Vl; return; } s = std::max(s, C); }
+    s = std::min(1.0, s * S);
     double h = fmod(H, 360.0); if (h < 0) h += 360; h /= 60; const int i = (int)floor(h) % 6; const double f = h - floor(h);
     const double p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
     switch (i) { case 0: c[0] = v; c[1] = t; c[2] = p; break; case 1: c[0] = q; c[1] = v; c[2] = p; break; case 2: c[0] = p; c[1] = v; c[2] = t; break;
@@ -539,7 +541,7 @@ struct Emetteur {
     const DefEm* d = nullptr; MT19937 R; double max = 0;
     double t = 0; std::vector<Part> parts; bool fini = false, boucle = false, premier = false; bool aArret = false; double arret = 0; double acc = 0;
     float H[148]; int hN = 0, hDep = 0, hImg = 0, hImgL = 0; bool hDrap = false;
-    bool aTeinte = false; double tH = 0, tC = 0;           // (14/11/2026) teinte de l'Atelier (options.json « particules »)
+    bool aTeinte = false; double tH = 0, tC = 0, tS = 1, tV = 1;   // (14/11/2026) teinte de l'Atelier (options.json « particules ») ; 23/11 + saturation, luminosité
     void init(const DefEm* def, uint32_t graine) { d = def; R = MT19937(graine); max = maximum(); reset(); }
     double maximum() const { const DefEm& D = *d;
         if (D.Emode != 0) return D.Emax;
@@ -728,7 +730,7 @@ struct Emetteur {
             else for (int i = 0; i < 3; i++) { X[i] = Rq[i][0]; Y[i] = Rq[i][1]; Z[i] = Rq[i][2]; }
             const double sx = L * s[0], sy = Hh * s[1];
             double c[4] = {p.col[0], p.col[1], p.col[2], p.col[3] * opacite};
-            if (aTeinte) teinter_hsv(c, tH, tC);
+            if (aTeinte) teinter_hsv(c, tH, tC, tS, tV);
             for (int j = 0; j < 4; j++) { const double cx = COINS[j][0], cy = COINS[j][1]; const int o = 4 * m + j;
                 for (int k = 0; k < 3; k++) Q.pos[3 * o + k] = (float)(p.monde[k] + X[k] * cx * sx + Y[k] * cy * sy);
                 for (int k = 0; k < 3; k++) { Q.nor[3 * o + k] = (float)Z[k]; Q.tan[3 * o + k] = (float)X[k]; }

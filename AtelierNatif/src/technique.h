@@ -16,12 +16,12 @@ struct PieceT {
     bool aJeuUV = false; double jeuUV[6][8]; bool ecran2D = false, animCachee = false; bool aPeauK = false; std::vector<M4> peauK;
     std::vector<std::array<double, 3>> jeuCol;          // couleurs animées (G4MA 16-19) : [n°, composante, valeur]
     bool aCoul = false; double coul[3] = {1, 1, 1};     // (14/11/2026) couleur de matériau choisie dans l'Atelier (options.json)
-    bool aTeinteS = false; double tH = 0, tC = 0;       // (14/11/2026) teinte des couleurs de sommets (options.json « sommets »)
+    bool aTeinteS = false; double tH = 0, tC = 0, tS = 1, tV = 1; // (14/11/2026) teinte des couleurs de sommets (options.json « sommets »)
 };
 struct EmetT {
     std::string cle, acteur; uint32_t elem = 0; int obj = -1; bool opaque = false, ztest = false, surEcran = false, monde = false, grd = false, cachee = false;
     std::vector<std::vector<double>> params; DefEm def; Emetteur ptl;
-    bool aTeinte = false; double tH = 0, tC = 0;        // (14/11/2026) teinte des particules de l'objet (options.json « particules »)
+    bool aTeinte = false; double tH = 0, tC = 0, tS = 1, tV = 1;  // (14/11/2026) teinte des particules de l'objet (options.json « particules »)
     int ptlF = -1; bool aPtlClip = false; std::string ptlClip; bool ptlDemarre = false, ptlVisible = false, aN = false; double e[3] = {1, 1, 1}; bool animCachee = true;
 };
 struct RefL { uint32_t nameCrc, boneNameCrc; int setType, boneSpace, boneRefType; };
@@ -91,7 +91,7 @@ struct Technique {
             s = 1; a = 0; if (!ok || f < debut) return;
             if (f < fin) { const double t = (f - debut) * vin; s = val(e_in, t, 1); a = val(a_in, t, 1); }
             else { const double t = (f - fin) * vout; s = val(e_out, t, 1); a = (a_out.empty() || t > a_out.back().first) ? 0 : val(a_out, t, 0); } }
-    } telop;
+    } telop, telop2;                                 // (24/11) telop2 : 2e bannière (mise en armure : ARMED après celle de l'esprit)
     std::unordered_map<std::string, int> planLum; int lumBase = -1, lumCourant = 0;
     bool aVP = false; M4 Vc, Pc; bool sansActeurs = false;       // (essais : personnages cachés)
     int duree() const { return (int)L.duree; }
@@ -134,13 +134,13 @@ struct Technique {
             if (x["priorite"].existe()) a.prio = (int)x["priorite"].num(); if (x["genre"].existe()) a.genre = (int)x["genre"].num();
             for (auto& c : x["courbes"].a) a.courbes.push_back(lire_vv(c)); auras.push_back(std::move(a)); }
         // pièces cachées dans l'Atelier (cases décochées) : options.json
-        { const JV& t = J["telop"]; telop = TelopT();
-          if (t.t == JV::OBJ && t["courbes"].t == JV::OBJ) { telop.ok = true; telop.debut = t["debut"].num();
-              if (t["fin"].t == JV::NUM) telop.fin = t["fin"].num();
-              if (t["vitesse_in"].t == JV::NUM) telop.vin = t["vitesse_in"].num(); if (t["vitesse_out"].t == JV::NUM) telop.vout = t["vitesse_out"].num();
-              if (t["centre"].taille() == 2) { telop.cx = t["centre"][0].num(); telop.cy = t["centre"][1].num(); }
+        for (int it = 0; it < 2; it++) { const JV& t = J[it ? "telop2" : "telop"]; TelopT& tl = it ? telop2 : telop; tl = TelopT();
+          if (t.t == JV::OBJ && t["courbes"].t == JV::OBJ) { tl.ok = true; tl.debut = t["debut"].num();
+              if (t["fin"].t == JV::NUM) tl.fin = t["fin"].num();
+              if (t["vitesse_in"].t == JV::NUM) tl.vin = t["vitesse_in"].num(); if (t["vitesse_out"].t == JV::NUM) tl.vout = t["vitesse_out"].num();
+              if (t["centre"].taille() == 2) { tl.cx = t["centre"][0].num(); tl.cy = t["centre"][1].num(); }
               auto lire = [&](const char* k, std::vector<std::pair<double, double>>& v) { for (auto& p : t["courbes"][k].a) v.push_back({p[0].num(), p[1].num()}); };
-              lire("echelle_in", telop.e_in); lire("echelle_out", telop.e_out); lire("fondu_in", telop.a_in); lire("fondu_out", telop.a_out); } }
+              lire("echelle_in", tl.e_in); lire("echelle_out", tl.e_out); lire("fondu_in", tl.a_in); lire("fondu_out", tl.a_out); } }
         lire_options(dos);
         return true;
     }
@@ -149,6 +149,7 @@ struct Technique {
     void lire_options(const std::wstring& dos) {
         for (auto& p : pieces) { p.cachee = false; p.aCoul = false; p.aTeinteS = false; }
         for (auto& e : ems) { e.cachee = false; e.aTeinte = false; }
+        lumK.clear();
         JV opt; if (lire_json(dos + L"\\options.json", opt)) sansActeurs = opt["sans_acteurs"].vrai();
         if (opt.existe()) for (auto& c : opt["caches"].a) {
             for (auto& p : pieces) if (p.cle == c.s) p.cachee = true;
@@ -156,13 +157,15 @@ struct Technique {
         if (opt.existe()) for (auto& kv : opt["couleurs"].o) for (auto& p : pieces)     // (14/11/2026) couleurs de matériau
             if (p.cle == kv.first && kv.second.taille() >= 3) { p.aCoul = true; for (int k = 0; k < 3; k++) p.coul[k] = kv.second[k].num(); }
         if (opt.existe()) for (auto& kv : opt["sommets"].o) for (auto& p : pieces)     // (14/11/2026) teinte des sommets [H, C]
-            if (p.cle == kv.first && kv.second.taille() >= 2) { p.aTeinteS = true; p.tH = kv.second[0].num(); p.tC = kv.second[1].num(); }
+            if (p.cle == kv.first && kv.second.taille() >= 2) { p.aTeinteS = true; p.tH = kv.second[0].num(); p.tC = kv.second[1].num(); p.tS = kv.second.taille() >= 3 ? kv.second[2].num() : 1.0; p.tV = kv.second.taille() >= 4 ? kv.second[3].num() : 1.0; }
+        if (opt.existe()) for (auto& kv : opt["lumieres"].o) if (kv.second.t == JV::NUM) lumK[kv.first] = kv.second.num();
         if (opt.existe()) for (auto& kv : opt["particules"].o) for (auto& e : ems)     // (14/11/2026) teinte des particules d'un objet
-            if (e.cle.rfind(kv.first + "/", 0) == 0 && kv.second.taille() >= 2) { e.aTeinte = true; e.tH = kv.second[0].num(); e.tC = kv.second[1].num(); }
+            if (e.cle.rfind(kv.first + "/", 0) == 0 && kv.second.taille() >= 2) { e.aTeinte = true; e.tH = kv.second[0].num(); e.tC = kv.second[1].num(); e.tS = kv.second.taille() >= 3 ? kv.second[2].num() : 1.0; e.tV = kv.second.taille() >= 4 ? kv.second[3].num() : 1.0; }
     }
 
     // ---------------------------------------------------------------- vue3d._calculerLumieres
     std::vector<LumPonct> lumPL; std::unordered_map<std::string, std::unordered_map<uint32_t, std::vector<ParamSh>>> PS;
+    std::unordered_map<std::string, double> lumK;     // (23/11) intensité des lumières de l'effet par objet (options.json « lumieres »)
     void calculerLumieres(const Res& res) {
         lumPL.clear(); PS.clear();
         for (auto& D : lums) {
@@ -191,6 +194,7 @@ struct Technique {
             for (auto& l : D.lumieres) { auto p = P.find(l.pos), c = P.find(l.col); if (p == P.end() || c == P.end()) continue;
                 LumPonct x; for (int k = 0; k < 3; k++) x.v[k] = (float)(k < (int)p->second.size() ? p->second[k] : 0);       // (exporteur : + [0, 0, 0])
                 x.v[3] = (float)(p->second.size() > 3 ? p->second[3] : NAN); for (int k = 0; k < 3; k++) x.v[4 + k] = (float)(k < (int)c->second.size() ? c->second[k] : 0);
+                { auto kk = lumK.find(D.acteur); if (kk != lumK.end()) for (int k = 0; k < 3; k++) x.v[4 + k] *= (float)kk->second; }   // (23/11) intensité de l'Atelier
                 x.masque = (uint32_t)(int64_t)ou(l.type, 0xF7);
                 if (x.v[3] != 0 && x.v[3] == x.v[3] && lumPL.size() < 255) lumPL.push_back(x); }      // (exporteur : lumières sans atténuation retirées)
         }

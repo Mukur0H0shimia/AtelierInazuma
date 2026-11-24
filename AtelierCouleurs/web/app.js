@@ -333,6 +333,14 @@ function couleurTirBalle() { const t = E.tech; if (!t) return 0; return /^whk/.t
 // sur la zone entre la barre du haut et la barre de lecture ; la page lui envoie les commandes (lecture / pause, image…).
 const NATIF = { actif: false, cle: null, rect: '', minuteur: null };
 function rectNatif() {
+  if (NATIF.hote && NATIF.hote.isConnected) {               // (23/11) aperçu d'invocation d'un esprit : la zone de l'aperçu
+    const c = NATIF.hote.getBoundingClientRect(), d = devicePixelRatio || 1;
+    return [c.left * d, c.top * d, c.width * d, c.height * d, innerWidth * d, innerHeight * d].map(Math.round);
+  }
+  if ($('centre').classList.contains('dans-stats')) {        // (23/11) aperçu de la fenêtre des stats : toute la vue, sans barres
+    const c = $('vue').getBoundingClientRect(), d = devicePixelRatio || 1;
+    return [c.left * d, c.top * d, c.width * d, c.height * d, innerWidth * d, innerHeight * d].map(Math.round);
+  }
   const c = $('vue').getBoundingClientRect(), hb = document.querySelector('.barre-vue').getBoundingClientRect(), lb = $('lecteur').getBoundingClientRect();
   const haut = Math.max(c.top, hb.bottom + 2), bas = Math.min(c.bottom, lb.top - 2), d = devicePixelRatio || 1;
   // + taille de la page (le lecteur place la page en bas de la zone cliente de la fenêtre d'Edge)
@@ -342,9 +350,15 @@ function cmdNatif(cmd, attendre) { return api('/api/natif_cmd', { cmd, attendre:
 function finNatif(envoyer) {
   // (14/11/2026) aussi pendant un lancement : le lecteur en chargement est arrêté par le serveur, et le lancement en cours
   // est annulé (numéro de lancement changé : sa réponse referme le lecteur au lieu de l'afficher)
-  if (envoyer && (NATIF.actif || NATIF.lance)) cmdNatif('quitter');
+  // (23/11, retour de muku : « changer l'apparition ne s'actualise pas ») « quitter » VISE le lecteur lancé (pid) : sans pid
+  // le serveur arrêtait TOUS les lecteurs, y compris le suivant déjà lancé si la réponse arrivait après. Pendant un lancement
+  // (pas encore de pid) rien n'est envoyé : le serveur arrête l'ancien avant d'en lancer un, et la réponse annulée referme le sien.
+  if (envoyer && NATIF.pid) api('/api/natif_cmd', { cmd: 'quitter', pid: NATIF.pid }).catch(() => {});
+  else if (envoyer && NATIF.actif) cmdNatif('quitter');
+  if (envoyer) NATIF.pid = null;
   if (envoyer) { NATIF.numero = (NATIF.numero || 0) + 1; NATIF.lance = false; }
   NATIF.actif = false; NATIF.cle = null; clearInterval(NATIF.minuteur); NATIF.minuteur = null;
+  if (envoyer) NATIF.imageVoulue = undefined;
   if (E.vue) E.vue.cv.style.visibility = ''; $('l-jouer').textContent = '▶';
 }
 // (22/11, retour de muku : « les paramètres vont derrière aussi ») ce qui s'ouvre PAR-DESSUS la vue cache le lecteur natif
@@ -352,7 +366,9 @@ function finNatif(envoyer) {
 // (Tableau des compétences, technique liée)
 function natifRecouvert() {
   const res = $('resultats');
-  return (res && res.style.display === 'block') || !!document.querySelector('#parametres.ouvert, dialog[open]');
+  // (23/11) fenêtre qui CONTIENT la vue (aperçu de « En attente de stats / cosmétique ») : elle ne la recouvre pas
+  const dlg = [...document.querySelectorAll('dialog[open]')].some(d => !d.contains($('centre')) && !(NATIF.hote && d.contains(NATIF.hote)));
+  return (res && res.style.display === 'block') || !!document.querySelector('#parametres.ouvert') || dlg;
 }
 function majCacheNatif() {
   if (!NATIF.actif) { NATIF.cacheListe = false; return; }
@@ -365,27 +381,40 @@ function suivreNatif() {                        // zone de la vue (la fenêtre l
     if (!NATIF.actif) return;
     majCacheNatif();
     const r = rectNatif().join(' ');
-    if (r !== NATIF.rect) { NATIF.rect = r; cmdNatif('rect ' + r); }
+    // (23/11) + renvoyée toutes les 2 s même sans changement : un lecteur qui a reçu une autre zone (commande perdue, ou zone d'un
+    // lancement précédent) se recale tout seul
+    NATIF.tic = ((NATIF.tic || 0) + 1) % 10;
+    if (r !== NATIF.rect || !NATIF.tic) { NATIF.rect = r; cmdNatif('rect ' + r); }
     optionsNatif();                              // (15/11/2026) pièces cachées / couleurs changées : envoyées sans relancer
-    const e = await cmdNatif('etat', true);
-    if (!e.actif) { finNatif(false); return; }
+    const numero = NATIF.numero, e = await cmdNatif('etat', true);
+    // (23/11, retour de muku) réponse arrivée APRÈS la fermeture du lecteur (changement d'onglet…) : ignorée (elle réécrivait
+    // « lecteur C++ » et ❚❚ sur une barre vide)
+    if (!NATIF.actif || NATIF.numero !== numero) return;
+    // (23/11) un « etat » sans réponse (page occupée) ne veut pas dire lecteur fermé : 5 de suite (1 s) avant de le croire
+    if (!e.actif) { NATIF.rates = (NATIF.rates || 0) + 1; if (NATIF.rates >= 5) { NATIF.rates = 0; finNatif(false); } return; }
+    NATIF.rates = 0;
     const ch = e.etat && e.etat.match(/choix (\d+) (\S+)/);      // (15/11/2026) clic sur la vidéo du lecteur natif
-    if (ch) { if (NATIF.choixN === undefined) NATIF.choixN = +ch[1]; else if (+ch[1] !== NATIF.choixN) { NATIF.choixN = +ch[1]; choisirDepuisVue(ch[2], false); } }
+    if (ch && !NATIF.hote) { if (NATIF.choixN === undefined) NATIF.choixN = +ch[1]; else if (+ch[1] !== NATIF.choixN) { NATIF.choixN = +ch[1]; choisirDepuisVue(ch[2], false); } }
     const m = e.etat && e.etat.match(/image (\d+) (\d+) pause (\d)/);
+    // (23/11) image demandée à l'ouverture : renvoyée tant que le lecteur n'est pas en pause dessus
+    if (m && NATIF.imageVoulue !== undefined) { if (+m[1] === NATIF.imageVoulue && m[3] === '1') NATIF.imageVoulue = undefined; else cmdNatif('image ' + NATIF.imageVoulue); }
     if (m) { if (document.activeElement !== $('l-image')) $('l-image').value = +m[1];
       $('l-info').textContent = `image ${m[1]} / ${m[2]} · lecteur C++`; $('l-jouer').textContent = m[3] === '1' ? '▶' : '❚❚'; }
   }, 200);
 }
 // (15/11/2026) options du lecteur natif (pièces cachées, couleurs de matériau, teintes) : réécrites et relues par le lecteur
 // ouvert (commande « options ») -> cacher / isoler / changer une couleur ne relance plus la vidéo
+// (23/11) teinte de sommets / particules -> [H, C, S] (S = saturation de VRFW, multiplicateur ; 1 = gardée)
+const tsc = t => [t.H, t.C, t.S === undefined ? 1 : t.S, t.V === undefined ? 1 : t.V];   // (23/11) + V = luminosité (value de VRFW)
 function optionsActuelles() {
   const V = E.vue;
   return { caches: V.pieces.filter(p => p.cle && !p.visible && !p.cle.startsWith('stade/') && !p.peau && !p.terrain).map(p => p.cle),
-    couleurs: couleursNatif(), sommets: E.avant ? {} : Object.fromEntries(Object.entries(E.teinteSom || {}).map(([k, t]) => [k, [t.H, t.C]])),
-    particules: E.avant ? {} : Object.fromEntries(Object.entries(E.teintePtl || {}).map(([k, t]) => [k, [t.H, t.C]])) };
+    couleurs: couleursNatif(), sommets: E.avant ? {} : Object.fromEntries(Object.entries(E.teinteSom || {}).map(([k, t]) => [k, tsc(t)])),
+    particules: E.avant ? {} : Object.fromEntries(Object.entries(E.teintePtl || {}).map(([k, t]) => [k, tsc(t)])),
+    lumieres: E.avant ? {} : Object.assign({}, E.lumK || {}) };   // (23/11) intensité des lumières de l'effet, par objet
 }
 async function optionsNatif() {
-  if (!NATIF.actif || !E.tech || !E.vue || NATIF.envoiOpt) return;
+  if (!NATIF.actif || NATIF.hote || !E.tech || !E.vue || NATIF.envoiOpt) return;
   const o = optionsActuelles(), j = JSON.stringify(o); if (j === NATIF.opt) return;
   NATIF.envoiOpt = true;
   try { const r = await api('/api/natif_options', Object.assign({ technique: E.tech.code }, o)).catch(() => ({ actif: false }));
@@ -395,7 +424,7 @@ function cleNatif() {
   const V = E.vue;
   const caches = V.pieces.filter(p => p.cle && !p.visible && !p.cle.startsWith('stade/') && !p.peau && !p.terrain).map(p => p.cle);
   const versions = Object.entries(E.textures).filter(([, x]) => x.modif).map(([k, x]) => k + JSON.stringify(x.moyenne)).join('|');
-  return { caches, cle: [E.tech.code, E.avant ? 'avant' : versions, caches.join(','), JSON.stringify(E.coulMat || {}), JSON.stringify(E.teinteSom || {}), JSON.stringify(E.teintePtl || {})].join('#') };
+  return { caches, cle: [E.tech.code, E.avant ? 'avant' : versions, caches.join(','), JSON.stringify(E.coulMat || {}), JSON.stringify(E.teinteSom || {}), JSON.stringify(E.teintePtl || {}), JSON.stringify(E.lumK || {})].join('#') };
 }
 // (14/11/2026) couleurs de matériau choisies -> par pièce (options.json du lecteur natif : « couleurs »)
 function couleursNatif() {
@@ -405,7 +434,7 @@ function couleursNatif() {
 }
 async function modifsNatif() {                  // textures recolorées dans l'Atelier (RGBA en base64)
   const modifs = {}; if (E.avant) return modifs;          // (15/11/2026) « avant » : textures d'origine
-  for (const [k, x] of Object.entries(E.textures)) if (x.modif && x.cur && x.cur.getContext) {
+  for (const [k, x] of Object.entries(E.textures)) if (x.modif && x.cur && x.cur.getContext && !k.startsWith('mm/')) {
     const d = x.cur.getContext('2d').getImageData(0, 0, x.cur.width, x.cur.height);
     modifs[k] = [x.cur.width, x.cur.height, await enBase64(new Uint8Array(d.data.buffer))]; }
   return modifs;
@@ -420,10 +449,43 @@ function texturesNatif() {
     if (r.actif) NATIF.cle = cleNatif().cle;
   }, 250);
 }
+// (23/11, muku : « fais tout ce que tu peux en natif ») l'image d'une technique = celle du LECTEUR DU JEU (vrais shaders) :
+// à l'ouverture, au curseur, aux flèches, il s'ouvre en pause sur l'image voulue. L'aperçu WebGL (approché : pas les vraies
+// couleurs du jeu) ne se voit plus que pendant son chargement, ou s'il est fermé / indisponible, avec une mention.
+async function natifSurImage(f) {
+  const V = E.vue; if (!V || !V.lecteur || !E.tech || E.tech.perso || NATIF.hote) return;
+  if (NATIF.actif && NATIF.cle === cleNatif().cle) { NATIF.imageVoulue = f; cmdNatif('image ' + f); return; }
+  NATIF.imageVoulue = f;
+  if (NATIF.lance) return;                       // lancement en cours : l'image sera posée à l'ouverture
+  try { await lecteurNatif(); } catch (e) { /* l'aperçu approché reste */ }
+}
+async function natifAuto(t) {                   // ouverture d'une technique dans l'onglet Techniques : lecteur en pause sur l'image 0
+  for (let k = 0; k < 240 && E.tech === t && !(E.lecteur && E.stadeCode); k++) await new Promise(r => setTimeout(r, 250));
+  const stats = $('menu-stats') && $('menu-stats').open;
+  if (E.tech !== t || !E.lecteur || !E.stadeCode || E.onglet !== 'techniques' || stats || $('centre').classList.contains('dans-stats')
+    || NATIF.actif || NATIF.lance || NATIF.hote) return;
+  activerAnimation(true); E.vue.joue = false; E.vue.image = 0;
+  natifSurImage(0);
+}
+function majApproche() {                        // mention sur l'aperçu WebGL quand c'est lui qu'on voit
+  const tl = $('l-telop'); if (tl && tl.style.display !== 'none' && !telopWebVisible()) tl.style.display = 'none';   // (23/11) bannière WebGL
+  const v = $('centre'); if (!v) return;          // (#vue est le canevas : la mention va dans #centre, par-dessus)
+  let d = $('vue-approche');
+  if (!d) { d = document.createElement('div'); d.id = 'vue-approche'; v.appendChild(d); }
+  const tech = E.tech && !E.tech.perso && E.onglet === 'techniques';
+  const voir = tech && !NATIF.actif && !(E.vue && E.vue.cv.style.visibility === 'hidden');
+  d.style.display = voir ? '' : 'none';
+  if (voir) d.textContent = NATIF.lance ? 'Aperçu approché · le lecteur du jeu se charge…'
+    : 'Aperçu approché (pas les vraies couleurs du jeu) · ▶, ← → ou le curseur ouvrent le lecteur du jeu';
+}
+setInterval(majApproche, 300);
 async function lecteurNatif() {
   const V = E.vue; if (!V || !V.lecteur || !E.tech) return;
   const { caches, cle } = cleNatif();
-  if (NATIF.actif && NATIF.cle === cle) { const r = await cmdNatif('basculer'); if (r.actif) return; finNatif(false); }   // déjà ouvert : lecture / pause
+  // déjà ouvert : lecture / pause. (23/11) ordre EXPLICITE d'après le bouton (« basculer » pendant le chargement, quand le lecteur
+  // ne s'est pas encore mis en pause sur l'image demandée, le mettait en pause au lieu de lancer la lecture)
+  if (NATIF.actif && NATIF.cle === cle) { NATIF.imageVoulue = undefined; const jouer = $('l-jouer').textContent !== '❚❚';
+    const r = await cmdNatif(jouer ? 'pause 0' : 'pause 1'); if (r.actif) { $('l-jouer').textContent = jouer ? '❚❚' : '▶'; return; } finNatif(false); }
   // (14/11/2026) lancement déjà en cours (Espace / ▶ pendant le chargement) : rien. Avant : un 2e lecteur, et le 1er restait
   // devant l'Atelier (fenêtre sans bordure impossible à fermer)
   if (NATIF.lance) return;
@@ -447,7 +509,11 @@ async function lancerNatif(V, caches, cle, numero) {
     if (r.erreur) { $('l-film-info').textContent = 'Lecteur natif : ' + r.erreur; return; }
     if (NATIF.numero !== numero || !E.tech || E.vue !== V) {     // annulé pendant le lancement : CE lecteur seulement
       api('/api/natif_cmd', { cmd: 'quitter', pid: r.pid }).catch(() => {}); return; }
-    NATIF.actif = true; NATIF.cle = cle; NATIF.rect = rect.join(' '); NATIF.choixN = undefined; NATIF.opt = JSON.stringify(optionsActuelles()); V.cv.style.visibility = 'hidden'; suivreNatif();
+    NATIF.actif = true; NATIF.pid = r.pid || null; NATIF.cle = cle; NATIF.rect = rect.join(' '); NATIF.choixN = undefined; NATIF.opt = JSON.stringify(optionsActuelles()); V.cv.style.visibility = 'hidden'; suivreNatif();
+    // (23/11) ouvert pour une image précise (curseur, flèches, ouverture de la technique) : en pause sur elle (commande gardée
+    // par le lecteur pendant son chargement)
+    // (renvoyée par suivreNatif jusqu'à ce que le lecteur la confirme : au lancement, il n'écoute pas encore)
+    if (NATIF.imageVoulue !== undefined) cmdNatif('image ' + NATIF.imageVoulue);
     $('l-film-info').textContent = `Lecteur natif (C++) ouvert en ${((performance.now() - t0) / 1000).toFixed(1).replace('.', ',')} s · Espace : pause · flèches : image par image · Échap : fermer`;
   } catch (e) { $('l-film-info').textContent = 'Lecteur natif : erreur ' + e.message; }
 }
@@ -503,7 +569,7 @@ async function ouvrir_(code) {
   $('titre-tech').textContent = 'Chargement… (la 1re ouverture d\'un modèle lit ses textures : quelques secondes)';
   const perso = estPerso();
   const t = await api(perso ? '/api/personnage?code=' + encodeURIComponent(code) + (ONGLETS_JEU.includes(E.onglet) ? '&cat=' + E.onglet + (E.onglet === 'maillots' ? '&cote=' + (MM.cote || '10') : '') : '') : '/api/technique?code=' + code);
-  E.tech = t; E.tech.perso = perso; E.tech.onglet = E.onglet; E.objets = t.objets_details; E.textures = {}; E.coulMat = {}; E.teinteSom = {}; E.teintePtl = {}; E.selPieces.clear(); E.selTex.clear();
+  E.tech = t; E.tech.perso = perso; E.tech.onglet = E.onglet; E.objets = t.objets_details; E.textures = {}; E.coulMat = {}; E.teinteSom = {}; E.teintePtl = {}; E.lumK = {}; E.selPieces.clear(); E.selTex.clear();
   retirerSuite();                                   // (22/11) les suites d'une création précédente ne concernent pas celle-ci
   if (!(E.repriseAuto && E.repriseAuto === E.projet)) E.cree = null;   // (22/11) même projet (côté du maillot) : lien gardé
   E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
@@ -532,8 +598,8 @@ async function ouvrir_(code) {
   // modèle de personnage : opaque (pas d'additif) et rien de caché ; effet : additif, pièces géantes cachées
   E.vue.additif = !perso; $('additif').checked = !perso;
   E.vue.lecteur = null; E.lecteur = null;
-  const geantes = perso ? [] : E.vue.cacherGeantes(); E.vue.recadrer(true); teintesPieces(); dessinerPieces(); dessinerTextures(); dessinerAuras(); dessinerMateriaux(); dessinerTeintes(); majCompteurs();
-  if (!perso) chargerAnimation(t).catch(e => majRapport('Animation non lue : ' + e.message));
+  const geantes = perso ? [] : E.vue.cacherGeantes(); E.vue.recadrer(true); teintesPieces(); dessinerPieces(); dessinerTextures(); dessinerAuras(); dessinerMateriaux(); dessinerTeintes(); appliquerLumieres(); dessinerLumieres(); majCompteurs();
+  if (!perso) chargerAnimation(t).then(() => natifAuto(t)).catch(e => majRapport('Animation non lue : ' + e.message));
   majRapport(geantes.length ? geantes.length + ' pièce(s) géante(s) cachée(s) au départ (fonds, flashs) : coche-les à gauche pour les voir.' : '');
   dessinerRecette(); paletteTech(); E.sigProjet = signatureProjet(); E.chargement = false; verifierProjet();
   if (E.modifie) { const m = E.modifie; E.modifie = null; E.cree = { mod: m.mod, code: m.code };   // (22/11) « Modifier » d'une création
@@ -817,7 +883,7 @@ async function allerVersPieces(cles, nom, demande) {
 }
 
 function texturesVisibles() {
-  if (!$('filtre-sel').checked || !E.selPieces.size) return Object.keys(E.textures);
+  if (!$('filtre-sel').checked || !E.selPieces.size) return Object.keys(E.textures).filter(k => !k.startsWith('mm/'));   // (24/11) icône / emblème : mode dessin seul
   const s = new Set();
   for (const o of E.objets) for (const p of o.pieces || []) if (E.selPieces.has(o.nom + '/' + p.index)) for (const n of p.textures) s.add(o.nom + '/' + n);
   for (const [o, n] of texturesParticulesChoisies()) s.add(o.nom + '/' + n);
@@ -938,9 +1004,11 @@ function blocReplie(titre, lignes) {
 }
 function majCompteurs() {
   const n = (x, mot) => x ? `${x} ${mot}${x > 1 ? 's' : ''}` : '';
-  if ($('cpt-tex')) $('cpt-tex').textContent = n(Object.values(E.textures || {}).filter(x => x.modif).length, 'changée');
-  if ($('cpt-mat')) $('cpt-mat').textContent = n(Object.keys(E.coulMat || {}).length, 'changé');
-  if ($('cpt-teintes')) $('cpt-teintes').textContent = n(Object.keys(E.teinteSom || {}).length + Object.keys(E.teintePtl || {}).length, 'changé');
+  const t = !!E.tech;                              // (23/11) rien d'ouvert : compteurs vides
+  if ($('cpt-tex')) $('cpt-tex').textContent = t ? n(Object.values(E.textures || {}).filter(x => x.modif).length, 'changée') : '';
+  if ($('cpt-mat')) $('cpt-mat').textContent = t ? n(Object.keys(E.coulMat || {}).length, 'changé') : '';
+  if ($('cpt-teintes')) $('cpt-teintes').textContent = t ? n(Object.keys(E.teinteSom || {}).length + Object.keys(E.teintePtl || {}).length, 'changé') : '';
+  if ($('cpt-lum')) $('cpt-lum').textContent = t ? n(Object.keys(E.lumK || {}).length, 'changée') : '';
   const i = $('info-sel'); if (i) i.innerHTML = !E.tech ? '' : E.selPieces.size
     ? `<b>${E.selPieces.size} pièce${E.selPieces.size > 1 ? 's' : ''} sélectionnée${E.selPieces.size > 1 ? 's' : ''}</b> : les listes ne montrent que leurs couleurs (Ctrl + clic pour en ajouter).`
     : 'Clique une pièce à gauche (ou un nom ci-dessous) pour ne voir que ses couleurs.';
@@ -949,7 +1017,7 @@ function dessinerMateriaux() {
   const b = $('materiaux'); if (!b) return; b.innerHTML = '';
   if (!E.tech || E.tech.perso) { b.innerHTML = '<p class="aide">Seulement pour les techniques.</p>'; return; }
   const lignes = [];
-  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.commun) continue;
+  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.aura_balle) continue;   // (23/11) effets communs (ega…) aussi
     const parMat = new Map();
     for (const p of o.pieces || []) { if (p.materiau === null || p.materiau === undefined) continue;
       if (!parMat.has(p.materiau)) parMat.set(p.materiau, []); parMat.get(p.materiau).push(p); }
@@ -990,7 +1058,10 @@ function apresMateriau() { teintesPieces(); dessinerPieces(); }
 // VRFW : [[recolor]] hue / colorize / mode = "set" avec vertex_colors = [pièces] (G4MG) et particles = true (COLOR_INFO de
 // tous les émetteurs de l'objet : VRFW ne choisit pas un émetteur seul). On choisit une couleur : sa teinte H et sa
 // saturation C (minimum) ; la luminosité d'origine de chaque sommet / particule est gardée (formule : teinterHSV).
-function teinteDe(hex) { const [h, s] = rgb2hsv(...hex2rgb(hex)); return { hex, H: Math.round(h * 10) / 10, C: Math.round(s * 1000) / 1000 }; }
+// (23/11) + S (saturation de VRFW, multiplicateur) : une couleur pâle choisie pâlit aussi les sommets colorés (blanc -> S = 0) ;
+// avant, choisir du blanc ne changeait rien aux sommets colorés (teinte seule)
+// (23/11, « je veux tout modifier ») + V : une couleur sombre choisie assombrit aussi (luminosité × v de la couleur)
+function teinteDe(hex) { const [h, s, v] = rgb2hsv(...hex2rgb(hex)); return { hex, H: Math.round(h * 10) / 10, C: Math.round(s * 1000) / 1000, S: Math.round(Math.min(1, s / 0.85) * 1000) / 1000, V: Math.round(v * 1000) / 1000 }; }
 function moyenneSommets(col) {         // couleur moyenne (0..1) et part de sommets colorés
   let n = 0, s = [0, 0, 0], col_ = 0; const pas = Math.max(4, Math.floor(col.length / 4 / 4000) * 4);
   for (let i = 0; i + 3 < col.length; i += pas) { const r = col[i] / 255, g = col[i + 1] / 255, b = col[i + 2] / 255; s[0] += r; s[1] += g; s[2] += b; n++;
@@ -1002,10 +1073,33 @@ function ligneTeinte(nom, titre, pastille, ch, choisir, remettre, surNom, cles) 
 }
 function appliquerTeintes() {
   for (const o of E.objets) { if (o.erreur || o.modeleActeur) continue;
-    for (const p of o.pieces || []) if (p.vue) { const t = (!E.avant && E.teinteSom[o.nom + '/' + p.index]) || null, tt = t ? [t.H, t.C] : null;
+    for (const p of o.pieces || []) if (p.vue) { const t = (!E.avant && E.teinteSom[o.nom + '/' + p.index]) || null, tt = t ? tsc(t) : null;
       const avant = p.vue.teinteSom; if (JSON.stringify(avant || null) !== JSON.stringify(tt)) E.vue.teinterSommets(p.vue, tt); }
     const tp = (!E.avant && E.teintePtl[o.nom]) || null;
-    for (const v of o.emetteursVue || []) v.teintePtl = tp ? [tp.H, tp.C] : null; }
+    for (const v of o.emetteursVue || []) v.teintePtl = tp ? tsc(tp) : null; }
+}
+// (23/11, muku : « je veux tout modifier », choix « intensité seulement ») LUMIÈRES DE L'EFFET (CCustomPointLight : elles
+// éclairent les joueurs et le stade). Leur couleur vient de l'échelle animée d'un os de l'objet ; VRFW n'a pas de réglage :
+// l'Atelier change l'animation lui-même (moteur/lumieres_effet.py). Une intensité par objet : 0 = éteinte, 100 % = comme le jeu.
+function objetsAvecLumieres() {
+  return (E.objets || []).filter(o => !o.erreur && !o.modeleActeur && !o.commun && o.lumieres && (o.lumieres.lumieres || []).length);
+}
+function appliquerLumieres() { if (E.vue) E.vue.lumK = E.avant ? {} : Object.assign({}, E.lumK || {}); }
+function dessinerLumieres() {
+  const b = $('lumieres-effet'); if (!b) return; b.innerHTML = '';
+  if (!E.tech || E.tech.perso) { b.innerHTML = '<p class="aide">Seulement pour les techniques.</p>'; return; }
+  const L = objetsAvecLumieres();
+  if (!L.length) { b.innerHTML = '<p class="aide">Aucune lumière dans cet effet.</p>'; return; }
+  for (const o of L) {
+    const k = (E.lumK || {})[o.acteur], v = Math.round((k === undefined ? 1 : k) * 100), n = o.lumieres.lumieres.length;
+    const d = document.createElement('div'); d.className = 'lum-ligne';
+    d.innerHTML = `<span class="lum-nom" title="Objet ${echapper(o.acteur)}">${echapper(o.acteur)} : ${n} lumière${n > 1 ? 's' : ''}</span>
+      <input type="range" min="0" max="200" step="5" value="${v}"><b class="lum-v">${v} %</b><button class="lum-raz" title="Comme le jeu (100 %)">↺</button>`;
+    const r = d.querySelector('input'), t = d.querySelector('.lum-v');
+    const regler = x => { if (x === 100) delete E.lumK[o.acteur]; else E.lumK[o.acteur] = x / 100; t.textContent = x + ' %'; appliquerLumieres(); majCompteurs(); };
+    r.oninput = () => regler(+r.value);
+    d.querySelector('.lum-raz').onclick = () => { r.value = 100; regler(100); };
+    b.appendChild(d); }
 }
 function dessinerTeintes() {
   const b = $('teintes'); if (!b) return; b.innerHTML = '';
@@ -1013,7 +1107,7 @@ function dessinerTeintes() {
   const S = filtreSel();
   // particules : une couleur par objet
   let titreP = false;
-  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.commun) continue;
+  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.aura_balle) continue;   // (23/11) effets communs (ega…) aussi
     const nem = ((o.particules && o.particules.emetteurs) || []).length; if (!nem) continue;
     if (S && ![...S].some(k => k.startsWith(o.nom + '/'))) continue;
     if (!titreP) { const t = document.createElement('div'); t.className = 'sous'; t.textContent = 'Particules'; b.appendChild(t); titreP = true; }
@@ -1025,7 +1119,7 @@ function dessinerTeintes() {
       Array.from({ length: nem }, (_, k) => o.nom + '/ptl' + k))); }
   // sommets : une couleur par pièce (colorées en premier, les blanches repliées)
   const lignes = [];
-  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.commun) continue;
+  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.aura_balle) continue;   // (23/11) effets communs (ega…) aussi
     for (const p of o.pieces || []) { if (!p.vue || !p.vue.col0) continue; const m = moyenneSommets(p.vue.col0); lignes.push({ o, p, m }); } }
   lignes.sort((a, b) => b.m.colores - a.m.colores);
   const vus = [], autres = [];
@@ -1060,7 +1154,7 @@ function basculerAvant(oui) {
   if (!E.tech) return;
   E.avant = oui === undefined ? !E.avant : !!oui; majBoutonAvant();
   for (const x of Object.values(E.textures)) x.donneesCur = null;
-  teintesPieces(); appliquerTeintes(); if (NATIF.actif) { texturesNatif(); optionsNatif(); }
+  teintesPieces(); appliquerTeintes(); appliquerLumieres(); if (NATIF.actif) { texturesNatif(); optionsNatif(); }
   majRapport(E.avant ? 'Original du jeu affiché (tes changements sont gardés) : « Avant / après » ou la touche A pour les revoir.' : 'Tes couleurs sont revenues.');
 }
 function quitterAvant() { if (E.avant) basculerAvant(false); }
@@ -1100,7 +1194,7 @@ function couleurMoyenneSaturee(cols) {    // moyenne des couleurs colorées (cha
 }
 function listeMateriaux() {             // une entrée par (objet, n° de matériau), comme la liste « Couleurs des matériaux »
   const out = [];
-  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.commun) continue;
+  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.aura_balle) continue;   // (23/11) effets communs (ega…) aussi
     const parMat = new Map();
     for (const p of o.pieces || []) { if (p.materiau === null || p.materiau === undefined) continue;
       if (!parMat.has(p.materiau)) parMat.set(p.materiau, []); parMat.get(p.materiau).push(p); }
@@ -1134,22 +1228,26 @@ function remplacer(op) {                // -> {tex, mat, som, ptl} : nombres d'�
       const [h, s, v] = rgb2hsv(c[0], c[1], c[2]), w = poidsTeinte(h, s, op); if (!(w > 0.5)) continue;
       const nv = teinteRemplacee(h, s, v, op), hex = versHex(nv);
       E.coulMat[L.cle] = { hex, rgb: hex2rgb(hex).map(x => x * L.mx), nom: nomMateriau(L.ps[0]), acteur: L.o.acteur }; n.mat++; }
-    if (op.cibles.som) for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.commun) continue;
+    if (op.cibles.som) for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.aura_balle) continue;   // (23/11) effets communs (ega…) aussi
       for (const p of o.pieces || []) { if (!p.vue || !p.vue.col0) continue; const cle = o.nom + '/' + p.index, t = E.teinteSom[cle];
         let h; if (t) h = t.H; else { const m = moyenneSommets(p.vue.col0); if (m.colores < 0.05) continue; const [hh, ss] = rgb2hsv(...m.c); if (ss < 0.08) continue; h = hh; }
         if (!(poidsTeinte(h, 1, op) > 0.5)) continue;
         const H = ((op.H1 + (h - op.h0)) % 360 + 360) % 360;
-        E.teinteSom[cle] = { hex: versHex(hsv2rgb(H, 0.85, 1)), H: Math.round(H * 10) / 10, C: 0, nom: p.nom, acteur: o.acteur }; n.som++; } }
-    if (op.cibles.ptl) for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.commun) continue;
+        // (23/11, retour d'un joueur : tigre blanc à l'aperçu, jaunâtre en lecture) la saturation suit aussi (op.k), comme les textures :
+        // avant, seule la teinte changeait et « jaune -> blanc » laissait les sommets jaunes (le lecteur et le jeu les dessinent)
+        const Sk = Math.round(Math.min(4, (t && t.S !== undefined ? t.S : 1) * op.k) * 1000) / 1000;
+        E.teinteSom[cle] = { hex: versHex(hsv2rgb(H, Math.min(1, 0.85 * Sk), Math.min(1, t && t.V !== undefined ? t.V : 1))), H: Math.round(H * 10) / 10, C: t ? t.C : 0, S: Sk, V: t && t.V !== undefined ? t.V : 1, nom: p.nom, acteur: o.acteur }; n.som++; } }
+    if (op.cibles.ptl) for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.aura_balle) continue;   // (23/11) effets communs (ega…) aussi
       const t = E.teintePtl[o.nom]; let h;
       if (t) h = t.H; else { const m = couleurMoyenneSaturee(couleursParticules(o)); if (!m) continue; h = rgb2hsv(...m.c)[0]; }
       if (!(poidsTeinte(h, 1, op) > 0.5)) continue;
       const H = ((op.H1 + (h - op.h0)) % 360 + 360) % 360;
-      E.teintePtl[o.nom] = { hex: versHex(hsv2rgb(H, 0.85, 1)), H: Math.round(H * 10) / 10, C: 0 }; n.ptl++; }
+      const Sk = Math.round(Math.min(4, (t && t.S !== undefined ? t.S : 1) * op.k) * 1000) / 1000;      // (23/11) saturation aussi
+      E.teintePtl[o.nom] = { hex: versHex(hsv2rgb(H, Math.min(1, 0.85 * Sk), Math.min(1, t && t.V !== undefined ? t.V : 1))), H: Math.round(H * 10) / 10, C: t ? t.C : 0, S: Sk, V: t && t.V !== undefined ? t.V : 1 }; n.ptl++; }
   }
   return n;
 }
-function apresTout() { apresRetouche(); appliquerTeintes(); dessinerMateriaux(); dessinerTeintes(); dessinerRecette(); paletteTech(); majCompteurs(); }
+function apresTout() { apresRetouche(); appliquerTeintes(); appliquerLumieres(); dessinerMateriaux(); dessinerTeintes(); dessinerLumieres(); dessinerRecette(); paletteTech(); majCompteurs(); }
 function ciblesChoisies() { return { tex: $('rc-tex').checked, mat: $('rc-mat').checked, som: $('rc-som').checked, ptl: $('rc-ptl').checked }; }
 function texteCompte(n) {
   const l = [[n.tex, 'texture'], [n.mat, 'matériau'], [n.som, 'pièce (sommets)', 'pièces (sommets)'], [n.ptl, 'objet (particules)', 'objets (particules)']]
@@ -1193,7 +1291,7 @@ function paletteTech(cible) {
     for (let i = 0; i < a.length; i += 4) ajout(a[i] / 255, a[i + 1] / 255, a[i + 2] / 255, a[i + 3] / 255 / 1024 * 3, 'textures'); }
   if (!E.tech.perso) {
     for (const L of listeMateriaux()) { const ch = E.coulMat[L.cle], c = ch ? hex2rgb(ch.hex) : L.d0.slice(0, 3).map(v => v / L.mx); ajout(c[0], c[1], c[2], 1, 'matériaux'); }
-    for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.commun) continue;
+    for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.aura_balle) continue;   // (23/11) effets communs (ega…) aussi
       for (const p of o.pieces || []) { if (!p.vue || !p.vue.col0) continue; const t = E.teinteSom[o.nom + '/' + p.index];
         if (t) { const c = hsv2rgb(t.H, 0.85, 1); ajout(c[0], c[1], c[2], 0.6, 'sommets'); continue; }
         const m = moyenneSommets(p.vue.col0); if (m.colores > 0.05) ajout(m.c[0], m.c[1], m.c[2], 0.6 * m.colores, 'sommets'); }
@@ -1274,19 +1372,19 @@ function champsProjet() {
 }
 function signatureProjet() {
   if (!E.tech) return null;
-  return JSON.stringify([E.rev || 0, E.coulMat, E.teinteSom, E.teintePtl, E.recette, champsProjet()]);
+  return JSON.stringify([E.rev || 0, E.coulMat, E.teinteSom, E.teintePtl, E.lumK || {}, E.recette, champsProjet()]);
 }
 async function sauverProjet() {
   // (15/11/2026) jamais pendant le chargement d'une technique : l'état à moitié chargé écrasait le projet (avant la question « Reprendre »)
   if (!E.tech || E.reprise || E.chargement || NATIF.sauveProjet) return;
   // (15/11/2026) projet repris sans image de l'aperçu : une sauvegarde de plus pour la faire, dès que l'animation est chargée
   const sig = signatureProjet(); if (sig === E.sigProjet && !(E.vignetteManque && E.lecteur)) return;
-  const tex = {}; for (const [k, x] of Object.entries(E.textures)) if (x.modif && x.cur && x.cur.toDataURL) tex[k] = x.cur.toDataURL('image/png');
+  const tex = {}; for (const [k, x] of Object.entries(E.textures)) if (x.modif && x.cur && x.cur.toDataURL && !k.startsWith('mm/')) tex[k] = x.cur.toDataURL('image/png');
   const { c, auras } = champsProjet();
   if (!E.vignette || !E.vignetteT || performance.now() - E.vignetteT > 20000) { NATIF.sauveProjet = true;
     try { const v = await faireVignette(); if (v) { E.vignette = v; E.vignetteT = performance.now(); } } finally { NATIF.sauveProjet = false; } }
   const etat = { version: 1, code: E.tech.code, onglet: E.tech.onglet, nom: E.tech.nom, date: new Date().toISOString(), textures: tex, apercu: couleursPrincipales(4), vignette: E.vignette || null,
-    coulMat: E.coulMat, teinteSom: E.teinteSom, teintePtl: E.teintePtl, recette: E.recette, champs: c, auras,
+    coulMat: E.coulMat, teinteSom: E.teinteSom, teintePtl: E.teintePtl, lumK: E.lumK || {}, recette: E.recette, champs: c, auras,
     calques: window.atelierEtat ? atelierEtat() : {},           // (15/11/2026) calques de l'atelier de retouche
     cree: E.cree || null };                                     // (22/11) la création faite depuis ce projet (Mes créations)
   NATIF.sauveProjet = true;
@@ -1298,7 +1396,7 @@ async function verifierProjet() {
   let r = null; try { r = await api('/api/projet?cle=' + encodeURIComponent(cle)); } catch (e) { return; }
   if (!r || !r.existe || cleProjet() !== cle) return;
   const e = r.etat, nT = Object.keys(e.textures || {}).length, nM = Object.keys(e.coulMat || {}).length,
-    nS = Object.keys(e.teinteSom || {}).length + Object.keys(e.teintePtl || {}).length, nR = (e.recette || []).length;
+    nS = Object.keys(e.teinteSom || {}).length + Object.keys(e.teintePtl || {}).length + Object.keys(e.lumK || {}).length, nR = (e.recette || []).length;
   if (!nT && !nM && !nS && !nR) return;
   if (E.repriseCle === cle) { E.repriseCle = null; E.chargement = true; try { await reprendreProjet(e); } finally { E.sigProjet = signatureProjet(); E.chargement = false; } return; }
   // (15/11/2026) plus de question « Reprendre / Repartir de zéro » : elle bloquait la sauvegarde tant qu'on n'y répondait pas
@@ -1311,7 +1409,8 @@ async function reprendreProjet(e) {
     try { const im = await chargerImage(url), cx = x.cur.getContext('2d');
       cx.clearRect(0, 0, x.cur.width, x.cur.height); cx.drawImage(im, 0, 0, x.cur.width, x.cur.height);
       x.base = cx.getImageData(0, 0, x.cur.width, x.cur.height); x.modif = true; x.moyenne = moyenne(x.base); x.donneesCur = null; } catch (er) { /* texture illisible */ } }
-  E.coulMat = e.coulMat || {}; E.teinteSom = e.teinteSom || {}; E.teintePtl = e.teintePtl || {}; E.recette = e.recette || []; E.pileRc = [];
+  E.coulMat = e.coulMat || {}; E.teinteSom = e.teinteSom || {}; E.teintePtl = e.teintePtl || {}; E.lumK = e.lumK || {}; E.recette = e.recette || []; E.pileRc = [];
+  appliquerLumieres(); dessinerLumieres();
   E.vignette = e.vignette || null; E.vignetteT = e.vignette ? performance.now() : 0; E.vignetteManque = !e.vignette;
   for (const [id, v] of Object.entries(e.champs || {})) { const el = $(id); if (!el) continue; if (el.type === 'checkbox') el.checked = v; else el.value = v; }
   for (const [n, [oui, hex]] of Object.entries(e.auras || {})) { const cb = document.querySelector(`[data-aura="${CSS.escape(n)}"]`), c = document.querySelector(`[data-aura-c="${CSS.escape(n)}"]`);
@@ -1401,7 +1500,7 @@ function dessinerHub() {
   // chiffres
   const nAttente = HUB.creations.filter(c => c.attente).length, nFinies = HUB.creations.length - nAttente;    // (22/11)
   const nProjets = HUB.projets.filter(p => !projetLieExistant(p)).length;   // (22/11) sans les projets des créations
-  $('hub-stats').innerHTML = [[nProjets, 'à continuer'], [nAttente, 'en attente de stats'], [nFinies, 'terminées'], [PREREG.length, 'préréglages']]
+  $('hub-stats').innerHTML = [[nProjets, 'à continuer'], [nAttente, 'en attente de stats / cosmétique'], [nFinies, 'terminées'], [PREREG.length, 'préréglages']]
     .map(([n, t]) => `<div class="hub-stat"><b>${n}</b><span>${t}</span></div>`).join('');
   $('hub-n-projets').textContent = nProjets; $('hub-n-creations').textContent = nFinies; $('hub-n-prereglages').textContent = PREREG.length;
   // à continuer
@@ -1445,7 +1544,7 @@ function dessinerHub() {
         // (22/11, demande de muku) « Installer » seulement dans Terminées (pas en attente de stats) ; « Supprimer » dans Terminées
         + (c.installe || c.attente ? '' : '<button data-a="installer" title="Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)">Installer</button>')
         + (c.attente ? '' : '<button data-a="supprimer" class="supprimer" title="Retirer cette création (ses fichiers sont rangés à part, récupérables)">Supprimer</button>') });
-    const bc = d.querySelector('[data-a="coups"]'); if (bc) bc.onclick = () => ouvrirCoups(c);
+    const bc = d.querySelector('[data-a="coups"]'); if (bc) bc.onclick = () => ouvrirStats(c);     // (24/11) un seul écran : stats + techniques
     const bs = d.querySelector('[data-a="stats"]'); if (bs) bs.onclick = () => ouvrirStats(c);
     const bx = d.querySelector('[data-a="supprimer"]'); if (bx) bx.onclick = () => supprimerCreation(c);
     const bl = d.querySelector('[data-a="liee"]'); if (bl) bl.onclick = () => ouvrirTechniqueLiee(c);
@@ -1532,7 +1631,7 @@ async function proposerSuite(mod, code) {
   const c = L.find(x => x.mod === mod && String(x.code) === String(code)); if (!c) return;
   const d = document.createElement('div'); d.id = 'suite-creation'; d.className = 'ensuite';
   const ajout = (txt, f) => { const b = document.createElement('button'); b.textContent = txt; b.onclick = f; d.appendChild(b); };
-  if (mod === 'MesPersonnages' && c.cle) ajout('Choisir ses techniques', () => ouvrirCoups(c));
+  if (mod === 'MesPersonnages' && c.cle) ajout('Choisir ses techniques', () => ouvrirStats(c));
   if (mod === 'MesEsprits' && c.genre === 'esprit') { ajout('Choisir sa technique liée', () => ouvrirTechniqueLiee(c)); ajout('Lui faire une armure', () => window.changerOnglet('armures')); }
   if (mod === 'MesEsprits' && c.genre === 'totem') ajout('Choisir sa technique liée', () => ouvrirTechniqueLiee(c));   // (22/11) totems aussi
   if (!d.children.length) return;
@@ -1629,25 +1728,28 @@ window.addEventListener('load', () => {
 async function exporter() {
   if (!E.tech) return majRapport('Ouvre d\'abord une technique.');
   const objets = {};
-  for (const o of E.objets) { if (o.erreur || o.commun) continue;            // effets communs (ega…) : jamais exportés
+  // (23/11, « je veux tout modifier ») effets communs (ega…, traits de vitesse) exportés aussi : copie « egz… » chargée à la
+  // place de l'original dans CETTE cinématique (moteur/export.py) ; les lueurs globales ne les touchent pas
+  for (const o of E.objets) { if (o.erreur || o.aura_balle) continue;
     const imgs = {};
     for (const [cle, x] of Object.entries(E.textures)) if (x.obj === o && x.modif) imgs[x.nom] = x.cur.toDataURL('image/png');
-    const lueurs = !o.modeleActeur && $('lueurs-on').checked ? { hue: +$('lueurs-h').value, saturation: 1.3, value: 1.0, garder_or: $('garder-or').checked } : null;
+    const lueurs = !o.modeleActeur && !o.commun && $('lueurs-on').checked ? { hue: +$('lueurs-h').value, saturation: 1.3, value: 1.0, garder_or: $('garder-or').checked } : null;
     const materiaux = {};                    // (14/11/2026) couleurs des matériaux -> VRFW [[recolor.tint]]
     if (!o.modeleActeur) for (const [k, c] of Object.entries(E.coulMat || {})) if (k.startsWith(o.nom + '/')) materiaux[c.nom] = c.rgb;
     const sommets = {};                      // (14/11/2026) teintes des sommets : {nom de pièce : [H, C]}
-    if (!o.modeleActeur) for (const [k, t] of Object.entries(E.teinteSom || {})) if (k.startsWith(o.nom + '/')) sommets[t.nom] = [t.H, t.C];
-    const tp = !o.modeleActeur && (E.teintePtl || {})[o.nom], particules = tp ? [tp.H, tp.C] : null;
-    if (Object.keys(imgs).length || lueurs || Object.keys(materiaux).length || Object.keys(sommets).length || particules)
-      objets[o.acteur] = { textures: imgs, lueurs, materiaux, sommets, particules };
+    if (!o.modeleActeur) for (const [k, t] of Object.entries(E.teinteSom || {})) if (k.startsWith(o.nom + '/')) sommets[t.nom] = tsc(t);
+    const tp = !o.modeleActeur && (E.teintePtl || {})[o.nom], particules = tp ? tsc(tp) : null;
+    const lumiere = !o.modeleActeur && !o.commun && (E.lumK || {})[o.acteur] !== undefined ? E.lumK[o.acteur] : null;   // (23/11) intensité des lumières
+    if (Object.keys(imgs).length || lueurs || Object.keys(materiaux).length || Object.keys(sommets).length || particules || lumiere !== null)
+      objets[o.acteur] = { textures: imgs, lueurs, materiaux, sommets, particules, lumiere };
   }
   const auras = {};
   document.querySelectorAll('[data-aura]').forEach(cb => { if (cb.checked) auras[cb.dataset.aura] = hex2rgb(document.querySelector(`[data-aura-c="${CSS.escape(cb.dataset.aura)}"]`).value); });
   if (!Object.keys(objets).length && !Object.keys(auras).length) return majRapport('Rien n\'est modifié : change d\'abord des couleurs.');
+  // (23/11, demande de muku) seulement le nom et la description ici : couleur du tir, traînée, prix et bannière se règlent
+  // dans « En attente de stats / cosmétique » (gardés par le serveur quand la technique est refaite ; neuve : en vente à 18 jetons)
   const d = { code: E.tech.code, nom: $('f-nom').value.trim() || E.tech.nom + ' (couleurs)', description: $('f-desc').value.trim(),
-    couleur_tir: $('f-couleur').value === '' ? null : +$('f-couleur').value, prix: $('f-prix').value ? +$('f-prix').value : null,
-    banniere: { texte: $('f-ban').value.trim(), couleur: $('f-ban-c').value, contour: $('f-ban-o').value },
-    trainee: $('f-trainee').value ? { famille: $('f-trainee').value, element: $('f-trainee-el').value } : null, objets, auras };
+    banniere: {}, objets, auras };
   if (E.banniereImage && E.banniereImage.projet === E.projet) d.banniere.image = E.banniereImage.image;   // (21/11) liée au projet
   majRapport('Création du mod…');
   try { const r = await api('/api/exporter', d);
@@ -1758,7 +1860,7 @@ function mmFormulaire(m) {
   // (22/11) police importée pas encore chargée : choisie dès qu'elle arrive (parametres.js : brancherPolices)
   for (const [id, v] of [['mm-num-police', n.chiffres ? 'f:' + n.chiffres : null], ['mm-num-lettres', n.lettres || null]]) if (v && $(id).value !== v) $(id).dataset.voulue = v;
   mmApercuNumero();
-  $('mm-icone-img').src = (m && m.icone) || ''; $('mm-embleme-img').src = (m && m.embleme) || ''; MM.icone = MM.embleme = null;
+  $('mm-icone-img').src = (m && m.icone) || ''; $('mm-embleme-img').src = (m && m.embleme) || ''; MM.icone = MM.embleme = null; mmOublierDessins();
   $('mm-en-cours').textContent = m ? 'Maillot : ' + m.nom : 'Nouveau maillot' + (E.tech ? ' (coupe : ' + E.tech.nom + ')' : '');
 }
 function mmNouveau() { MM.id = null; MM.cote = '10'; MM.base = { '10': {}, '20': {} }; MM.edits = { '10': {}, '20': {} }; mmFormulaire(null); mmListe(); if (E.tech && E.tech.onglet === 'maillots') mmMajCotes(); }
@@ -1865,7 +1967,7 @@ function mmHex(h) { h = String(h).replace('#', ''); return [0, 2, 4].map(i => pa
 async function mmEnregistrer() {
   if (!E.tech || E.tech.onglet !== 'maillots') return majRapport('Ouvre d’abord un maillot du jeu (il sert de coupe) ou un de tes maillots.');
   const base = E.tech.cle_maillot; if (!base) return majRapport('Ce maillot du jeu ne peut pas servir de coupe.');
-  mmCapturer();
+  mmCapturer(); mmDessinFini();
   const images = {}, accessoires = {};
   for (const [c, suf] of [['10', 'dom'], ['20', 'ext']]) { const ed = MM.edits[c] || {};
     if (ed.haut) images['haut_' + suf] = ed.haut.png; if (ed.short) images['short_' + suf] = ed.short.png;
@@ -1900,11 +2002,35 @@ async function mmConstruire() {
     suivre(); });
 }
 function mmFichier(input, cle, img) { input.onchange = () => { const f = input.files[0]; if (!f) return; const lr = new FileReader();
-  lr.onload = () => { MM[cle] = lr.result; $(img).src = lr.result; }; lr.readAsDataURL(f); }; }
+  lr.onload = () => { MM[cle] = lr.result; $(img).src = lr.result; mmOublierDessins(cle); }; lr.readAsDataURL(f); }; }
+// (24/11, muku : « sur l'atelier maillot on pouvait dessiner le logo en boutique ») ICÔNE DE LA BOUTIQUE et EMBLÈME DESSINABLES,
+// comme l'onglet Icône du studio de l'Atelier Maillots : ✎ ouvre le mode dessin sur une image 256 × 256 (icône) ou 512 × 512
+// (emblème) ; elle part de ton image, sinon de l'icône du maillot de base dans le jeu (/api/maillot_icone_base), sinon vide.
+// Elle n'est dans E.textures que pendant le mode dessin (pas sur la 3D, pas dans les vignettes, pas au lecteur natif).
+MM.tex = {};
+function mmOublierDessins(cle) { for (const k of cle ? [cle] : ['icone', 'embleme']) { delete MM.tex[k]; delete E.textures['mm/' + k]; if (typeof A !== 'undefined' && A.docs) delete A.docs['mm/' + k]; } }
+async function mmDessiner(cle) {
+  if (!E.tech || E.tech.onglet !== 'maillots') return majRapport('Ouvre d’abord un maillot du jeu (il sert de coupe) ou un de tes maillots.');
+  let x = MM.tex[cle];
+  if (!x) { const taille = cle === 'icone' ? 256 : 512, cv = document.createElement('canvas'); cv.width = cv.height = taille; const g = cv.getContext('2d');
+    const src = MM[cle] || $('mm-' + cle + '-img').getAttribute('src') || (cle === 'icone' && E.tech.cle_maillot ? '/api/maillot_icone_base?base=' + encodeURIComponent(E.tech.cle_maillot) : '');
+    if (src) { try { g.drawImage(await chargerImage(src), 0, 0, taille, taille); } catch (e) { /* pas d'image : on part du vide */ } }
+    const orig = g.getImageData(0, 0, taille, taille);
+    x = MM.tex[cle] = { obj: { nom: 'mm' }, nom: cle === 'icone' ? 'Icône de la boutique' : 'Emblème d’équipe', info: { w: taille, h: taille }, orig, cur: cv, modif: false, moyenne: moyenne(orig) }; }
+  E.textures['mm/' + cle] = x; atDessinOuvrir('mm/' + cle);
+  majRapport(cle === 'icone' ? 'Icône de la boutique en mode dessin. Ferme le mode dessin, puis « Enregistrer sans construire » ou « Créer » pour la garder.'
+    : 'Emblème d’équipe en mode dessin. Ferme le mode dessin, puis « Enregistrer sans construire » ou « Créer » pour le garder.');
+}
+function mmDessinFini() {      // fermeture du mode dessin (atelier.js) et enregistrement : le dessin devient l'image envoyée
+  for (const [cle, x] of Object.entries(MM.tex)) { if (!document.body.classList.contains('dessin')) delete E.textures['mm/' + cle];
+    if (!x.modif) continue; const u = x.cur.toDataURL('image/png'); $('mm-' + cle + '-img').src = u; if (u !== x.mmEnvoye) { MM[cle] = u; x.mmEnvoye = u; } }
+}
 window.addEventListener('load', () => { if (!$('mm-enregistrer')) return;
   $('mm-enregistrer').onclick = () => mmEnregistrer().catch(e => majRapport('Erreur : ' + e.message));
   $('mm-nouveau').onclick = mmNouveau; document.querySelectorAll('[data-mm-cote]').forEach(b => b.onclick = () => mmCote(b.dataset.mmCote).catch(e => majRapport('Erreur : ' + e.message))); $('mm-construire').onclick = () => mmConstruire().catch(e => majRapport('Erreur : ' + e.message));
   mmFichier($('mm-icone'), 'icone', 'mm-icone-img'); mmFichier($('mm-embleme'), 'embleme', 'mm-embleme-img');
+  $('mm-icone-dessin').onclick = () => mmDessiner('icone').catch(e => majRapport('Erreur : ' + e.message));
+  $('mm-embleme-dessin').onclick = () => mmDessiner('embleme').catch(e => majRapport('Erreur : ' + e.message));
   // (16/11/2026) aperçu du numéro : redessiné à chaque réglage
   // (22/11) polices importées (⚙ Paramètres) dans les deux listes, + « Importer une police… »
   if (window.brancherPolices) { brancherPolices($('mm-num-police'), p => 'f:' + p.nom); brancherPolices($('mm-num-lettres'), p => p.nom); }
@@ -2118,7 +2244,7 @@ async function chargerAnimation(t) {
       if (p.peau && p.vue.peauCPU) p.vue.anim.peau = p.peau.map(n => sq.parNom[n]);    // os de la palette -> n° dans le squelette
       if (o.commun) p.vue.surEcran = true; }
     ajouterEmetteurs(o); for (const v of o.emetteursVue) v.visible = !$('l-particules') || $('l-particules').checked;
-    { const tp = (!E.avant && (E.teintePtl || {})[o.nom]) || null; for (const v of o.emetteursVue) v.teintePtl = tp ? [tp.H, tp.C] : null; }
+    { const tp = (!E.avant && (E.teintePtl || {})[o.nom]) || null; for (const v of o.emetteursVue) v.teintePtl = tp ? tsc(tp) : null; }
     // (+ CCustomShaderParam : valeurs prises sur les os recopiées dans les u_shaderParam des matériaux)
     if (o.lumieres && ((o.lumieres.lumieres || []).length || (o.lumieres.shader || []).length)) E.vue.lumieresDefs.push({ acteur: o.acteur, def: o.lumieres }); }
   // (ancien ballon rigide : remplacé par les acteurs avec os)
@@ -2219,6 +2345,12 @@ function ordrePieces(cle, seau, n) {
   return out;
 }
 // bannière par-dessus la cinématique : entrée en grossissant, sortie en fondu (celle de l'éditeur si tu en as fait une)
+// (23/11, retour de muku : « la bannière du web reste par-dessus le natif, et nous suit dans tous les onglets ») la bannière de
+// l'aperçu WebGL n'est cachée que par l'animation WebGL, qui ne tourne plus quand le lecteur du jeu (qui dessine SA bannière)
+// est ouvert : cachée aussi quand il l'est, et hors d'une technique (vérifié aussi toutes les 300 ms par majApproche)
+function telopWebVisible() {
+  return !NATIF.actif && !!E.tech && !E.tech.perso && (E.onglet === 'techniques' || $('centre').classList.contains('dans-stats'));
+}
 function majTelop(f) {
   const el = $('l-telop'), t = E.lecteur && E.lecteur.d.telop;
   // (14/11/2026) courbes du modèle de menu du jeu (soccer10_01) comme le lecteur natif : entrée à 30 images/s dès « montrée »,
@@ -2227,7 +2359,7 @@ function majTelop(f) {
   const val = (k, u, d) => { if (!k || !k.length) return d; if (u <= k[0][0]) return k[0][1]; if (u >= k[k.length - 1][0]) return k[k.length - 1][1];
     for (let i = 1; i < k.length; i++) if (u < k[i][0]) return k[i - 1][1] + (k[i][1] - k[i - 1][1]) * (u - k[i - 1][0]) / (k[i][0] - k[i - 1][0]); return d; };
   const sortie = C && f >= fin ? (f - fin) * (t.vitesse_out || 1) : null;
-  if (!t || !E.vue.lecteur || !$('l-banniere').checked || f < t.debut || (f >= fin && (!C || sortie > 10))) { el.style.display = 'none'; return; }
+  if (!t || !E.vue.lecteur || !$('l-banniere').checked || f < t.debut || (f >= fin && (!C || sortie > 10)) || !telopWebVisible()) { el.style.display = 'none'; return; }
   // (21/11) bannière perso (onglet Bannières ou copie déjà créée) si elle existe, sinon celle du jeu ; v : date de la perso
   // (21/11, retour de muku) la bannière perso est celle du PROJET ouvert : la technique du jeu ouverte sans lui montre la vraie
   const src = E.banniereImage && E.tech && E.banniereImage.projet === E.projet ? E.banniereImage.image
@@ -2308,7 +2440,8 @@ const B = { ed: null, choix: null, liste: [] };
 async function dessinerBanniere() {
   try {
     B.ed.manquante = null; await B.ed.dessiner();
-    if (B.ed.manquante) $('b-rapport').textContent = `Police absente de ce PC : ${B.ed.manquante} (Impact utilisée à la place).`;
+    if (B.ed.manquante) $('b-rapport').textContent = String(B.ed.p.police).startsWith('jeu:') ? B.ed.manquante   // (24/11) lettres du jeu : la police reste
+      : `Police absente de ce PC : ${B.ed.manquante} (Impact utilisée à la place).`;
   } catch (e) { $('b-rapport').textContent = 'Police : ' + e.message; }
 }
 function reglagesBanniere() {
@@ -2323,6 +2456,22 @@ async function ouvrirBannieres() {
     B.ed = new EditeurBanniere($('b-vue'));
     let dispo = null;                                   // polices présentes sur ce PC : seules celles-là sont proposées
     try { dispo = new Set(await api('/api/polices')); } catch (e) { }
+    // (23/11, demande de muku) les vraies lettres des bannières du jeu, une couleur par élément (en tête de liste)
+    const tr_ = x => (window.trad ? window.trad(x) : x);         // (24/11) titres des groupes traduits (attribut label)
+    const gJeu = document.createElement('optgroup'); gJeu.label = tr_('Lettres du jeu');
+    for (const [el, n] of [['wind', 'Air'], ['fire', 'Feu'], ['forest', 'Forêt'], ['mountain', 'Montagne'], ['void', 'Néant']]) {
+      const o = document.createElement('option'); o.value = 'jeu:' + el; o.textContent = 'Lettres du jeu — ' + n; gJeu.appendChild(o); }
+    $('b-police').appendChild(gJeu);
+    // (24/11, muku : « proposer le style d'écriture des Keshin, totem et armure dans les polices ») comme les bannières du jeu :
+    // esprit guerrier (lettres plus étroites, « / » = 2e ligne : nom / titre), totem (le « Totem » du jeu au-dessus du nom,
+    // lettres claires au contour bleu foncé), armure (ARMED : lettres violettes)
+    const gSt = document.createElement('optgroup'); gSt.label = tr_('Styles des esprits');
+    for (const [el, n] of [['wind', 'Air'], ['fire', 'Feu'], ['forest', 'Forêt'], ['mountain', 'Montagne'], ['void', 'Néant']]) {
+      const o = document.createElement('option'); o.value = 'jeu:esprit:' + el; o.textContent = 'Esprit guerrier — ' + n; gSt.appendChild(o); }
+    // (24/11, muku : « transforme-moi ça en police ») planches d'alphabet de muku : chaque lettre = ses pixels (moteur/police_image.py)
+    for (const [v, n] of [['jeu:totem', 'Totem'], ['jeu:armure', 'Armure (lettres du jeu)'], ['jeu:image:armure2', 'Armure — planche 2']]) {
+      const o = document.createElement('option'); o.value = v; o.textContent = n; gSt.appendChild(o); }
+    $('b-police').appendChild(gSt);
     for (const [f, n] of EditeurBanniere.polices()) {
       if (dispo && !dispo.has(f.toLowerCase())) continue;
       const o = document.createElement('option'); o.value = f; o.textContent = n; $('b-police').appendChild(o); }
@@ -2345,7 +2494,9 @@ async function ouvrirBannieres() {
     $('b-enregistrer').onclick = async () => {
       if (!B.choix || B.choix.ouverte) return $('b-rapport').textContent = 'Choisis à gauche une copie déjà créée.';
       $('b-rapport').textContent = 'Enregistrement…';
-      try { const r = await api('/api/banniere', { nom: B.choix.nom, base: B.choix.base, image: B.ed.image() }); E.telopV = Date.now();
+      // (23/11) esprit / totem / armure : sortie MesEsprits (bannière du nom, ou ARMED de l'armure)
+      try { const r = B.choix.genre ? await api('/api/banniere_esprit', { genre: B.choix.genre, id: B.choix.id, image: B.ed.image() })
+          : await api('/api/banniere', { nom: B.choix.nom, base: B.choix.base, image: B.ed.image() }); E.telopV = Date.now();
         $('b-rapport').textContent = r.ok ? r.rapport.join('\n') : 'Erreur : ' + r.erreur; } catch (e) { $('b-rapport').textContent = 'Erreur : ' + e.message; } };
     reglagesBanniere();
   }
@@ -2354,15 +2505,25 @@ async function ouvrirBannieres() {
   B.liste = [];
   if (E.tech && !E.tech.perso) B.liste.push({ ouverte: true, titre: 'Technique ouverte : ' + E.tech.nom, base: E.tech.code, texte: $('f-nom').value || E.tech.nom });
   for (const [nom, v] of Object.entries(etat.deja || {})) B.liste.push({ nom, titre: v.nom, sous: v.key + ' · copie de ' + v.base, base: v.base, texte: v.nom });
+  // (23/11, muku : « tu n'as pas fait les bannières pour les totems et les armures ») + mes esprits guerriers et totems (la bannière
+  // de leur nom, affichée à l'invocation) et mes armures (la bannière ARMED de la mise en armure, commune dans le jeu)
+  try {
+    const GENRES = { esprit: 'Esprit guerrier', totem: 'Totem', armure: 'Armure : bannière ARMED' };
+    for (const x of await api('/api/bannieres_esprits'))
+      B.liste.push({ genre: x.genre, id: x.id, titre: x.nom, sous: GENRES[x.genre], base: x.base, texte: x.genre === 'armure' ? ({ en: 'Armourfy!', es: '¡Armadura!' }[window.ATELIER_LANGUE] || 'Armure !') : x.nom, style: x.style });   // (24/11) texte du jeu dans la langue de l'Atelier
+  } catch (e) { }
   const box = $('b-choix'); box.innerHTML = '';
   if (!B.liste.length) box.innerHTML = '<p class="aide">Ouvre une technique (onglet Techniques) ou crée d\'abord une copie.</p>';
   B.liste.forEach(c => { const d = document.createElement('div'); d.innerHTML = `${c.titre}${c.sous ? `<small>${c.sous}</small>` : ''}`;
     d.onclick = () => choisirBanniere(c, d); box.appendChild(d); });
-  if (B.liste.length) choisirBanniere(B.liste[0], box.firstChild); else dessinerBanniere();
+  // (23/11) ouvert depuis « cosmétique » d'une technique créée : cette copie déjà choisie
+  const pre = B.preselect ? B.liste.findIndex(c => c.id === B.preselect || (c.sous && c.sous.startsWith(B.preselect + ' ·'))) : -1; B.preselect = null;
+  if (B.liste.length) choisirBanniere(B.liste[Math.max(0, pre)], box.children[Math.max(0, pre)]); else dessinerBanniere();
 }
 function choisirBanniere(c, el) {
   B.choix = c; document.querySelectorAll('#b-choix div').forEach(x => x.classList.toggle('sel', x === el));
   B.ed.p.texte = c.texte; $('b-texte').value = c.texte;
+  if (c.style) { B.ed.p.police = 'jeu:' + c.style; $('b-police').value = B.ed.p.police; }   // (24/11) le style du jeu pour ce genre
   $('b-modele').src = '/api/telop_png?code=' + encodeURIComponent(c.base);
   // (22/11, retour de muku : « pas intuitif ») UN seul bouton, selon ce qui est choisi à gauche, avec le nom écrit dessus
   // (avant : « Utiliser pour la technique ouverte » et « Enregistrer dans la copie choisie » côte à côte, faciles à confondre)
@@ -2406,8 +2567,15 @@ window.addEventListener('load', async () => {
     // (21/11) liste des copies d'esprit de l'onglet Armures : remplie à CHAQUE arrivée sur l'onglet (avant : seulement au clic
     // sur l'onglet ; par l'accueil, « Continuer » / « Modifier », elle restait vide -> « Aucune copie d'esprit »)
     if (o === 'armures') caListe();
-    if (o !== 'bannieres' && o !== 'hub' && E.tech && E.tech.onglet !== o) { retirerSuite(); E.tech = null; E.objets = []; E.textures = {}; E.vue.vider(); E.vue.lecteur = null; E.lecteur = null;
-      dessinerPieces(); dessinerTextures(); $('titre-tech').textContent = "Rien d'ouvert"; majRapport(''); }
+    // (23/11) le lecteur du jeu est ouvert dès qu'une technique l'est : en pause hors de l'onglet Techniques, fermé si elle est vidée
+    if (o !== 'techniques' && NATIF.actif && !NATIF.hote) cmdNatif('pause 1');
+    if (o !== 'bannieres' && o !== 'hub' && E.tech && E.tech.onglet !== o) { retirerSuite(); if (!NATIF.hote) finNatif(true); E.tech = null; E.objets = []; E.textures = {}; E.vue.vider(); E.vue.lecteur = null; E.lecteur = null;
+      // (23/11, retour de muku : « ça fait comme si la technique était encore là ») barre de lecture, sélection, compteurs,
+      // couleurs de la technique et listes remis à vide
+      E.selPieces.clear(); E.selTex.clear();
+      $('l-image').value = 0; $('l-info').textContent = ''; $('l-jouer').textContent = '▶'; if ($('l-film-info')) $('l-film-info').textContent = '';
+      $('lecteur').classList.add('inactif'); if ($('l-telop')) $('l-telop').style.display = 'none';
+      dessinerPieces(); dessinerTextures(); dessinerMateriaux(); dessinerTeintes(); paletteTech(); majCompteurs(); $('titre-tech').textContent = "Rien d'ouvert"; majRapport(''); }
   };
   document.querySelectorAll('.onglets button').forEach(b => b.onclick = () => changerOnglet(b.dataset.onglet));
   window.changerOnglet = changerOnglet;
@@ -2497,8 +2665,9 @@ window.addEventListener('load', async () => {
   // (14/11/2026 : l'ancien lecteur, rendu Python à la pause et « Film Direct3D », est retiré : tout passe par le lecteur C++)
   if ($('l-natif-bouton')) $('l-natif-bouton').onclick = () => lecteurNatif();
   $('l-jouer').onclick = () => { if (!E.vue.lecteur) activerAnimation(true); E.vue.joue = false; lecteurNatif(); };   // lecture = lecteur C++
-  $('l-image').oninput = () => { if (NATIF.actif) { cmdNatif('image ' + $('l-image').value); return; }
-    if (!E.vue.lecteur) activerAnimation(true); E.vue.joue = false; E.vue.image = +$('l-image').value; };
+  // (23/11, muku : « tout ce que tu peux en natif ») image par image = lecteur du jeu (ouvert en pause sur l'image si besoin)
+  $('l-image').oninput = () => { if (NATIF.actif) { NATIF.imageVoulue = undefined; cmdNatif('image ' + $('l-image').value); return; }
+    if (!E.vue.lecteur) activerAnimation(true); E.vue.joue = false; E.vue.image = +$('l-image').value; natifSurImage(+$('l-image').value); };
   $('l-vitesse').onchange = () => E.vue.vitesse = +$('l-vitesse').value;
   $('l-camera').onchange = () => E.vue.cameraJeu = $('l-camera').checked;
   $('l-boucle').onchange = () => E.vue.boucle = $('l-boucle').checked;
@@ -2518,9 +2687,15 @@ if ($('l-particules')) $('l-particules').onchange = () => { for (const p of E.vu
     if (ev.code === 'Space' && E.vue.lecteur) { ev.preventDefault(); E.vue.joue = false; lecteurNatif(); return; }
     if (ev.code === 'Escape' && NATIF.lance && !NATIF.actif) { finNatif(true); $('l-film-info').textContent = 'Lecteur natif : lancement annulé'; return; }
     if (ev.code === 'KeyA' && !ev.ctrlKey && !ev.altKey && E.tech) { ev.preventDefault(); basculerAvant(); return; }      // (15/11/2026) avant / après
-    if (!NATIF.actif) return;                     // lecteur incrusté : ses touches
+    // (23/11) flèches / Début sans lecteur ouvert : il s'ouvre en pause sur l'image voulue
+    if (!NATIF.actif) { const d = { ArrowRight: 1, ArrowLeft: -1, Home: 0 }[ev.code];
+      if (d !== undefined && E.tech && !E.tech.perso && E.vue && E.lecteur) { ev.preventDefault();
+        natifSurImage(d === 0 ? 0 : Math.max(0, Math.min(E.lecteur.duree - 1, Math.floor(E.vue.image) + d))); }
+      return; }                                   // lecteur incrusté : ses touches
     const k = { ArrowRight: 'pas 1', ArrowLeft: 'pas -1', Home: 'debut', KeyE: 'ecran', Escape: 'quitter' }[ev.code];
-    if (k) { ev.preventDefault(); if (k === 'quitter') finNatif(true); else cmdNatif(k); } });
+    // (23/11) Échap : d'abord pause (on reste sur l'image du jeu), Échap encore : fermer (l'aperçu approché revient)
+    if (k === 'quitter' && $('l-jouer').textContent === '❚❚') { ev.preventDefault(); cmdNatif('pause 1'); return; }
+    if (k) { ev.preventDefault(); NATIF.imageVoulue = undefined; if (k === 'quitter') finNatif(true); else cmdNatif(k); } });
   addEventListener('resize', () => { if (NATIF.actif) { NATIF.rect = rectNatif().join(' '); cmdNatif('rect ' + NATIF.rect); } });
   // essais : ?essai_natif=<code> ouvre la technique puis le lecteur incrusté (vérifications sans clic)
   { const q = new URLSearchParams(location.search).get('essai_natif');
@@ -2728,6 +2903,105 @@ async function apercuJoueur(r, cle, f) {
   } catch (e) { msg.textContent = 'Aperçu indisponible : ' + e.message; }
 }
 
+// (23/11) joueur en 3D au centre de l'écran des stats (comme le jeu) : même chargement qu'apercuJoueur, sur SA propre vue
+// (la vue du Tableau des compétences n'est pas prise).
+async function joueur3D(cv, msg, base, cle) {
+  if (!cv || typeof Vue3D === 'undefined' || !base) return;
+  msg.textContent = 'Chargement du joueur…';
+  try {
+    const V = cv.__vue || (cv.__vue = new Vue3D(cv)); V.cameraJeu = false; V.vider(); V.lecteur = null;
+    const [buf, copie] = await Promise.all([api('/api/modele?quoi=joueur&code=' + encodeURIComponent(base)),
+      cle ? api('/api/copie_textures?cle=' + encodeURIComponent(cle)).catch(() => ({})) : Promise.resolve({})]);
+    const dv = new DataView(buf), lg = dv.getUint32(0, true), meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, lg))); let p = 4 + lg;
+    const tex = async (cleT, url) => { if (V.textures[cleT]) return; const im = await chargerImage(url); const t = document.createElement('canvas');
+      t.width = im.width; t.height = im.height; t.getContext('2d').drawImage(im, 0, 0); V.texture(cleT, t); };
+    for (const [i, m] of meta.entries()) {
+      const pos = new Float32Array(buf.slice(p, p + m.nv * 12)); p += m.nv * 12;
+      const normales = new Float32Array(buf.slice(p, p + m.nv * 12)); p += m.nv * 12;
+      const uv = new Float32Array(buf.slice(p, p + m.nv * 8)); p += m.nv * 8;
+      const os = new Uint16Array(buf.slice(p, p + m.nv * 8)); p += m.nv * 8;
+      const poids = new Float32Array(buf.slice(p, p + m.nv * 16)); p += m.nv * 16;
+      const idx = new Uint16Array(buf.slice(p, p + m.ni * 2)); p += m.ni * 2 + ((4 - (m.ni * 2) % 4) % 4);
+      const v = V.ajouterPeau('joueur/' + i, { nv: m.nv, ni: m.ni, pos, uv, os, poids, idx, normales, contour: m.contour, ombreCle: m.ombre ? 'peau:' + m.ombre : null, noir: m.noir }, 'joueur');
+      if (m.ombre) { try { await tex('peau:' + m.ombre, '/tex/' + m.ombre + '.png'); } catch (e) { /* sans carte d'ombres */ } }
+      if (m.texture) { const nom = m.texture.split('/').pop(), url = copie[nom] || '/tex/' + m.texture + '.png';
+        try { await tex('peau:' + m.texture + (copie[nom] ? ':copie' : ''), url); v.texCle = 'peau:' + m.texture + (copie[nom] ? ':copie' : ''); } catch (e) { /* sans texture */ } }
+    }
+    try { const P = await api('/api/pose_joueur?code=' + encodeURIComponent(base) + '&paquet=' + TC_POSE.paquet + '&clip=' + TC_POSE.clip);
+      if (P.ok) { const sq = new Squelette(P.os, P), inv = sq.mondeRepos.map(Anim3D.inverse), c0 = P.clip, n = Math.max(1, c0.fin - c0.debut);
+        V.lecteur = { d: {}, duree: n, calculer(f) { const m = sq.poser(c0, c0.debut + (f % n)); return { peaux: { joueur: m.map((w, b) => Anim3D.mul(w, inv[b])) }, objets: {} }; } };
+        V.image = 0; V.joue = true; V.boucle = true; } } catch (e) { /* pose de liaison */ }
+    V.recadrer(); V.dist *= 0.95; V.yaw = TC_POSE.yaw; V.pitch = 0.05;
+    msg.textContent = '';
+  } catch (e) { msg.textContent = 'Aperçu indisponible : ' + e.message; }
+}
+
+// (23/11, demande de muku) APERÇU d'une technique créée dans « En attente de stats / cosmétique » : son projet est rouvert
+// dans l'éditeur (comme « Modifier » : tes couleurs), puis la zone de la vue 3D (#centre : vue, barre de lecture, ▶ lecteur
+// natif) est posée dans la fenêtre ; à la fermeture elle revient à sa place et on retourne à Mes créations.
+// (23/11, demande de muku : « la preview des Keshin = l'animation d'invocation en match ») le LECTEUR DU JEU joue
+// « invoc_<copie> » (serveur : technique_invocation, scène d'invocation de la sortie MesEsprits, la copie à la place de
+// l'esprit), posé sur la zone de l'aperçu (NATIF.hote) ; il boucle tout seul. Arrêté à la fermeture de la fenêtre.
+async function apercuInvocation(hote, msg, code, f, choix) {
+  NATIF.hote = hote; finNatif(true);
+  msg.textContent = 'Chargement de l’invocation (la 1re fois : jusqu’à une minute)…'; msg.classList.add('bas');
+  const numero = NATIF.numero = (NATIF.numero || 0) + 1; NATIF.lance = true;
+  const arreter = () => { if (NATIF.hote === hote) NATIF.hote = null; finNatif(true); };   // finNatif vise le pid (23/11)
+  f.__fin = arreter;
+  const rect = rectNatif(); let w = rect[2], h = Math.round(w * 9 / 16); if (h > rect[3]) { h = rect[3]; w = Math.round(h * 16 / 9); }
+  w = Math.max(640, Math.min(2560, w)); h = Math.round(w * 9 / 16);
+  const jeton = 'L' + Math.random().toString(36).slice(2, 10), titre = document.title.replace(/ · L[a-z0-9]+$/, '');
+  document.title = titre + ' · ' + jeton; setTimeout(() => { document.title = titre; }, 4000);
+  const tcode = (code.startsWith('armure_') ? code : 'invoc_' + code) + (choix && choix.element ? '~@' + choix.element : choix ? '~' + choix.scene + '~' + choix.esprit : '');
+  let r; try { r = await api('/api/natif', { stade: 's10g001', technique: tcode, modifs: {}, caches: [], couleurs: {}, sommets: {}, particules: {},
+    largeur: w, hauteur: h, incruste: true, rect, jeton }); } catch (e) { r = { erreur: e.message }; }
+  if (NATIF.numero === numero) NATIF.lance = false;
+  if (!f.open || NATIF.numero !== numero || NATIF.hote !== hote) { if (r && r.pid) api('/api/natif_cmd', { cmd: 'quitter', pid: r.pid }).catch(() => {}); return; }
+  if (!r || r.erreur) { msg.textContent = 'Aperçu indisponible : ' + ((r && r.erreur) || '?'); return; }
+  NATIF.actif = true; NATIF.pid = r.pid || null; NATIF.cle = tcode; NATIF.rect = rect.join(' '); NATIF.choixN = undefined; suivreNatif(); msg.textContent = '';
+}
+function finApercuStats(f) { if (f && f.__fin) { const x = f.__fin; f.__fin = null; x(); } }
+async function apercuTechnique(hote, msg, c, f) {
+  const centre = $('centre'); if (!centre || !hote) return;
+  msg.textContent = 'Chargement de l’aperçu…';
+  const deja = E.tech && !E.tech.perso && E.cree && E.cree.mod === c.mod && String(E.cree.code) === String(c.code);
+  const ongletAvant = E.onglet;
+  if (deja && E.onglet !== 'techniques' && window.changerOnglet) window.changerOnglet('techniques');   // barre de lecture : onglet Techniques
+  try { if (!deja) { await modifierCreation(c); for (let k = 0; k < 100 && E.chargement; k++) await new Promise(r => setTimeout(r, 100)); } }
+  catch (e) { msg.textContent = 'Aperçu indisponible : ' + e.message; }
+  if (!f.open || !hote.isConnected) { if (!f.open && ongletAvant === 'hub' && window.changerOnglet) window.changerOnglet('hub'); return; }   // fermée pendant le chargement
+  if (!E.tech || E.tech.perso) { msg.textContent = 'Aperçu indisponible : technique introuvable.'; return; }
+  const place = { parent: centre.parentNode, suivant: centre.nextSibling };
+  hote.appendChild(centre); centre.classList.add('dans-stats');
+  msg.textContent = projetDe(c) ? '' : 'Projet d’origine introuvable : couleurs de la technique de départ.';
+  if (E.vue) E.vue.recadrer(true);
+  // (23/11, muku : « la preview doit se jouer en boucle et sans paramètre, juste voir la technique ») animation du jeu en
+  // boucle dans la vue (caméra du jeu, sans son), réglages de la vue cachés (CSS #centre.dans-stats)
+  const avant = { son: $('l-son').checked };
+  $('l-son').checked = false; finNatif(true);
+  (async () => { for (let k = 0; k < 150 && !E.lecteur && f.open; k++) await new Promise(r => setTimeout(r, 100));
+    if (!E.lecteur || !f.open || !centre.classList.contains('dans-stats')) return;
+    activerAnimation(true); E.vue.cameraJeu = true; E.vue.boucle = true; E.vue.vitesse = 1; E.vue.image = 0; E.vue.joue = true;
+    // (23/11, retour de muku : « problème avec la preview ») l'aperçu WebGL n'a pas les vrais joueurs (silhouettes) : le
+    // LECTEUR DU JEU (AtelierNatif, Direct3D, vrais shaders, il boucle tout seul) est lancé dans la zone de l'aperçu
+    msg.textContent = 'Chargement du lecteur du jeu…'; msg.classList.add('bas');
+    try { await lecteurNatif(); } catch (e) { /* l'aperçu WebGL reste */ }
+    if (!f.open || !centre.classList.contains('dans-stats')) { arreterNatifs(); return; }   // fermée pendant le lancement
+    if (NATIF.actif) { E.vue.joue = false; msg.textContent = ''; }
+    else msg.textContent = 'Lecteur du jeu indisponible : aperçu simplifié.'; })();
+  // (23/11, retour de muku : « en fermant le menu la preview est restée ») le lecteur peut tourner alors que l'Atelier le
+  // croit fermé (un « etat » sans réponse remet NATIF.actif à faux) : à la fermeture, TOUS les lecteurs sont arrêtés
+  const arreterNatifs = () => { finNatif(true); api('/api/natif_cmd', { cmd: 'quitter' }).catch(() => {}); };
+  f.__fin = () => {
+    arreterNatifs();
+    if (E.vue) { E.vue.joue = false; E.vue.boucle = $('l-boucle').checked; E.vue.cameraJeu = $('l-camera').checked; E.vue.vitesse = +$('l-vitesse').value; }
+    $('l-son').checked = avant.son;
+    centre.classList.remove('dans-stats');
+    place.parent.insertBefore(centre, place.suivant && place.suivant.parentNode === place.parent ? place.suivant : null);
+    if (E.vue) E.vue.recadrer(true);
+    if (ongletAvant === 'hub' && window.changerOnglet) window.changerOnglet('hub');
+  };
+}
 // (22/11, idée de muku : « d'abord le visuel, ensuite les stats dans un menu à part ») fenêtre des valeurs d'une création :
 // champs donnés par le serveur (moteur/stats.py : clés VRFW lues dans des mods qui marchent), partis des valeurs de l'original
 // (22/11, demande de muku) SUPPRIMER une création de Terminées : ses fichiers sont rangés dans sortie/<mod>/_retires
@@ -2767,7 +3041,15 @@ function iconeNommee(nom, t) {          // (22/11) icône de icon_common par son
     + `background-size:${P.w * k}px ${P.h * k}px;background-position:${-z[0] * k}px ${-z[1] * k}px"></i>`;
 }
 const MS_EL_IC = { fire: 'feu', forest: 'foret', wind: 'vent' };
-function elIcone(e, t) {                // carré d'élément du jeu ; montagne : son carré brun est redessiné (alpha nul dans la planche)
+// (23/11, muku : « void n'a pas d'image ») TUILES D'ÉLÉMENT DU JEU : gaiji_cmd_type01-04 (dx11/font/gaiji_game) ; Néant =
+// gaiji_cmd_type00, fabriquée par BetterQoL (content/images/font/gaiji_game.toml, cache de VRFW) et reprise par CharacterReforged
+// (element_icon). Sans l'image (autre installation), le carré de couleur reste dessous.
+const EL_GAIJI = { wind: '01', forest: '02', fire: '03', mountain: '04', void: '00' };
+function elIcone(e, t) {
+  if (EL_GAIJI[e]) return `<span class="ms2-carre el-${MS_EL[e] || 'neutre'} ms2-gaiji" style="width:${t}px;height:${t}px;background-image:url('/ui_jeu/zone/gaiji_game/gaiji_cmd_type${EL_GAIJI[e]}.png')"></span>`;
+  return elIconeAncienne(e, t);
+}
+function elIconeAncienne(e, t) {        // carré d'élément du jeu ; montagne : son carré brun est redessiné (alpha nul dans la planche)
   if (e === 'mountain') return `<span class="ms2-carre mont" style="width:${t}px;height:${t}px">${iconeNommee('montagne', t * .8)}</span>`;
   const ic = MS_EL_IC[e] ? iconeNommee(MS_EL_IC[e], t) : '';
   return ic || `<span class="ms2-carre el-${MS_EL[e] || 'neutre'}" style="width:${t}px;height:${t}px"></span>`;
@@ -2777,10 +3059,12 @@ async function ouvrirStats(c) {
   let f = $('menu-stats');
   if (!f) {
     f = document.createElement('dialog'); f.id = 'menu-stats'; document.body.appendChild(f);
-    f.addEventListener('close', () => { if (typeof majCacheNatif === 'function') majCacheNatif(); });
+    f.addEventListener('close', () => { if (!f.open) finApercuStats(f); if (typeof majCacheNatif === 'function') majCacheNatif(); });
+    f.addEventListener('cancel', () => finApercuStats(f));     // (23/11) Échap : aperçu remis tout de suite (« close » arrive tard)
   }
-  const tag = c.genre === 'totem' ? 'TOT' : { MesTechniques: 'TECH', MesEsprits: 'ESP', MesPersonnages: 'PERSO' }[c.mod] || '';
-  const motEsprit = c.genre === 'totem' ? 'TOTEM' : 'ESPRIT';                // (22/11) les totems ne sont pas des esprits
+  finApercuStats(f); f.classList.remove('ms-tech-mode'); f.onkeydown = null; f.__invocation = null; f.__effets = null; f.__coups = null; f.classList.remove('msp-mode');
+  const tag = c.genre === 'totem' ? 'TOT' : c.genre === 'armures' ? 'ARM' : { MesTechniques: 'TECH', MesEsprits: 'ESP', MesPersonnages: 'PERSO' }[c.mod] || '';
+  const motEsprit = c.genre === 'totem' ? 'TOTEM' : c.genre === 'armures' ? 'ARMURE' : 'ESPRIT';     // (23/11) + armures                // (22/11) les totems ne sont pas des esprits
   f.innerHTML = `<div class="tc-entete"><div class="jm-coin tc-coin">${iconeJeu('m2', 46)}<span>Stats</span></div>
       <div class="tc-plaque"><span class="tc-plaque-nom"></span><span class="tc-plaque-sous">Lecture…</span><span class="jm-tag tc-plaque-tag">${tag}</span></div>
       <button class="tc-fermer" title="Fermer sans rien changer (Échap)">✕</button></div>
@@ -2788,11 +3072,11 @@ async function ouvrirStats(c) {
     <div class="tc-aide"><span><i class="jm-touche">Échap</i> Fermer</span><span class="ms-aide-txt"></span>
       <button class="ms-original">Garder celles de l'original</button><button class="tc-enregistrer ms-garder">Enregistrer</button></div>`;
   f.querySelector('.tc-plaque-nom').textContent = c.nom;
-  f.querySelector('.tc-fermer').onclick = () => f.close();
+  f.querySelector('.tc-fermer').onclick = () => { finApercuStats(f); f.close(); };
   if (!f.open) f.showModal();
   if (typeof majCacheNatif === 'function') majCacheNatif();
-  const G = f.querySelector('.ms-gauche'), D = f.querySelector('.ms-droite');
-  let r; try { r = await api('/api/stats?mod=' + encodeURIComponent(c.mod) + '&code=' + encodeURIComponent(code)); } catch (e) { D.textContent = e.message; return; }
+  let G = f.querySelector('.ms-gauche'), D = f.querySelector('.ms-droite');
+  let r; try { r = await api('/api/stats?mod=' + encodeURIComponent(c.mod) + '&code=' + encodeURIComponent(code) + '&langue=' + encodeURIComponent(window.ATELIER_LANGUE || 'fr')); } catch (e) { D.textContent = e.message; return; }
   if (!r.ok) { D.textContent = r.erreur; return; }
 
   const jeu = r.jeu || {}, deja = r.stats || {}, champ = k => r.champs.find(x => x.cle === k);
@@ -2811,6 +3095,19 @@ async function ouvrirStats(c) {
   const apercu = () => {
     const pmax = V.power_max !== '' ? V.power_max : '—', el = MS_EL[V.element] || 'neutre';
     let h = `<div class="tc-carte ms-carte g-${c.onglet}">${joueur && c.code ? `<img src="/api/portrait?code=${encodeURIComponent(c.code)}" alt="">` : vign ? `<img src="${vign}" alt="">` : ''}<span class="jm-tag">${tag}</span></div>`;
+    if (r.genre === 'technique' && f.querySelector('.msj-tech')) {
+      // (23/11, demande de muku : « copie cette UI ») plaque du nom + fiche blanche du Tableau des compétences du jeu
+      const g = MS_GENRE[(c.code || '').slice(0, 3)] || ['', ''], P = f.querySelector('.msj-tech .msj-plaque');
+      P.innerHTML = `<i class="msj-rayures"></i><span class="msj-nom-j">${echapper(c.nom)}</span>${V.element ? elIcone(V.element, 30) : ''}
+        <span class="msj-genre">${echapper(g[1].toUpperCase())}</span><span class="msj-pt"><small>PT</small>${V.tp !== '' ? V.tp : '—'}</span>`;
+      G.innerHTML = `<div class="msj-fiche-tete"><span class="tc-orbe ${g[0]}"></span><span>${echapper(g[1])}</span><small>Comme en jeu</small></div>
+        <div class="msj-fiche-ligne"><div class="tc-barre el-${el} ms-apercu"><span class="tc-orbe ${g[0]}"></span><span class="tc-nom">${echapper(c.nom)}</span><span class="tc-pw"><small>${g[1].toUpperCase()}</small>${pmax}</span></div>
+          <div class="tc-tension" style="--t:${Math.min(1, (+V.tp || 0) / 150)}"><span>TENSION</span><i></i><b>${V.tp !== '' ? V.tp : '—'}<small>T</small></b></div></div>
+        <div class="msj-fiche-puces"><span class="msj-ia">${V.users > 1 ? V.users + ' joueurs' : 'Solo'}</span>
+          <span class="tc-puce el-${el} ms2-puce">${elIcone(V.element, 22)}${echapper(libEl(V.element) || 'Élément')}</span><span class="tc-niv"><span>Niv. 1</span>${V.power_min}</span>
+          ${jeu.power_max !== undefined ? `<span class="msj-orig"><small>Original</small><span class="tc-barre petit el-${MS_EL[jeu.element] || 'neutre'}"><span class="tc-orbe ${g[0]}"></span><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>${g[1].toUpperCase()}</small>${jeu.power_max}</span></span></span>` : ''}</div>`;
+      return;
+    }
     if (r.genre === 'technique') {
       const g = MS_GENRE[(c.code || '').slice(0, 3)] || ['', ''];
       h += `<div class="ms-titre">Comme en jeu</div>
@@ -2861,6 +3158,30 @@ async function ouvrirStats(c) {
       <button class="ms2-raz" data-raz="${k}" title="Remettre celui de l’original">↺</button></div>`; };
   const elems = (champ('element') || { choix: [] }).choix.map(([v, n]) => [v, n, 'el el-' + MS_EL[v], elIcone(v, 26)]);
   const fond = '<div class="ms2-alveoles"></div>';
+  // (23/11, demande de muku) COSMÉTIQUE d'une technique (plus dans « Créer la technique ») : couleur du tir, traînée du
+  // ballon (tirs), prix en boutique, bannière ; gardée par le serveur (export.appliquer_cosmetique) avec « Enregistrer »
+  const cos0 = r.cosmetique || {}, ban0 = cos0.banniere || {};
+  const C = r.genre === 'technique' ? { couleur_tir: cos0.couleur_tir ?? '', prix: cos0.prix ?? '',
+    trainee: (cos0.trainee || {}).famille || '', trainee_el: (cos0.trainee || {}).element || 'void',
+    ban_texte: ban0.texte || '', ban_c: ban0.couleur || '#f5c842', ban_o: ban0.contour || '#0d1a4a', ban_style: ban0.style || 'jeu' } : null;
+  const opts = (L, v) => L.map(([x, n]) => `<option value="${x}"${String(v) === String(x) ? ' selected' : ''}>${echapper(n)}</option>`).join('');
+  const blocCosmetique = () => !C ? '' : `<div class="ms-section">Cosmétique</div><div class="ms-cosm">
+      <label><span>Couleur du tir</span><select data-c="couleur_tir">${opts([['', "Garder celle d'origine"], [0, 'Montagne'], [1, 'Air'], [2, 'Feu'], [3, 'Forêt'], [4, 'Néant'], [6, 'Esprit (jaune)']], C.couleur_tir)}</select></label>
+      ${r.tir ? `<label><span>Traînée du ballon (tirs)</span><span class="ms-cosm-2"><select data-c="trainee">${opts([['', 'Celle du jeu'], ['ega0075', 'Tir spécial'], ['ega0080', 'Tir enchaîné'], ['ega0085', 'Tir lointain']], C.trainee)}</select>
+        <select data-c="trainee_el"${C.trainee ? '' : ' disabled'}>${opts([['void', 'Néant (violet)'], ['wind', 'Air'], ['fire', 'Feu'], ['forest', 'Forêt'], ['mountain', 'Montagne']], C.trainee_el)}</select></span></label>` : ''}
+      <label><span>Prix en boutique (jetons, vide = pas de vente)</span><input type="number" min="1" data-c="prix" value="${C.prix}"></label>
+      <label><span>Bannière (texte)</span><input data-c="ban_texte" value="${echapper(C.ban_texte)}" placeholder="${ban0.editeur ? 'bannière de l’éditeur gardée (écris un texte pour la remplacer)' : ban0.garder ? 'bannière actuelle gardée (écris un texte pour la remplacer)' : 'FRAPPE GALACTIQUE'}"></label>
+      <div class="ms-cosm-2"><label><span>Lettres</span><input type="color" data-c="ban_c" value="${C.ban_c}"></label><label><span>Contour</span><input type="color" data-c="ban_o" value="${C.ban_o}"></label>
+        <button type="button" class="ms-ban-perso" title="Ouvre l'éditeur de bannières avec cette copie choisie">✎ Personnaliser la bannière</button></div></div>`;
+  const brancherCosmetique = () => {
+    if (!C) return;
+    D.querySelectorAll('[data-c]').forEach(el => { el.oninput = el.onchange = () => { C[el.dataset.c] = el.value;
+      if (el.dataset.c === 'trainee') { const s = D.querySelector('[data-c="trainee_el"]'); if (s) s.disabled = !el.value; } }; });
+    const b = D.querySelector('.ms-ban-perso');
+    if (b) b.onclick = () => { B.preselect = c.code; f.close(); window.changerOnglet('bannieres'); };
+  };
+  const cosmetique = () => !C ? undefined : { couleur_tir: C.couleur_tir === '' ? null : +C.couleur_tir, prix: C.prix === '' ? null : +C.prix,
+    trainee: C.trainee ? { famille: C.trainee, element: C.trainee_el } : null, banniere: { texte: C.ban_texte.trim(), couleur: C.ban_c, contour: C.ban_o, style: C.ban_style } };
   const panneau = () => {
     let h = `<div class="tc-detail ms-panneau ms2">${fond}<div class="ms2-deltas"></div>`;
     if (r.genre === 'technique') {
@@ -2868,7 +3189,7 @@ async function ouvrirStats(c) {
         + '<div class="ms-section">Utilisation</div>' + ligneNombre('tp', 'Coût en PT (tension)', 150)
         + ligneChoix('users', [[1, 'Solo'], [2, '2 joueurs'], [3, '3 joueurs'], [4, '4 joueurs']])
         + '<div class="ms-section">Nature</div>' + ligneChoix('element', elems, false, 'ms2-els')
-        + ligneChoix('growth', [0, 1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)]));
+        + ligneChoix('growth', [0, 1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)])) + blocCosmetique();
     } else if (r.genre === 'esprit') {
       h += '<div class="ms-section">Puissance</div>' + ligneNombre('power_min', 'Au niveau 1', 300) + ligneNombre('power_max', 'Au niveau max', 300)
         + '<div class="ms-section">Nature</div>' + ligneChoix('element', elems, false, 'ms2-els');
@@ -2886,6 +3207,7 @@ async function ouvrirStats(c) {
     }
     h += '<div class="ms-etat"></div></div>';
     D.innerHTML = h;
+    brancherCosmetique();
     const regler = (k, v) => { V[k] = v; D.querySelectorAll(`input[data-k="${k}"]`).forEach(o => { if (+o.value !== +v || o.value === '') o.value = v; }); majTout(); apercu(); };
     D.querySelectorAll('input[data-k]').forEach(el => el.oninput = () => {
       const k = el.dataset.k, v = el.value === '' ? '' : +el.value; V[k] = v;
@@ -2942,17 +3264,512 @@ async function ouvrirStats(c) {
     const T = D.querySelector('.ms2-tout-raz');
     if (T) T.onclick = () => { for (const ch of r.champs) if (jeu[ch.cle] !== undefined) V[ch.cle] = jeu[ch.cle]; panneau(); apercu(); };
   };
-  apercu(); panneau();
-  f.querySelector('.ms-aide-txt').textContent = joueur ? 'Vide ou « comme l’original » : rien ne change' : 'Partie des valeurs de l’original : seules celles que tu changes sont écrites';
+  // (23/11, demande de muku : « copier le jeu », écran validé sur maquette) JOUEUR : écran comme le Tableau des compétences
+  // du jeu (capture de muku) : à gauche la carte, le poste et les lignes de stats (étiquette blanche, bout vert, gros chiffres
+  // bleus, jauge) ; au centre le joueur en 3D ; à droite la plaque du nom et le détail de la stat choisie (− / +, barre, ↺).
+  // Mêmes valeurs (V, statsOn) et même enregistrement qu'avant : changer une stat allume « les changer » (les 8 vont ensemble).
+  const statsJeu = () => {
+    const corps = f.querySelector('.ms-corps'); corps.classList.add('ms-jeu');
+    corps.innerHTML = `<div class="msj-gauche"></div><div class="msj-centre"><canvas class="msj-vue"></canvas><div class="msj-vue-msg"></div></div><div class="msj-droite"></div>`;
+    const Gc = corps.querySelector('.msj-gauche'), Dr = corps.querySelector('.msj-droite');
+    const ST = Object.keys(MS_STAT), MAXJ = 300, POSTES = ['', 'fw', 'mf', 'df', 'gk'];
+    let sel = 0;
+    const brut = k => V['stats.' + k], orig = k => jeu['stats.' + k];
+    const val = k => brut(k) === '' || brut(k) === undefined ? (orig(k) ?? 200) : +brut(k);
+    const allumer = () => { if (statsOn) return; statsOn = true; for (const k of ST) if (brut(k) === '' || brut(k) === undefined) V['stats.' + k] = orig(k) ?? 200; };
+    const regler = (k, v) => { allumer(); const ch = champ('stats.' + k) || {}; V['stats.' + k] = Math.max(ch.min ?? 0, Math.min(ch.max ?? 999, Math.round(v))); dessiner(); };
+    const posteDe = () => V.position || jeu.position || '';
+    const dessiner = () => {
+      const pos = posteDe(), p = MS_POSTE[pos], ele = V.element || jeu.element, el2 = ele ? MS_EL[ele] : '';
+      const port = c.code ? `<img src="/api/portrait?code=${encodeURIComponent(c.code)}" alt="">` : '';
+      let h = `<div class="msj-carte el-${el2 || 'neutre'}">${port}${p ? `<span class="msj-poste p-${pos}">${p[0]}</span>` : ''}${ele ? `<span class="msj-el">${elIcone(ele, 26)}</span>` : ''}</div>
+        <div class="msj-poste-ligne"><span>Poste :</span><button class="msj-fl" data-d="-1" title="Poste précédent">◀</button>
+          <b class="msj-poste p-${pos || 'vide'}">${p ? p[0] : '—'}</b><button class="msj-fl" data-d="1" title="Poste suivant">▶</button>
+          ${V.position === '' || V.position === undefined ? '<small>comme l’original</small>' : ''}</div><div class="msj-lignes">`;
+      ST.forEach((k, n) => { const ch = champ('stats.' + k) || { nom: k }, v = val(k), o = orig(k), d = o !== undefined && statsOn ? v - o : 0;
+        h += `<div class="msj-ligne${n === sel ? ' sel' : ''}${d ? ' change' : ''}" data-n="${n}"><span class="msj-etiq">${iconeNommee('st_' + k, 34)}<span class="msj-nom">${echapper(ch.nom)}</span></span>
+          <span class="msj-tend ${d > 0 ? 'plus' : d < 0 ? 'moins' : ''}"></span>
+          <span class="msj-val"><b>${v}</b><small>/${MAXJ}</small></span>
+          <span class="msj-jauge" title="Clique pour régler"><i style="width:${Math.min(100, 100 * v / MAXJ)}%"></i>${o !== undefined ? `<u style="left:${Math.min(100, 100 * o / MAXJ)}%"></u>` : ''}</span></div>`; });
+      h += `</div>`;
+      Gc.innerHTML = h;
+      // droite : plaque du nom + détail de la stat choisie + poste secondaire et élément
+      const k = ST[sel], ch = champ('stats.' + k) || { nom: k }, v = val(k), o = orig(k);
+      const sec = V.sub_position || '', secs = [['', 'comme l’original']].concat(Object.entries(MS_POSTE).map(([x, [a, nn]]) => [x, a + ' · ' + nn]));
+      const els = [['', 'comme l’original']].concat((champ('element') || { choix: [] }).choix);
+      Dr.innerHTML = `<div class="msj-plaque"><i class="msj-rayures"></i><span class="msj-nom-j">${echapper(c.nom)}</span>${p ? `<span class="msj-poste p-${pos}">${p[0]}</span>` : ''}
+          ${ele ? elIcone(ele, 30) : ''}<small>${echapper(f.querySelector('.tc-plaque-sous').textContent)}</small></div>
+        <div class="msj-detail"><div class="msj-tete">${iconeNommee('st_' + k, 44)}<span>${echapper(ch.nom)}</span></div>
+          <div class="msj-corps-d"><div class="msj-col"><small>ORIGINAL</small><b>${o !== undefined ? o : '—'}</b></div>
+            <div class="msj-col"><small>VALEUR</small><b class="msj-v">${v}</b></div>
+            <div class="msj-regler"><button class="msj-pas" data-d="-1" title="−1 (Maj : −10)">−</button><input type="range" min="0" max="${MAXJ}" value="${Math.min(MAXJ, v)}">
+              <button class="msj-pas" data-d="1" title="+1 (Maj : +10)">+</button><button class="msj-raz" title="Remettre la valeur de l’original">↺</button></div>
+            ${statsOn ? '' : '<p class="msj-note">Les stats de l’original sont gardées tant que tu n’en changes aucune (les 8 vont ensemble).</p>'}</div></div>
+        <div class="ms-etat"></div>
+        <div class="msj-choix"><div class="msj-titre">2e poste</div><div class="msj-puces" data-k="sub_position">${secs.map(([x, nn]) => `<button data-v="${x}" class="${String(sec) === String(x) ? 'sel' : ''}">${echapper(nn)}</button>`).join('')}</div>
+          <div class="msj-titre">Élément</div><div class="msj-puces" data-k="element">${els.map(([x, nn]) => `<button data-v="${x}" class="${String(V.element || '') === String(x) ? 'sel' : ''}">${x ? elIcone(x, 22) : ''}${echapper(nn)}</button>`).join('')}</div></div>`;
+      // branchements
+      Gc.querySelectorAll('.msj-ligne').forEach(L => L.onclick = e => { sel = +L.dataset.n; const J = e.target.closest('.msj-jauge');
+        if (J) { const R = J.getBoundingClientRect(); regler(ST[sel], MAXJ * Math.max(0, Math.min(1, (e.clientX - R.left) / R.width))); } else dessiner(); });
+      Gc.querySelectorAll('.msj-fl').forEach(b => b.onclick = () => { const i = POSTES.indexOf(V.position || ''); V.position = POSTES[(i + (+b.dataset.d) + POSTES.length) % POSTES.length]; dessiner(); });
+      Dr.querySelectorAll('.msj-pas').forEach(b => b.onclick = e => regler(k, val(k) + (+b.dataset.d) * (e.shiftKey ? 10 : 1)));
+      Dr.querySelector('.msj-regler input').oninput = e => regler(k, +e.target.value);
+      Dr.querySelector('.msj-raz').onclick = () => { if (o !== undefined) regler(k, o); };
+      Dr.querySelectorAll('.msj-puces').forEach(P => P.querySelectorAll('button').forEach(b => b.onclick = () => { V[P.dataset.k] = b.dataset.v; dessiner(); }));
+    };
+    f.onkeydown = e => { if (e.target.closest('input[type=number], select')) return; const k = ST[sel], pas = e.shiftKey ? 10 : 1;
+      if (e.key === 'ArrowDown') { sel = (sel + 1) % ST.length; dessiner(); } else if (e.key === 'ArrowUp') { sel = (sel + ST.length - 1) % ST.length; dessiner(); }
+      else if (e.key === 'ArrowRight') regler(k, val(k) + pas); else if (e.key === 'ArrowLeft') regler(k, val(k) - pas); else return;
+      e.preventDefault(); };
+    dessiner();
+    joueur3D(corps.querySelector('.msj-vue'), corps.querySelector('.msj-vue-msg'), c.base || c.code, c.cle);
+  };
+  // (24/11, muku : « refais-moi le menu des stats d'un joueur pour pouvoir choisir ses techniques dedans ; à l'endroit vide sous
+  // son nom, les stats qu'on peut modifier ; à l'endroit de « Catalyste… », la case de l'esprit guerrier ou du totem »)
+  // JOUEUR = le Tableau des compétences du jeu (capture de muku) : à gauche la carte, le poste, la case esprit / totem (là où
+  // le jeu met le catalyseur) puis les 6 techniques ; au centre le joueur en 3D ; à droite la plaque du nom, SOUS elle les 8
+  // stats (clic, − / +, barre), puis la fiche blanche de la case choisie avec la liste pour la remplir. « Enregistrer » écrit
+  // les techniques (/api/coups, seulement si elles ont changé) puis les stats (/api/stats), comme les deux anciens écrans.
+  const joueurJeu = async () => {
+    const corps = f.querySelector('.ms-corps'); corps.classList.add('ms-jeu', 'msp');
+    corps.innerHTML = `<div class="msj-gauche"></div><div class="msj-centre"><canvas class="msj-vue"></canvas><div class="msj-vue-msg"></div></div><div class="msj-droite"><div class="msp-haut"></div><div class="ms-etat"></div><div class="msp-fiche"></div></div>`;
+    const Gc = corps.querySelector('.msj-gauche'), Hd = corps.querySelector('.msp-haut'), Fi = corps.querySelector('.msp-fiche');
+    const ST = Object.keys(MS_STAT), MAXJ = 300, POSTES = ['', 'fw', 'mf', 'df', 'gk'];
+    let selSt = 0, sel = 0, filtreG = '', texte = '', touche = false;
+    const brut = k => V['stats.' + k], orig = k => jeu['stats.' + k];
+    const val = k => brut(k) === '' || brut(k) === undefined ? (orig(k) ?? 200) : +brut(k);
+    const allumer = () => { if (statsOn) return; statsOn = true; for (const k of ST) if (brut(k) === '' || brut(k) === undefined) V['stats.' + k] = orig(k) ?? 200; };
+    const regler = (k, v) => { allumer(); const ch = champ('stats.' + k) || {}; V['stats.' + k] = Math.max(ch.min ?? 0, Math.min(ch.max ?? 999, Math.round(v))); dessinerHaut(); };
+    const posteDe = () => V.position || jeu.position || '';
+    Gc.innerHTML = '<div class="tc-vide-txt">Lecture des techniques…</div>';
+    // ---- techniques (même lecture que l'ancien Tableau des compétences)
+    let R; try { R = await api('/api/coups?cle=' + encodeURIComponent(c.cle)); if (!R.ok) throw new Error(R.erreur); } catch (e) { R = { erreur: e.message, mes: [], catalogue: [], actuels: [], mods: [], origine: [], fiches: {}, modeles_esprits: {} }; }
+    const tous = [...R.mes, ...R.catalogue], parId = new Map(tous.map(x => [x.id, x]));
+    const estAura = x => AURAS_COUPS.includes(x.genre);
+    const S = [null, null, null, null, null, null, null];          // 0-5 techniques, 6 = esprit / totem (case 9 du jeu)
+    const poser = L => { S.fill(null); let k = 0; for (const m of L) { const x = parId.get(m.move); if (!x) continue;
+        if (estAura(x)) S[6] = { move: m.move, level: m.level || 1 }; else if (k < 6) S[k++] = { move: m.move, level: m.level || 1 }; } };
+    poser(R.actuels.length ? R.actuels : R.mods.length ? R.mods : R.origine);
+    f.__coups = () => touche ? [...S.slice(0, 6), S[6]].filter(Boolean) : undefined;
+    const fiche = x => R.fiches[x.code] || [0, 0, 0, 0];
+    const iconeEsprit = x => { const m = R.modeles_esprits[String(fiche(x)[3])]; return m ? `<img class="tc-esp-ico" src="/api/icone_esprit?code=${encodeURIComponent(m)}" alt="" onerror="this.remove()">` : ''; };
+    const barre = (x, i, petit) => {
+      if (!x) return `<button class="tc-barre vide${i === 6 ? ' msp-vide-esprit' : ''}${petit ? ' petit' : ''}" data-i="${i}"><span class="tc-orbe"></span><span class="tc-nom">${i === 6 ? 'Esprit guerrier ou totem' : ''}</span></button>`;
+      if (estAura(x)) return `<button class="tc-barre esprit${petit ? ' petit' : ''}" data-i="${i}" data-id="${x.id}"><span class="tc-nom">${x.mod ? '★ ' : ''}${echapper(x.nom)}</span><small>${echapper(x.genre)}</small>${iconeEsprit(x)}</button>`;
+      const F = fiche(x), el = TC_EL[F[2]] || ['', 'neutre'], g = TC_GENRE[x.genre] || [x.genre.slice(0, 3).toUpperCase(), 'tir'];
+      return `<button class="tc-barre el-${el[1]}${petit ? ' petit' : ''}" data-i="${i}" data-id="${x.id}" title="${echapper(x.nom)} — ${echapper(x.genre)}${el[0] ? ', ' + el[0] : ''} (${x.code})">
+        <span class="tc-orbe g-${g[1]}"></span><span class="tc-nom">${x.mod ? '★ ' : ''}${echapper(x.nom)}</span><span class="tc-pw"><small>${g[0]}</small>${F[0] || ''}</span></button>`; };
+    const changer = () => { touche = true; dessinerGauche(); dessinerFiche(); };
+    // ---- gauche : carte, poste, case esprit / totem, 6 techniques
+    const dessinerGauche = () => {
+      const pos = posteDe(), p = MS_POSTE[pos], ele = V.element || jeu.element, el2 = ele ? MS_EL[ele] : '';
+      const port = c.code ? `<img src="/api/portrait?code=${encodeURIComponent(c.code)}" alt="">` : '';
+      Gc.innerHTML = `<div class="msj-carte el-${el2 || 'neutre'}">${port}${p ? `<span class="msj-poste p-${pos}">${p[0]}</span>` : ''}${ele ? `<span class="msj-el">${elIcone(ele, 26)}</span>` : ''}</div>
+        <div class="msj-poste-ligne"><span>Poste :</span><button class="msj-fl" data-d="-1" title="Poste précédent">◀</button>
+          <b class="msj-poste p-${pos || 'vide'}">${p ? p[0] : '—'}</b><button class="msj-fl" data-d="1" title="Poste suivant">▶</button>
+          ${V.position === '' || V.position === undefined ? '<small>comme l’original</small>' : ''}</div>
+        <div class="msp-cases">${barre(S[6] && parId.get(S[6].move), 6)}${[0, 1, 2, 3, 4, 5].map(i => barre(S[i] && parId.get(S[i].move), i)).join('')}</div>
+        <div class="tc-boutons msp-boutons"><button data-f="origine" title="Les techniques de la carte d'origine (fichiers du jeu)">Celles du jeu</button>
+          ${R.mods.length ? `<button data-f="mods" title="Ce que ${echapper(R.mod)} donne à l'original (ce que tu vois en jeu)">Celles de ${echapper(R.mod)}</button>` : ''}</div>
+        ${R.erreur ? `<div class="tc-note">Techniques illisibles : ${echapper(R.erreur)}</div>` : R.plateau ? '<div class="tc-note">La carte d’origine a son propre plateau de compétences : une technique ajoutée n’y apparaît que si le plateau la contient (VRFW).</div>' : ''}`;
+      Gc.querySelectorAll('.msp-cases .tc-barre').forEach(b => { b.classList.toggle('sel', +b.dataset.i === sel); b.onclick = () => { sel = +b.dataset.i; filtreG = ''; dessinerGauche(); dessinerFiche(); }; });
+      Gc.querySelectorAll('.msj-fl').forEach(b => b.onclick = () => { const i = POSTES.indexOf(V.position || ''); V.position = POSTES[(i + (+b.dataset.d) + POSTES.length) % POSTES.length]; dessinerGauche(); dessinerHaut(); });
+      Gc.querySelector('[data-f="origine"]').onclick = () => { poser(R.origine); changer(); };
+      if (R.mods.length) Gc.querySelector('[data-f="mods"]').onclick = () => { poser(R.mods); changer(); };
+    };
+    // ---- droite, en haut : plaque du nom puis LES STATS (l'endroit vide du jeu sous le nom)
+    const dessinerHaut = () => {
+      const pos = posteDe(), p = MS_POSTE[pos], ele = V.element || jeu.element;
+      const k = ST[selSt], ch = champ('stats.' + k) || { nom: k }, v = val(k), o = orig(k);
+      const sec = V.sub_position || '', els = (champ('element') || { choix: [] }).choix;
+      Hd.innerHTML = `<div class="msj-plaque"><i class="msj-rayures"></i><span class="msj-nom-j">${echapper(c.nom)}</span>${p ? `<span class="msj-poste p-${pos}">${p[0]}</span>` : ''}
+          ${ele ? elIcone(ele, 30) : ''}<small>${echapper(f.querySelector('.tc-plaque-sous').textContent)}</small></div>
+        <div class="msp-stats">${ST.map((s_, n) => { const c_ = champ('stats.' + s_) || { nom: s_ }, w = val(s_), o_ = orig(s_), d = o_ !== undefined && statsOn ? w - o_ : 0;
+          return `<button class="msp-st${n === selSt ? ' sel' : ''}${d > 0 ? ' plus' : d < 0 ? ' moins' : ''}" data-n="${n}" title="${echapper(c_.nom)}${o_ !== undefined ? ' — original : ' + o_ : ''}">
+            <span class="msp-st-nom">${iconeNommee('st_' + s_, 22)}<span>${echapper(c_.nom)}</span></span><b>${w}</b><i style="width:${Math.min(100, 100 * w / MAXJ)}%"></i></button>`; }).join('')}</div>
+        <div class="msp-regler"><span class="msp-regler-nom">${iconeNommee('st_' + k, 26)}${echapper(ch.nom)}</span><small>Original</small><b>${o !== undefined ? o : '—'}</b>
+          <button class="msj-pas" data-d="-1" title="−1 (Maj : −10)">−</button><input type="range" min="0" max="${MAXJ}" value="${Math.min(MAXJ, v)}">
+          <button class="msj-pas" data-d="1" title="+1 (Maj : +10)">+</button><b class="msj-v">${v}</b><button class="msj-raz" title="Remettre la valeur de l’original">↺</button></div>
+        <div class="msp-autres"><label>2e poste <select data-k="sub_position"><option value="">comme l’original</option>${Object.entries(MS_POSTE).map(([x, [a, nn]]) => `<option value="${x}"${String(sec) === x ? ' selected' : ''}>${a} · ${echapper(nn)}</option>`).join('')}</select></label>
+          <label>Élément <select data-k="element"><option value="">comme l’original</option>${els.map(([x, nn]) => `<option value="${echapper(x)}"${String(V.element || '') === String(x) ? ' selected' : ''}>${echapper(nn)}</option>`).join('')}</select></label>
+          ${statsOn ? '' : '<small class="msp-note">Stats de l’original gardées tant que tu n’en changes aucune (les 8 vont ensemble).</small>'}</div>`;
+      Hd.querySelectorAll('.msp-st').forEach(b => b.onclick = () => { selSt = +b.dataset.n; dessinerHaut(); });
+      Hd.querySelectorAll('.msj-pas').forEach(b => b.onclick = e => regler(k, val(k) + (+b.dataset.d) * (e.shiftKey ? 10 : 1)));
+      Hd.querySelector('.msp-regler input').oninput = e => regler(k, +e.target.value);
+      Hd.querySelector('.msj-raz').onclick = () => { if (o !== undefined) regler(k, o); };
+      Hd.querySelectorAll('.msp-autres select').forEach(x => x.onchange = () => { V[x.dataset.k] = x.value; dessinerHaut(); dessinerGauche(); });
+    };
+    // ---- droite, en bas : fiche blanche de la case choisie + la liste pour la remplir
+    const dessinerFiche = () => {
+      const s_ = S[sel], x = s_ && parId.get(s_.move), F = x ? fiche(x) : null, aura = sel === 6;
+      const liste = tous.filter(y => aura ? estAura(y) : !estAura(y)), genres = [...new Set(liste.map(y => y.genre))];
+      const q = texte.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const L = liste.filter(y => (!filtreG || y.genre === filtreG) && (!q || (y.nom + ' ' + y.code).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)))
+        .sort((a, b) => (b.mod ? 1 : 0) - (a.mod ? 1 : 0) || (fiche(b)[0] - fiche(a)[0]) || a.nom.localeCompare(b.nom)).slice(0, 150);
+      const tension = F && F[1] ? `<div class="tc-tension" style="--t:${Math.min(1, F[1] / 150)}"><span>TENSION</span><i></i><b>${F[1]}<small>T</small></b></div>` : '';
+      Fi.innerHTML = `<div class="msp-detail">${x ? barre(x, sel, false) : `<div class="tc-vide-txt">${aura ? 'Case de l’esprit guerrier ou du totem : vide' : 'Case ' + (sel + 1) + ' vide'}</div>`}${tension}
+          ${x ? `<div class="tc-infos"><label class="tc-niv"><span>Appris au</span> <i class="jm-touche">Lv.</i><input type="number" min="1" max="99" value="${s_.level}"></label>
+            <span class="tc-puce">${echapper(x.genre)}</span>${F && TC_EL[F[2]] ? `<span class="tc-puce el-${TC_EL[F[2]][1]}">${TC_EL[F[2]][0]}</span>` : ''}
+            ${x.mod ? `<span class="tc-puce mien">${x.mod}</span>` : ''}<button class="tc-vider">Vider la case</button></div>` : ''}</div>
+        <div class="msp-choix"><div class="tc-choix-tete"><span>${aura ? 'Choisir un esprit guerrier ou un totem' : 'Choisir une technique'}</span>
+            <div class="jm-recherche"><span class="jm-touche">X</span><input class="tc-cherche" placeholder="Chercher par nom" value="${echapper(texte)}"></div></div>
+          <div class="tc-genres"><button data-g="" class="${filtreG ? '' : 'sel'}">Tout</button>${genres.map(g => `<button data-g="${echapper(g)}" class="${filtreG === g ? 'sel' : ''}">${echapper(g)}</button>`).join('')}</div>
+          <div class="tc-liste">${L.map(y => barre(y, -1, true).replace('data-i="-1"', `data-choix="${y.id}"`)).join('') || '<div class="tc-vide-txt">Aucune</div>'}</div></div>`;
+      const inp = Fi.querySelector('.tc-niv input'); if (inp) inp.oninput = () => { s_.level = Math.max(1, Math.min(99, +inp.value || 1)); touche = true; };
+      const vd = Fi.querySelector('.tc-vider'); if (vd) vd.onclick = () => { S[sel] = null; changer(); };
+      const ch = Fi.querySelector('.tc-cherche'); ch.oninput = () => { texte = ch.value; const p_ = ch.selectionStart; dessinerFiche(); const n = Fi.querySelector('.tc-cherche'); n.focus(); n.setSelectionRange(p_, p_); };
+      Fi.querySelectorAll('.tc-genres button').forEach(b => b.onclick = () => { filtreG = b.dataset.g; dessinerFiche(); });
+      Fi.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
+        const id = +b.dataset.choix, y = parId.get(id);
+        const i0 = S.findIndex(m => m && m.move === id); if (i0 >= 0 && i0 !== sel) S[i0] = null;      // pas deux fois la même
+        S[sel] = { move: id, level: (S[sel] && S[sel].level) || 1 };
+        if (!estAura(y) && sel < 5) { const nx = S.findIndex((m, k_) => k_ < 6 && k_ > sel && !m); if (nx >= 0) sel = nx; }
+        changer(); });
+    };
+    f.onkeydown = e => { if (e.target.closest('input, select')) return;
+      if ((e.key === 'Delete' || e.key === 'Backspace') && S[sel]) { S[sel] = null; changer(); e.preventDefault(); } };
+    dessinerGauche(); dessinerHaut(); dessinerFiche();
+    joueur3D(corps.querySelector('.msj-vue'), corps.querySelector('.msj-vue-msg'), c.base || c.code, c.cle);
+  };
+  // (23/11, demandes de muku : « copie cette UI », « fais comme les joueurs : je clique sur Forest, ça me propose les autres »)
+  // TECHNIQUE : écran du Tableau des compétences du jeu. À gauche l'APERÇU (la vue 3D de l'éditeur, tes couleurs, en boucle,
+  // sans réglages) ; à droite la plaque du nom, la fiche blanche du jeu où CHAQUE élément se clique (barre = puissance max,
+  // TENSION = PT, Solo, élément, Niv. 1, évolution, et la cosmétique), et entre les deux le détail de ce qui est choisi.
+  const techJeu = () => {
+    f.classList.add('ms-tech-mode'); f.querySelector('.tc-coin span').textContent = 'Tableau des compétences';
+    const corps = f.querySelector('.ms-corps'); corps.classList.add('ms-jeu', 'msj-tech');
+    corps.innerHTML = `<div class="msj-apercu"><div class="msj-apercu-hote"></div><div class="msj-apercu-msg"></div></div>
+      <div class="msj-droite"><div class="msj-plaque"></div><div class="msjt-detail"></div><div class="msj-fiche"></div></div>`;
+    const P = corps.querySelector('.msj-plaque'), Dt = corps.querySelector('.msjt-detail'), Fi = corps.querySelector('.msj-fiche');
+    const GENRE_CAT = { shoot: ['g-tir', 'Tir'], dribble: ['g-dri', 'Dribble'], block: ['g-def', 'Défense'], catch: ['g-gar', 'Arrêt'] };
+    const genre = () => GENRE_CAT[V.category] || MS_GENRE[(c.code || '').slice(0, 3)] || ['', ''];
+    // (23/11, muku : « une meilleure image pour le type ») les ORBES DU JEU (icon_common, comme les barres du Tableau des compétences)
+    const ORBE_CAT = { shoot: 'type_tir', dribble: 'type_dribble', block: 'type_bloc', catch: 'type_arret' };
+    const CAT_PREF = { whs: 'shoot', who: 'dribble', whd: 'block', whk: 'catch' };
+    const orbe = (cat, t) => iconeNommee(ORBE_CAT[cat] || '', t) || `<span class="tc-orbe ${(GENRE_CAT[cat] || [''])[0]}"></span>`;
+    const catDe = () => V.category || CAT_PREF[(c.code || '').slice(0, 3)] || '';
+    const ELS = (champ('element') || { choix: [] }).choix;
+    const NOMS = { power_max: 'Puissance au niveau max', power_min: 'Puissance au niveau 1', tp: 'Coût en PT (tension)', users: 'Joueurs pour la lancer',
+      element: 'Élément', growth: 'Courbe de progression', category: 'Type de technique', specialite: 'Spécialité', couleur_tir: 'Couleur du tir', trainee: 'Traînée du ballon', prix: 'Prix en boutique', banniere: 'Bannière' };
+    const MAXI = { power_max: 1500, power_min: 1000, tp: 150 };
+    // (23/11) couleurs du tir LUES (skill_config m_skillColorInfoList) : 0 montagne (jaune-orange), 1 air (bleu), 2 feu
+    // (orange-rouge), 3 forêt (vert), 4 néant (violet) ; 6 = bleu de la seule Inazuma Break (whs10180), autres effets de tir
+    const COUL_TIR = [['', "Garder celle d'origine"], ['0', 'Montagne'], ['1', 'Air'], ['2', 'Feu'], ['3', 'Forêt'], ['4', 'Néant'], ['6', 'Inazuma Break (bleu)']];
+    // (23/11, muku : « une photo au-dessus de ce que c'est ») IMAGE de chaque couleur : le ballon et son aura dessinés avec
+    // la colonne de la texture du jeu BallAura0010 que cette couleur utilise (r.degrades_tir), du blanc au cœur au plus foncé
+    const IMG_COUL = {};
+    const imgCouleur = idx => {
+      const d = (r.degrades_tir || {})[idx]; if (!d) return '';
+      if (IMG_COUL[idx]) return IMG_COUL[idx];
+      const W = 150, H = 84, cv = document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d');
+      const rgb = (k, a) => `rgba(${d[Math.min(d.length - 1, k)].join(',')},${a})`, bx = 104, by = 44;
+      x.fillStyle = '#0c1830'; x.fillRect(0, 0, W, H);
+      x.globalCompositeOperation = 'lighter';
+      const q = x.createLinearGradient(6, 0, bx, 0);                 // traînée
+      q.addColorStop(0, rgb(31, 0)); q.addColorStop(.45, rgb(27, .55)); q.addColorStop(.85, rgb(14, .95)); q.addColorStop(1, rgb(6, 1));
+      x.fillStyle = q; x.beginPath(); x.moveTo(6, by - 3); x.quadraticCurveTo(60, by - 24, bx, by - 22); x.lineTo(bx, by + 22); x.quadraticCurveTo(60, by + 24, 6, by + 3); x.closePath(); x.fill();
+      const g2 = x.createRadialGradient(bx, by, 6, bx, by, 38);      // aura
+      g2.addColorStop(0, rgb(2, 1)); g2.addColorStop(.4, rgb(12, .95)); g2.addColorStop(.72, rgb(26, .7)); g2.addColorStop(1, rgb(31, 0));
+      x.fillStyle = g2; x.beginPath(); x.arc(bx, by, 38, 0, 7); x.fill();
+      x.globalCompositeOperation = 'source-over';                     // ballon
+      x.fillStyle = '#f4f6f8'; x.beginPath(); x.arc(bx, by, 13, 0, 7); x.fill();
+      x.fillStyle = '#2b3440'; const pent = (cx, cy, rr) => { x.beginPath(); for (let i = 0; i < 5; i++) { const t = -Math.PI / 2 + i * 2 * Math.PI / 5; x.lineTo(cx + rr * Math.cos(t), cy + rr * Math.sin(t)); } x.fill(); };
+      pent(bx, by, 4.6); pent(bx - 9, by - 6, 2.6); pent(bx + 9, by - 6, 2.6); pent(bx - 6, by + 9, 2.6); pent(bx + 6, by + 9, 2.6);
+      return (IMG_COUL[idx] = cv.toDataURL());
+    };
+    const idxCouleur = v => v === '' || v === undefined ? jeu.couleur_tir_jeu : +v;
+    // (23/11, muku : « des spécialités qu'on ne peut pas choisir, comme tir de loin ») SPÉCIALITÉ, LUE dans le jeu :
+    // tir -> Tir lointain (bit 4) / Tir de contre (bit 16) ; défense -> Bloque-tir (bit 16) ; icônes icon_sp_sub01/03/02
+    const SPEC = { long: ['Tir lointain', 'icon_sp_sub01'], contre: ['Tir de contre', 'icon_sp_sub03'], bloque: ['Bloque-tir', 'icon_sp_sub02'] };
+    const specsDe = cat => cat === 'shoot' ? ['aucune', 'long', 'contre'] : cat === 'block' ? ['aucune', 'bloque'] : [];
+    const icSpec = (k, t) => SPEC[k] ? `<img class="msjt-ic-spec" src="/ui_jeu/zone/icon_common/${SPEC[k][1]}.png" alt="" style="width:${t}px;height:${t}px">` : '';
+    const TRAIN = [['', 'Celle du jeu'], ['ega0075', 'Tir spécial'], ['ega0080', 'Tir enchaîné'], ['ega0085', 'Tir lointain']];
+    const TRAIN_EL = [['void', 'Néant (violet)'], ['wind', 'Air'], ['fire', 'Feu'], ['forest', 'Forêt'], ['mountain', 'Montagne']];
+    const ordre = () => ['category'].concat(specsDe(catDe()).length ? ['specialite'] : [], ['power_max', 'tp', 'users', 'element', 'power_min', 'growth', 'couleur_tir'], r.tir ? ['trainee'] : [], ['prix', 'banniere']);
+    let sel = 'power_max';
+    const lib = (L, v) => (L.find(x => String(x[0]) === String(v)) || ['', String(v)])[1];
+    // (23/11, retour de muku : « la bannière ne change pas dans la preview ») bannière refaite (lettres du jeu / simple) et
+    // envoyée à l'aperçu (vue 3D + lecteur du jeu ouvert) à chaque changement du texte, du style, des couleurs ou de l'élément
+    let minBan = null;
+    const banApercu = () => { clearTimeout(minBan); minBan = setTimeout(async () => {
+      if (!E.tech || !E.projet) return;
+      try { await api('/api/banniere_apercu', { code: E.tech.code, projet: E.projet, texte: C.ban_texte || c.nom, style: C.ban_style,
+          couleur: C.ban_c, contour: C.ban_o, element: V.element || jeu.element });
+        E.telopV = Date.now(); } catch (e) { /* aperçu seulement */ } }, 350); };
+    const dessiner = () => {
+      if (sel === 'specialite' && !specsDe(catDe()).length) sel = 'category';
+      const el = MS_EL[V.element] || 'neutre', pmax = V.power_max !== '' ? V.power_max : '—', s_ = k => k === sel ? ' sel' : '', g = genre(), go = GENRE_CAT[jeu.category] || g;
+      P.innerHTML = `<i class="msj-rayures"></i><span class="msj-nom-j">${echapper(c.nom)}</span>${V.element ? elIcone(V.element, 30) : ''}
+        <span class="msj-genre">${echapper(g[1])}</span><span class="msj-pt"><small>PT</small>${V.tp !== '' ? V.tp : '—'}</span>`;
+      Fi.innerHTML = `<div class="msj-fiche-tete"><span class="msjt-type msjt-clic${s_('category')}" data-k="category" title="Changer le type (tir, dribble, défense, arrêt)">${orbe(catDe(), 40)}<span>${echapper(g[1])}</span></span>
+          ${specsDe(catDe()).length ? `<span class="msjt-spec msjt-clic${s_('specialite')}${V.specialite && V.specialite !== 'aucune' ? '' : ' vide'}" data-k="specialite" title="Spécialité">${V.specialite && SPEC[V.specialite] ? icSpec(V.specialite, 34) + '<span>' + echapper(SPEC[V.specialite][0]) + '</span>' : '<span>Spécialité : aucune</span>'}</span>` : ''}<small>Comme en jeu</small></div>
+        <div class="msj-fiche-ligne"><div class="tc-barre el-${el} msjt-clic${s_('power_max')}" data-k="power_max"><span class="msjt-orbe">${orbe(catDe(), 46)}</span><span class="tc-nom">${echapper(c.nom)}</span><span class="tc-pw"><small>${g[1]}</small>${pmax}</span></div>
+          <div class="tc-tension msjt-clic${s_('tp')}" data-k="tp" style="--t:${Math.min(1, (+V.tp || 0) / 150)}"><span>TENSION</span><i></i><b>${V.tp !== '' ? V.tp : '—'}<small>T</small></b></div></div>
+        <div class="msj-fiche-puces"><span class="msj-ia msjt-clic${s_('users')}" data-k="users">${V.users > 1 ? V.users + ' joueurs' : 'Solo'}</span>
+          <span class="tc-puce el-${el} ms2-puce msjt-clic${s_('element')}" data-k="element">${elIcone(V.element, 22)}${echapper(lib(ELS, V.element) || 'Élément')}</span>
+          <span class="tc-niv msjt-clic${s_('power_min')}" data-k="power_min"><span>Niv. 1</span>${V.power_min}</span>
+          <span class="tc-niv msjt-clic${s_('growth')}" data-k="growth"><span>Évol.</span>${V.growth !== '' ? V.growth : '—'}</span>
+          ${jeu.power_max !== undefined ? `<span class="msj-orig"><small>Original</small><span class="tc-barre petit el-${MS_EL[jeu.element] || 'neutre'}"><span class="msjt-orbe">${orbe(jeu.category || catDe(), 32)}</span><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>${go[1]}</small>${jeu.power_max}</span></span></span>` : ''}</div>
+        <div class="msj-fiche-puces msjt-cosm"><span class="msjt-titre-c">Cosmétique</span>
+          <span class="msjt-chip msjt-coul-chip msjt-clic${s_('couleur_tir')}" data-k="couleur_tir">${imgCouleur(idxCouleur(C.couleur_tir)) ? `<img src="${imgCouleur(idxCouleur(C.couleur_tir))}" alt="">` : ''}<span><small>Tir</small>${echapper(lib(COUL_TIR, C.couleur_tir))}</span></span>
+          ${r.tir ? `<span class="msjt-chip msjt-clic${s_('trainee')}" data-k="trainee"><small>Traînée</small>${echapper(lib(TRAIN, C.trainee))}${C.trainee ? ' · ' + echapper(lib(TRAIN_EL, C.trainee_el)) : ''}</span>` : ''}
+          <span class="msjt-chip msjt-clic${s_('prix')}" data-k="prix"><small>Boutique</small>${C.prix === '' ? 'Pas en vente' : C.prix + ' jetons'}</span>
+          <span class="msjt-chip msjt-clic${s_('banniere')}" data-k="banniere"><small>Bannière</small>${echapper(C.ban_texte || (ban0.editeur ? 'de l’éditeur' : ban0.garder ? 'actuelle' : '—'))}</span></div>`;
+      Fi.querySelectorAll('.msjt-clic').forEach(x => x.onclick = () => { sel = x.dataset.k; dessiner(); });
+      detail();
+    };
+    // détail de ce qui est choisi (comme le détail d'une stat des joueurs)
+    const detail = () => {
+      const k = sel, nb = ['power_max', 'power_min', 'tp'].includes(k);
+      let corpsD = '';
+      if (nb) {
+        const v = V[k] === '' ? 0 : +V[k], o = jeu[k], mx = Math.max(MAXI[k], v, o || 0);
+        corpsD = `<div class="msj-corps-d"><div class="msj-col"><small>ORIGINAL</small><b>${o !== undefined ? o : '—'}</b></div>
+          <div class="msj-col"><small>VALEUR</small><input class="msjt-val" type="number" min="${(champ(k) || {}).min ?? 0}" max="${(champ(k) || {}).max ?? 9999}" value="${v}"></div>
+          <div class="msj-regler"><button class="msj-pas" data-d="-1" title="−1 (Maj : −10)">−</button><input type="range" min="0" max="${mx}" value="${v}">
+            <button class="msj-pas" data-d="1" title="+1 (Maj : +10)">+</button><button class="msj-raz" title="Remettre la valeur de l’original">↺</button></div></div>`;
+      } else {
+        const puces = (L, v, cle, ic) => `<div class="msj-puces" data-c="${cle}">${L.map(([x, n]) => `<button data-v="${x}" class="${String(v) === String(x) ? 'sel' : ''}${cle === k && jeu[k] !== undefined && String(jeu[k]) === String(x) ? ' orig' : ''}">${ic ? ic(x) : ''}${echapper(n)}</button>`).join('')}</div>`;
+        if (k === 'users') corpsD = puces([[1, 'Solo'], [2, '2 joueurs'], [3, '3 joueurs'], [4, '4 joueurs']], V.users, 'users');
+        else if (k === 'element') corpsD = puces(ELS, V.element, 'element', x => elIcone(x, 24));
+        else if (k === 'growth') corpsD = puces([0, 1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)]), V.growth, 'growth');
+        else if (k === 'category') corpsD = puces((champ('category') || { choix: [] }).choix, V.category, 'category', x => orbe(x, 34))
+          + '<p class="msj-note msjt-note">Le type décide où la technique est proposée en match (tir, dribble, défense, arrêt). La cinématique reste celle de l’original.</p>';
+        else if (k === 'couleur_tir') corpsD = `<div class="msj-puces msjt-coul" data-c="couleur_tir">${COUL_TIR.map(([x, n]) => { const im = imgCouleur(idxCouleur(x));
+            return `<button data-v="${x}" class="${String(C.couleur_tir) === String(x) ? 'sel' : ''}">${im ? `<img src="${im}" alt="">` : ''}<span>${echapper(n)}</span></button>`; }).join('')}</div>
+          <p class="msj-note msjt-note">L’aura et la traînée du ballon pendant le tir, avec les couleurs du jeu (dégradé BallAura0010).</p>`;
+        else if (k === 'specialite') corpsD = `<div class="msj-puces" data-c="specialite">${specsDe(catDe()).map(x => `<button data-v="${x}" class="${(V.specialite || 'aucune') === x ? 'sel' : ''}${jeu.specialite === x ? ' orig' : ''}">${icSpec(x, 28)}${echapper(SPEC[x] ? SPEC[x][0] : 'Aucune')}</button>`).join('')}</div>
+          <p class="msj-note msjt-note">Comme dans le jeu : un tir lointain se tire de loin (et se propose dans tous les duels), un tir de contre reprend un ballon, un bloque-tir arrête les tirs.</p>`;
+        else if (k === 'trainee') corpsD = puces(TRAIN, C.trainee, 'trainee') + (C.trainee ? '<div class="msj-titre">Couleur de la traînée</div>' + puces(TRAIN_EL, C.trainee_el, 'trainee_el') : '');
+        else if (k === 'prix') corpsD = `<div class="msj-corps-d"><div class="msj-col"><small>JETONS</small><input class="msjt-val" type="number" min="1" value="${C.prix}" placeholder="—"></div>
+          <div class="msj-regler"><button class="msj-pas" data-d="-1">−</button><button class="msj-pas" data-d="1">+</button><button class="msjt-pas-vente">Pas en vente</button></div></div>`;
+        // (23/11, demande de muku) style : LETTRES DES BANNIÈRES DU JEU (découpées dans ses 861 bannières, couleur de l'élément)
+        // ou simple (police Impact, couleurs des lettres et du contour)
+        else if (k === 'banniere') corpsD = `<div class="msj-puces" data-c="ban_style">${[['jeu', 'Lettres du jeu'], ['simple', 'Simple (couleurs)']].map(([x, n]) => `<button data-v="${x}" class="${C.ban_style === x ? 'sel' : ''}">${echapper(n)}</button>`).join('')}</div>
+          <div class="msjt-ban"><label>Texte <input class="msjt-ban-t" value="${echapper(C.ban_texte)}" placeholder="${ban0.editeur ? 'bannière de l’éditeur gardée (écris un texte pour la remplacer)' : ban0.garder ? 'bannière actuelle gardée (écris un texte pour la remplacer)' : 'FRAPPE GALACTIQUE'}"></label>
+          <label>Lettres <input type="color" class="msjt-ban-c" value="${C.ban_c}"></label><label>Contour <input type="color" class="msjt-ban-o" value="${C.ban_o}"></label>
+          <button type="button" class="ms-ban-perso" title="Ouvre l'éditeur de bannières avec cette copie choisie">✎ Personnaliser la bannière</button></div>`;
+      }
+      const raz = !nb && jeu[k] !== undefined ? `<button class="msj-raz msjt-raz" title="Remettre celui de l’original">↺</button>` : '';
+      Dt.innerHTML = `<div class="msj-detail"><div class="msj-tete"><span>${echapper(NOMS[k] || k)}</span>${raz}</div>${corpsD}</div><div class="ms-etat"></div>`;
+      // branchements
+      const regler = v => { const ch = champ(k) || {}; V[k] = Math.max(ch.min ?? 0, Math.min(ch.max ?? 99999, Math.round(v))); dessiner(); };
+      if (nb) {
+        Dt.querySelectorAll('.msj-pas').forEach(b => b.onclick = e => regler((V[k] === '' ? 0 : +V[k]) + (+b.dataset.d) * (e.shiftKey ? 10 : 1)));
+        Dt.querySelector('input[type=range]').oninput = e => regler(+e.target.value);
+        const n = Dt.querySelector('.msjt-val'); n.onchange = () => regler(+n.value || 0);
+        Dt.querySelector('.msj-raz').onclick = () => { if (jeu[k] !== undefined) regler(jeu[k]); };
+      }
+      Dt.querySelectorAll('.msj-puces').forEach(L => L.querySelectorAll('button').forEach(b => b.onclick = () => {
+        const cle = L.dataset.c, v = b.dataset.v;
+        if (cle in C) C[cle] = v; else V[cle] = nombre(cle) ? +v : v;
+        if (cle === 'category' && !specsDe(catDe()).includes(V.specialite)) { V.specialite = 'aucune'; }   // spécialité d'un autre type : retirée
+        if (cle === 'ban_style' || cle === 'element') banApercu();
+        dessiner(); }));
+      const rz = Dt.querySelector('.msjt-raz'); if (rz) rz.onclick = () => { V[k] = jeu[k]; dessiner(); };
+      if (k === 'prix') {
+        const n = Dt.querySelector('.msjt-val'); n.onchange = () => { C.prix = n.value === '' || +n.value < 1 ? '' : Math.round(+n.value); dessiner(); };
+        Dt.querySelectorAll('.msj-pas').forEach(b => b.onclick = e => { C.prix = Math.max(1, (+C.prix || 0) + (+b.dataset.d) * (e.shiftKey ? 10 : 1)); dessiner(); });
+        Dt.querySelector('.msjt-pas-vente').onclick = () => { C.prix = ''; dessiner(); };
+      }
+      if (k === 'banniere') {
+        const t = Dt.querySelector('.msjt-ban-t'); t.oninput = () => { C.ban_texte = t.value; banApercu(); };
+        t.onchange = () => dessiner();
+        Dt.querySelector('.msjt-ban-c').oninput = e => { C.ban_c = e.target.value; banApercu(); };
+        Dt.querySelector('.msjt-ban-o').oninput = e => { C.ban_o = e.target.value; banApercu(); };
+        Dt.querySelector('.ms-ban-perso').onclick = () => { B.preselect = c.code; finApercuStats(f); f.close(); window.changerOnglet('bannieres'); };
+      }
+    };
+    // clavier : ↑ ↓ choisir, ← → changer (Maj : 10)
+    f.onkeydown = e => {
+      if (e.target.closest('input, select, textarea')) return;
+      const ORDRE = ordre(), i = ORDRE.indexOf(sel), pas = e.shiftKey ? 10 : 1;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { sel = ORDRE[(i + (e.key === 'ArrowDown' ? 1 : ORDRE.length - 1)) % ORDRE.length]; dessiner(); }
+      else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && ['power_max', 'power_min', 'tp'].includes(sel)) {
+        const ch = champ(sel) || {}; V[sel] = Math.max(ch.min ?? 0, Math.min(ch.max ?? 99999, (V[sel] === '' ? 0 : +V[sel]) + (e.key === 'ArrowRight' ? pas : -pas))); dessiner(); }
+      else return;
+      e.preventDefault(); };
+    dessiner();
+    apercuTechnique(corps.querySelector('.msj-apercu-hote'), corps.querySelector('.msj-apercu-msg'), c, f);
+  };
+  // (23/11, demande de muku) ESPRIT GUERRIER / TOTEM : même écran que les techniques ; à gauche l'invocation en match
+  // (lecteur du jeu), à droite la plaque, le détail de ce qui est choisi et la fiche (barre d'esprit, élément, Niv. 1)
+  const espJeu = () => {
+    f.classList.add('ms-tech-mode'); f.querySelector('.tc-coin span').textContent = 'Tableau des compétences';
+    const corps = f.querySelector('.ms-corps'); corps.classList.add('ms-jeu', 'msj-tech');
+    corps.innerHTML = `<div class="msj-apercu"><div class="msj-apercu-hote"></div><div class="msj-apercu-msg"></div></div>
+      <div class="msj-droite"><div class="msj-plaque"></div><div class="msjt-detail"></div><div class="msj-fiche"></div></div>`;
+    const P = corps.querySelector('.msj-plaque'), Dt = corps.querySelector('.msjt-detail'), Fi = corps.querySelector('.msj-fiche');
+    const ELS = (champ('element') || { choix: [] }).choix, totem = c.genre === 'totem';
+    // (23/11, demande de muku : « les armures maintenant ») ARMURE : même fiche (sa ligne AURA_CMD_INFO wao…/was… : puissance,
+    // élément, bonus, effet unique) ; « Apparition » = sa MISE EN ARMURE (scènes ev81) ; bandeau fsa_base + icône Armed (area06) ;
+    // ses techniques = celles de l'esprit (CharacterReforged keep_spirit) ; aperçu « armure_<ma copie d'esprit> »
+    const armure = r.genre === 'armure', codeApercu = armure ? 'armure_' + r.esprit : c.code;
+    const NOMS = { power_max: 'Puissance au niveau max', power_min: 'Puissance au niveau 1', element: 'Élément', invocation: armure ? 'Mise en armure (en match)' : 'Apparition (invocation en match)',
+      bonus: armure ? 'Bonus (pour le joueur en armure)' : 'Bonus (pour le joueur qui l’invoque)', unique: 'Effet unique', banniere: 'Bannière' };
+    // (24/11, muku : « ajoute un bouton comme les techniques pour faire sa bannière direct ici ») case Bannière : l'image actuelle
+    // (son nom, automatique, ou celle de l'éditeur ; armure : ARMED) et « Personnaliser la bannière » -> éditeur, cette copie choisie
+    const BAN = r.banniere || null;
+    // (23/11, muku : « un autre truc qu'on ne peut pas modifier… tout sauf compatible ») BONUS et EFFET UNIQUE de l'esprit
+    // (aura_skill_config AURA_CMD_EFFECT / AURA_CMD_UNIQUE_EFFECT, moteur/effets_esprits.py) : choisis parmi ceux que le jeu et
+    // les mods utilisent, écrits tels quels (VRFW effects / unique_effects). null = ceux de l'original.
+    const EO = r.effets_origine || { bonus: [], uniques: [] }, CAT = r.catalogue_effets || { bonus: [], uniques: [] };
+    const nomEffet = l => ((CAT.bonus.concat(CAT.uniques)).find(x => x.ligne[0] === l[0]) || (EO.bonus.concat(EO.uniques)).find(x => x.ligne[0] === l[0]) || {}).nom || 'effet';
+    const EF = { bonus: r.effets && r.effets.bonus ? r.effets.bonus.map(l => l.slice()) : null, uniques: r.effets && r.effets.uniques ? r.effets.uniques.map(l => l.slice()) : null };
+    let efChange = false;
+    const efListe = k => EF[k] || EO[k].map(x => x.ligne.slice());
+    // (23/11, muku : « après un certain nombre de bonus, l'effet unique disparaît ») case courte : 2 noms puis « +n » (la liste
+    // complète est dans la bulle et dans le panneau) ; avant, la case grandissait et poussait « Effet unique » hors de la fenêtre
+    const efCourt = L => L.length ? L.slice(0, 2).map(nomEffet).join(' · ') + (L.length > 2 ? ' +' + (L.length - 2) : '') : 'aucun';
+    // (23/11, demande de muku : « changer l'animation d'apparition », « c'est selon l'esprit guerrier ») chaque scène
+    // d'invocation contient les gestes de plusieurs esprits : on choisit l'esprit (et sa scène) dont ta copie prend les gestes
+    const INV = r.invocations || [], INV0 = r.invocation_origine || null;
+    let invChoix = r.invocation && r.invocation.choisie ? { scene: r.invocation.scene, esprit: r.invocation.esprit } : null, invChange = false;
+    const ORDRE = ['power_max', 'element', 'power_min'].concat(INV.length ? ['invocation'] : []).concat(['bonus', 'unique'], BAN ? ['banniere'] : []);
+    const libInv = x => x ? ((INV.find(y => y.scene === x.scene && y.esprit === x.esprit) || {}).nom || x.esprit) : (totem ? 'Celle de l’original' : 'Selon l’élément');
+    let sel = 'power_max';
+    const lib = (L, v) => (L.find(x => String(x[0]) === String(v)) || ['', String(v)])[1];
+    const PORTRAIT_V = Date.now();        // portrait relu à chaque ouverture (il change quand la copie est refaite)
+    const dessiner = () => {
+      const pmax = V.power_max !== '' ? V.power_max : '—', s_ = k => k === sel ? ' sel' : '', el = MS_EL[V.element] || 'neutre';
+      P.innerHTML = `<i class="msj-rayures"></i><span class="msj-nom-j">${echapper(c.nom)}</span>${V.element ? elIcone(V.element, 30) : ''}
+        <span class="msj-genre">${echapper(motEsprit)}</span>`;
+      // (23/11, muku : « c'est ça », capture de la carte Keshin du Tableau des compétences) CARTE DU JEU (team00_30) :
+      // bandeau de l'élément fs_base01-05 (totems : soul_base) avec l'icône du genre (icon_sp_area05 Keshin, 08 totem,
+      // Lua ability_learning_report_menu : 100 + n -> area05 + n), le nom et le portrait (aura_fs / aura_soul) à droite ;
+      // « Technique de Keshin » ; sa barre fsp_base (élément) avec sa puissance et ATT / DÉF (gtxt_cmd_at01 / df01) ; son type
+      const T = r.technique || {}, gT = MS_GENRE[(T.code || '').slice(0, 3)] || ['', ''];
+      const nEl = e => ({ wind: '01', forest: '02', fire: '03', mountain: '04', void: '05' })[e] || '05';
+      const fond = (e, tot) => `/ui_jeu/zone/team00_30/${tot ? 'soul' : armure ? 'fsa' : 'fs'}_base${nEl(e)}.png`;
+      const bandeau = (nom, e, cls, k, port) => `<div class="msjk-bandeau${cls}"${k ? ` data-k="${k}"` : ''} style="background-image:url('${fond(e, totem)}')">
+          <img class="msjk-ic" src="/ui_jeu/zone/icon_common/icon_sp_area${totem ? '08' : armure ? '06' : '05'}.png" alt=""><span class="msjk-nom">${echapper(nom)}</span>
+          ${port ? `<img class="msjk-portrait" src="/api/icone_esprit?code=${encodeURIComponent(port)}&v=${PORTRAIT_V}" alt="" onerror="this.remove()">` : ''}</div>`;
+      const defense = ['g-def', 'g-gar'].includes(gT[0]);
+      Fi.innerHTML = `<div class="msjk-carte">${bandeau(c.nom, V.element, ' msjt-clic' + s_('element'), 'element', armure ? r.esprit : c.code)}
+        ${armure ? `<div class="msjk-sous"><span class="msjk-titre">Techniques : celles de l’esprit</span><small>Comme en jeu</small></div>
+        <div class="msjk-tech msjt-clic${s_('power_max')}" data-k="power_max" style="background-image:url('/ui_jeu/zone/team00_30/fsp_base${nEl(V.element)}.png')"><span class="msjk-tnom">${echapper(motEsprit)}</span>
+          <span class="msjk-pw"><img src="/ui_jeu/zone/team00_30/gtxt_cmd_at01.png" alt="">${pmax}</span></div>` : `<div class="msjk-sous"><span class="msjk-titre">Technique ${totem ? 'du totem' : 'de Keshin'}</span><small>Comme en jeu</small></div>
+        <div class="msjk-tech msjt-clic${s_('power_max')}" data-k="power_max" style="background-image:url('/ui_jeu/zone/team00_30/fsp_base${nEl(V.element)}.png')">
+          ${{ 'g-tir': '01', 'g-dri': '02', 'g-def': '03', 'g-gar': '04' }[gT[0]] ? `<img class="msjk-type" src="/ui_jeu/zone/icon_common/icon_sp_area${{ 'g-tir': '01', 'g-dri': '02', 'g-def': '03', 'g-gar': '04' }[gT[0]]}.png" alt="">` : ''}<span class="msjk-tnom">${echapper(T.nom || motEsprit)}</span>
+          <span class="msjk-pw"><img src="/ui_jeu/zone/team00_30/gtxt_cmd_${defense ? 'df' : 'at'}01.png" alt="">${pmax}</span></div>`}
+        <div class="msj-fiche-puces"><div class="msjk-ligne1">${gT[1] ? `<span class="msjk-genre ${gT[0]}">${echapper(gT[1])}</span>` : ''}
+          <span class="tc-puce el-${el} ms2-puce msjt-clic${s_('element')}" data-k="element">${elIcone(V.element, 22)}${echapper(lib(ELS, V.element) || 'Élément')}</span>
+          <span class="tc-niv msjt-clic${s_('power_min')}" data-k="power_min"><span>Niv. 1</span>${V.power_min}</span>
+          ${INV.length ? `<span class="msjt-chip msjt-clic${s_('invocation')}" data-k="invocation" title="${echapper(libInv(invChoix))}"><small>${armure ? 'Mise en armure' : 'Apparition'}</small>${echapper(libInv(invChoix))}</span>` : ''}
+          <span class="msjt-chip msjk-ef msjt-clic${s_('bonus')}" data-k="bonus" title="${echapper(efListe('bonus').map(nomEffet).join(' · '))}"><small>Bonus${EF.bonus ? ' ✎' : ''}</small>${echapper(efCourt(efListe('bonus')))}</span>
+          <span class="msjt-chip msjk-ef msjt-clic${s_('unique')}" data-k="unique" title="${echapper(efListe('uniques').map(nomEffet).join(' · '))}"><small>Effet unique${EF.uniques ? ' ✎' : ''}</small>${echapper(efCourt(efListe('uniques')))}</span>
+          ${BAN ? `<span class="msjt-chip msjt-clic${s_('banniere')}" data-k="banniere"><small>Bannière</small>${echapper(BAN.editeur ? 'de l’éditeur' : armure ? 'celle du jeu' : 'automatique')}</span>` : ''}</div>
+          ${jeu.power_max !== undefined ? `<span class="msj-orig"><small>Original</small>${bandeau((armure ? r.nom_origine || nomBase : nomBase) + ' · ' + jeu.power_max, jeu.element, ' petit', '', armure ? r.esprit_origine : c.base)}</span>` : ''}</div></div>`;
+      Fi.querySelectorAll('.msjt-clic').forEach(x => x.onclick = () => { sel = x.dataset.k; dessiner(); });
+      detail();
+    };
+    const detail = () => {
+      const k = sel, nb = k !== 'element' && k !== 'invocation' && k !== 'bonus' && k !== 'unique' && k !== 'banniere';
+      let corpsD;
+      if (k === 'banniere') {
+        corpsD = `<div class="msjk-ban"><img src="/api/banniere_esprit_png?id=${encodeURIComponent(BAN.id)}&base=${encodeURIComponent(BAN.base || '')}&v=${Date.now()}" alt="" onerror="this.remove()"></div>
+          <p class="msj-note msjt-note">${armure ? 'Bannière « ARMED » de la mise en armure : dans le jeu, la même pour toutes les armures. La tienne remplace celle du jeu pour cette armure seulement.'
+            : 'Montrée à l’invocation en match : faite automatiquement avec son nom (lettres du jeu), ou la tienne faite dans l’éditeur de bannières.'}</p>
+          <div class="msjt-ban"><button type="button" class="ms-ban-perso" title="Ouvre l'éditeur de bannières avec cette copie choisie">✎ Personnaliser la bannière</button></div>`;
+      } else if (k === 'bonus' || k === 'unique') {
+        const cle = k === 'bonus' ? 'bonus' : 'uniques', L = efListe(cle), max = k === 'bonus' ? 6 : 3;
+        const choix = k === 'bonus' ? CAT.bonus : CAT.uniques.filter(x => x.texte || L.some(l => l[0] === x.ligne[0]));
+        corpsD = `<div class="msjk-ef-liste">${L.map((l, i) => `<span class="msjk-ef-pastille">${echapper(nomEffet(l))}<button data-retirer="${i}" title="Retirer">✕</button></span>`).join('') || '<i>aucun</i>'}</div>
+          ${L.length < max ? `<div class="msjk-ef-ajout"><select class="msjk-ef-choix"><option value="">+ Ajouter ${k === 'bonus' ? 'un bonus' : 'un effet unique'}…</option>
+            ${choix.map((x, i) => `<option value="${i}">${echapper((x.type ? x.type + ' · ' : '') + x.nom)}${x.emplois > 1 ? ' (' + x.emplois + ' esprits)' : ''}</option>`).join('')}</select></div>` : `<p class="msj-note msjt-note">${max} au plus (comme dans le jeu).</p>`}
+          <p class="msj-note msjt-note">${k === 'bonus' ? (armure ? 'Bonus que reçoit le joueur en armure. Choisis parmi ceux que le jeu utilise (écrits exactement comme le jeu).' : 'Bonus que reçoit le joueur qui invoque l’esprit. Choisis parmi ceux que le jeu utilise (écrits exactement comme le jeu).')
+            : 'Effet en plus, comme une compétence passive. Choisis parmi ceux du jeu et des mods activés.'} Original : ${echapper(EO[cle].map(x => x.nom).join(' · ') || 'aucun')}.</p>`;
+      } else if (k === 'invocation') {
+        const EL_NOM = Object.fromEntries(ELS);
+        const bouton = (x, n, ic, sl) => `<button data-inv="${x ? x.scene + '|' + x.esprit : ''}" class="${sl ? 'sel' : ''}${x && x.os_ok === false ? ' msjt-os' : ''}"${x && x.os_ok === false ? ' title="Pas tous ses os chez ta copie : regarde l’aperçu"' : ''}>${ic}${echapper(n)}</button>`;
+        let h = '<div class="msj-puces msjt-inv">' + bouton(null, totem ? 'Celle de l’original' : 'Selon l’élément (automatique)', '', !invChoix) + '</div>';
+        const parScene = {};
+        for (const x of INV) (parScene[x.scene] = parScene[x.scene] || []).push(x);
+        for (const [sc, L] of Object.entries(parScene)) {
+          const el = L[0].element;
+          h += `<div class="msj-titre">${el ? elIcone(el, 18) + ' ' + echapper(EL_NOM[el] || el) : sc.startsWith('ev83') ? 'Invocation des totems' : 'Scène de Pégase'} <small>(${sc})</small></div><div class="msj-puces msjt-inv">`
+            + L.map(x => bouton(x, x.nom + (INV0 && x.esprit === INV0.esprit && x.scene === INV0.scene ? ' (original)' : ''), '',
+                invChoix && invChoix.scene === x.scene && invChoix.esprit === x.esprit)).join('') + '</div>';
+        }
+        corpsD = h + '<p class="msj-note msjt-note">Ta copie prend les gestes de l’esprit choisi, dans la scène de son élément. Tous sont proposés : ceux en pointillés n’ont pas tous leurs os chez ta copie (des pièces peuvent rester figées), regarde l’aperçu à gauche avant de choisir. « Enregistrer » garde ton choix.</p>';
+      } else if (nb) {
+        const v = V[k] === '' ? 0 : +V[k], o = jeu[k], mx = Math.max(300, v, o || 0);
+        corpsD = `<div class="msj-corps-d"><div class="msj-col"><small>ORIGINAL</small><b>${o !== undefined ? o : '—'}</b></div>
+          <div class="msj-col"><small>VALEUR</small><input class="msjt-val" type="number" min="0" max="${(champ(k) || {}).max ?? 32767}" value="${v}"></div>
+          <div class="msj-regler"><button class="msj-pas" data-d="-1" title="−1 (Maj : −10)">−</button><input type="range" min="0" max="${mx}" value="${v}">
+            <button class="msj-pas" data-d="1" title="+1 (Maj : +10)">+</button><button class="msj-raz" title="Remettre la valeur de l’original">↺</button></div></div>`;
+      } else {
+        corpsD = `<div class="msj-puces" data-c="element">${ELS.map(([x, n]) => `<button data-v="${x}" class="${String(V.element) === String(x) ? 'sel' : ''}${jeu.element === x ? ' orig' : ''}">${elIcone(x, 24)}${echapper(n)}</button>`).join('')}</div>`
+          + (totem ? '' : armure ? '<p class="msj-note msjt-note">La mise en armure suit l’élément (scène de mise en armure de cet élément, enregistrée avec « Enregistrer »).</p>'
+            : '<p class="msj-note msjt-note">L’invocation en match suit l’élément (scène d’invocation de cet élément, enregistrée avec « Enregistrer »).</p>');
+      }
+      const raz = (k === 'bonus' || k === 'unique') ? `<button class="msj-raz msjk-ef-raz" title="Remettre ceux de l’original">↺</button>`
+        : !nb && jeu[k] !== undefined ? `<button class="msj-raz msjt-raz" title="Remettre celui de l’original">↺</button>` : '';
+      Dt.innerHTML = `<div class="msj-detail"><div class="msj-tete"><span>${echapper(NOMS[k] || k)}</span>${raz}</div>${corpsD}</div><div class="ms-etat"></div>`;
+      const regler = v => { const ch = champ(k) || {}; V[k] = Math.max(ch.min ?? 0, Math.min(ch.max ?? 99999, Math.round(v))); dessiner(); };
+      if (nb) {
+        Dt.querySelectorAll('.msj-pas').forEach(b => b.onclick = e => regler((V[k] === '' ? 0 : +V[k]) + (+b.dataset.d) * (e.shiftKey ? 10 : 1)));
+        Dt.querySelector('input[type=range]').oninput = e => regler(+e.target.value);
+        const n = Dt.querySelector('.msjt-val'); n.onchange = () => regler(+n.value || 0);
+        Dt.querySelector('.msj-raz').onclick = () => { if (jeu[k] !== undefined) regler(jeu[k]); };
+      }
+      // aperçu du choix (le lecteur du jeu relancé sur cette apparition) ; (23/11, retour de muku : « quand je change l'élément
+      // et que l'apparence est par élément ça ne recharge pas ») « Selon l'élément » : l'invocation de l'élément CHOISI ici
+      // (« ~@<élément> », serveur : plan_invocation comme à l'enregistrement), pas celle enregistrée
+      const relancerApercu = () => {
+        const hote = f.querySelector('.msj-apercu-hote'), msg = f.querySelector('.msj-apercu-msg');
+        if (hote) { finApercuStats(f); apercuInvocation(hote, msg, codeApercu, f, invChoix || (totem ? null : { element: V.element })); } };
+      Dt.querySelectorAll('.msj-puces button[data-v]').forEach(b => b.onclick = () => {
+        const avant = V.element; V.element = b.dataset.v; dessiner();
+        if (!invChoix && !totem && String(avant) !== String(V.element)) relancerApercu(); });
+      Dt.querySelectorAll('.msj-puces button[data-inv]').forEach(b => b.onclick = () => {
+        const [sc, es] = b.dataset.inv.split('|'); invChoix = sc ? { scene: sc, esprit: es } : null; invChange = true; dessiner();
+        relancerApercu(); });
+      const rz = Dt.querySelector('.msjt-raz'); if (rz) rz.onclick = () => { V[k] = jeu[k]; dessiner(); };
+      if (k === 'banniere') Dt.querySelector('.ms-ban-perso').onclick = () => { B.preselect = BAN.id; finApercuStats(f); f.close(); window.changerOnglet('bannieres'); };
+      if (k === 'bonus' || k === 'unique') {
+        const cle = k === 'bonus' ? 'bonus' : 'uniques';
+        const choix = k === 'bonus' ? CAT.bonus : CAT.uniques.filter(x => x.texte || efListe(cle).some(l => l[0] === x.ligne[0]));
+        Dt.querySelectorAll('[data-retirer]').forEach(b => b.onclick = () => { const L = efListe(cle); L.splice(+b.dataset.retirer, 1); EF[cle] = L; efChange = true; dessiner(); });
+        const se = Dt.querySelector('.msjk-ef-choix'); if (se) se.onchange = () => { const x = choix[+se.value]; if (!x) return; const L = efListe(cle); L.push(x.ligne.slice()); EF[cle] = L; efChange = true; dessiner(); };
+        const zr = Dt.querySelector('.msjk-ef-raz'); if (zr) zr.onclick = () => { EF[cle] = null; efChange = true; dessiner(); };
+      }
+    };
+    f.onkeydown = e => {
+      if (e.target.closest('input, select, textarea')) return;
+      const i = ORDRE.indexOf(sel), pas = e.shiftKey ? 10 : 1;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { sel = ORDRE[(i + (e.key === 'ArrowDown' ? 1 : ORDRE.length - 1)) % ORDRE.length]; dessiner(); }
+      else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && sel !== 'element') {
+        const ch = champ(sel) || {}; V[sel] = Math.max(ch.min ?? 0, Math.min(ch.max ?? 99999, (V[sel] === '' ? 0 : +V[sel]) + (e.key === 'ArrowRight' ? pas : -pas))); dessiner(); }
+      else return;
+      e.preventDefault(); };
+    f.__invocation = () => invChange ? (invChoix || { auto: true }) : undefined;
+    // (23/11) bonus / effet unique : envoyés seulement s'ils ont été touchés ({} = ceux de l'original)
+    f.__effets = () => efChange || r.effets ? Object.fromEntries(Object.entries(EF).filter(([, v]) => v)) : undefined;
+    dessiner();
+    const hote = corps.querySelector('.msj-apercu-hote'), msg = corps.querySelector('.msj-apercu-msg');
+    // (23/11, totems) un totem A une invocation en match : ev83_00010_1 (LU : colonne 12 de wss000020… = crc32 de ce nom ;
+    // gestes de 20 totems, ceux de la copie livrés sous son code) -> joué par le lecteur du jeu, comme les Keshin
+    apercuInvocation(hote, msg, codeApercu, f);
+  };
+  if (joueur && c.cle) { f.classList.add('msp-mode'); f.querySelector('.tc-coin span').textContent = 'Tableau des compétences'; joueurJeu(); } else if (joueur) statsJeu(); else if (r.genre === 'technique') techJeu(); else if (r.genre === 'esprit' || r.genre === 'armure') espJeu(); else { apercu(); panneau(); }
+  f.querySelector('.ms-aide-txt').textContent = joueur && c.cle ? 'Clique une case pour choisir sa technique ; clique une stat pour la changer (− / +, la barre). Suppr : vider la case'
+    : joueur ? 'Clique une statistique, puis change sa valeur (− / +, la barre, ou ← →)'
+    : r.genre === 'technique' || r.genre === 'esprit' || r.genre === 'armure' ? 'Clique un élément de la fiche pour le changer (↑ ↓ choisir, ← → changer)' : 'Partie des valeurs de l’original : seules celles que tu changes sont écrites';
   const envoyer = async stats => {
     const e = f.querySelector('.ms-etat'); e.textContent = 'Écriture…';
     const bs = [f.querySelector('.ms-garder'), f.querySelector('.ms-original')].filter(Boolean);   // (22/11) pas de double clic
     if (bs.some(b => b.disabled)) return;
     bs.forEach(b => { b.disabled = true; });
-    try { const q = await api('/api/stats', { mod: c.mod, code, stats }).finally(() => bs.forEach(b => { b.disabled = false; }));
+    // (24/11) joueur : ses techniques d'abord (si elles ont changé), comme « Enregistrer » de l'ancien Tableau des compétences
+    const coups = f.__coups ? f.__coups() : undefined; let rapCoups = [];
+    if (coups !== undefined) { try { const qc = await api('/api/coups', { cle: c.cle, coups });
+        if (!qc.ok) { bs.forEach(b => { b.disabled = false; }); e.textContent = qc.erreur; return; } rapCoups = qc.rapport || []; }
+      catch (x) { bs.forEach(b => { b.disabled = false; }); e.textContent = x.message; return; } }
+    try { const q = await api('/api/stats', { mod: c.mod, code, stats, cosmetique: cosmetique(), invocation: f.__invocation ? f.__invocation() : undefined, effets: f.__effets ? f.__effets() : undefined }).finally(() => bs.forEach(b => { b.disabled = false; }));
       if (!q.ok) { e.textContent = q.erreur; return; }
-      f.close(); majRapport(q.rapport.join('\n'));
-      $('hub-etat').textContent = 'Stats enregistrées. Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.'; chargerHub();
+      finApercuStats(f); f.close(); majRapport(rapCoups.concat(q.rapport).join('\n'));
+      $('hub-etat').textContent = (C ? 'Stats et cosmétique enregistrées. Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.' : 'Stats enregistrées. Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.'); chargerHub();
     } catch (x) { e.textContent = x.message; } };
   f.querySelector('.ms-original').onclick = () => envoyer({});
   f.querySelector('.ms-garder').onclick = () => {

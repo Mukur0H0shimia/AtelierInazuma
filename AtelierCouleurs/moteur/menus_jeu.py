@@ -33,7 +33,12 @@ FICHIERS = {
 ZONES_NOMMEES = {'icones_communes': {
     'feu': [512, 1036, 50, 50], 'foret': [684, 1048, 50, 50], 'montagne': [746, 1046, 44, 36], 'vent': [892, 1052, 50, 50],
     'tir': [330, 998, 68, 68], 'tir_vert': [254, 998, 68, 68], 'mur': [10, 650, 80, 80], 'dribble': [110, 650, 80, 80],
-    'dribble_vert': [210, 650, 80, 80], 'gant': [926, 970, 68, 68]}}
+    'dribble_vert': [210, 650, 80, 80], 'gant': [926, 970, 68, 68],
+    # (23/11) orbes des types de technique, zones du jeu icon_sp_area01 (tir) / 02 (dribble) / 03 (défense) / 04 (arrêt)
+    'type_tir': [328, 996, 72, 72], 'type_dribble': [252, 996, 72, 72], 'type_bloc': [428, 976, 72, 72], 'type_arret': [924, 968, 72, 72],
+    # (23/11) icônes des statistiques (Tableau des compétences du jeu), MESURÉES dans icon_common (zones opaques, regardées)
+    'st_kick': [888, 274, 70, 52], 'st_control': [882, 358, 68, 52], 'st_technique': [890, 436, 52, 66], 'st_pressure': [888, 612, 72, 48],
+    'st_physical': [898, 694, 50, 52], 'st_intelligence': [904, 524, 42, 56], 'st_agility': [888, 774, 72, 58]}}
 
 
 def _dossier(cache_dir):

@@ -299,6 +299,42 @@ def reparer_assignes(cfg, sortie):
     return faits
 
 
+LUMIERES_EN_JEU = False      # (23/11) copie intermédiaire refusée par VRFW (voir plus haut) : désactivée
+
+
+def objet_intermediaire_lumiere(cfg, sortie, chemin, acteur, copie, k):
+    """(23/11) copie intermédiaire de l'objet d'effet <acteur> avec ses lumières × k, livrée dans assets/<dossier de l'objet>/<nom>/ :
+    objbin (nom remplacé sur place, même longueur), g4pkm (noms + crc32 + index de l'en-tête comme VRFW, animation de la couleur de
+    lumière × k), g4mg / ptlb / g4tx recopiés. Nom : celui de la copie avec son 5e caractère = « 7 » (libre dans le jeu et le mod).
+    -> (chemin de l'objbin pour VRFW « object = … », rapport)"""
+    from . import lumieres_effet as LE
+    rel = chemin.split('/')                             # common/effect/event/ev63/ev63100700/ev63100700.objbin
+    dossier = rel[1:-2]                                 # effect/event/ev63
+    inter = copie[:4] + '7' + copie[5:]
+    for n in range(10):
+        if not os.path.exists(os.path.join(cfg['data_dir'], 'common', *dossier, inter)):
+            break
+        inter = copie[:4] + str((7 + n) % 10) + copie[5:]
+    assert len(inter) == len(acteur)
+    src_c = os.path.join(cfg['data_dir'], 'common', *dossier, acteur)
+    src_x = os.path.join(cfg['data_dir'], 'dx11', *dossier, acteur)
+    dst = os.path.join(sortie, 'assets', *dossier, inter)
+    os.makedirs(dst, exist_ok=True)
+    objbin = os.path.join(src_c, acteur + '.objbin')
+    os_couleur = {x['os'] for x in LE.lumieres_objet(objbin)}
+    if not os_couleur:
+        raise ValueError('aucune lumière ponctuelle dans %s' % acteur)
+    b = open(objbin, 'rb').read()
+    open(os.path.join(dst, inter + '.objbin'), 'wb').write(b.replace(acteur.encode(), inter.encode()))
+    pk = open(os.path.join(src_c, acteur + '.g4pkm'), 'rb').read()
+    pk, rapport = LE.regler_intensite(LE.renommer_paquet(pk, acteur, inter), os_couleur, k)
+    open(os.path.join(dst, inter + '.g4pkm'), 'wb').write(pk)
+    for f, base in ((acteur + '.g4mg', src_c), (acteur + '.ptlb', src_c), (acteur + '.g4tx', src_x)):
+        if os.path.exists(os.path.join(base, f)):
+            shutil.copyfile(os.path.join(base, f), os.path.join(dst, f.replace(acteur, inter)))
+    return '/'.join(dossier + [inter, inter + '.objbin']), rapport
+
+
 def copie_objet(nom_objet, id_neuf):
     """ev60102000 + ev60_89010 -> ev60890100 (même longueur : 4 premiers caractères, 4 chiffres de l'id, 2 derniers)"""
     return nom_objet[:4] + id_neuf[5:9] + nom_objet[-2:]
@@ -310,8 +346,19 @@ def slug(nom):
     return s.strip('_') or 'technique'
 
 
-def banniere(texte, couleur, contour, sortie_png):
-    """bannière simple 1728 x 352, fond transparent (police Impact, contour) avec ffmpeg"""
+def banniere(texte, couleur, contour, sortie_png, element=None, style='jeu'):
+    """bannière 1728 x 352, fond transparent. (23/11, demande de muku) style « jeu » (par défaut) : écrite avec les LETTRES
+    DES BANNIÈRES DU JEU (moteur/lettres_jeu.py, alphabet de l'élément) ; « simple » ou alphabet pas encore construit :
+    police Impact, couleur des lettres et du contour, avec ffmpeg"""
+    if style != 'simple':
+        try:
+            from . import lettres_jeu
+            cache = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'cache')
+            if lettres_jeu.disponible(cache):
+                lettres_jeu.ecrire(texte, element or 'wind', cache, sortie_png)
+                return
+        except Exception as ex:
+            print('lettres du jeu :', ex)
     police = os.path.join(os.path.dirname(sortie_png), '_police.ttf')
     shutil.copy(r'C:\Windows\Fonts\impact.ttf', police)
     t = texte.replace('\\', '').replace("'", '\u2019').replace(':', '\\:')
@@ -408,6 +455,11 @@ def exporter(cfg, demande, infos_technique):
     os.makedirs(sortie, exist_ok=True)
     nom = slug(demande['nom'])
     code, ev0 = demande['code'], infos_technique['cinematique']
+    # (23/11, demande de muku) COSMÉTIQUE (couleur du tir, traînée, prix, bannière) réglée dans « En attente de stats /
+    # cosmétique », plus dans « Créer la technique » : gardée dans le registre et réappliquée quand la technique est refaite
+    cos = cosmetique_pour_export(sortie, nom, demande)
+    demande = dict(demande, couleur_tir=cos['couleur_tir'], prix=cos['prix'], trainee=cos['trainee'],
+                   banniere=_banniere_a_ecrire(cos, demande))
     key, ev = nouveaux_numeros(cfg, code, ev0, sortie, nom)
     rapport = ['technique « %s » : code %s, cinématique %s (copie de %s)' % (demande['nom'], key, ev, ev0)]
 
@@ -437,10 +489,10 @@ def exporter(cfg, demande, infos_technique):
     if demande.get('couleur_tir') is not None:
         lignes.append('color = %d' % int(demande['couleur_tir']))
     # (22/11) stats réglées plus tard (« En attente de stats ») : gardées quand la technique est refaite
+    # (23/11) appelé aussi sans stats : une copie d'un tir lointain reçoit range = "both" (tous les duels)
     _stats_avant = (_deja_dans_le_mod(sortie).get(nom) or {}).get('stats')
-    if _stats_avant:
-        from . import stats as _st
-        lignes += _st.lignes_technique(_stats_avant, _st.jeu_technique(cfg['data_dir'], code))
+    from . import stats as _st
+    lignes += _st.lignes_technique(_stats_avant or {}, _st.jeu_technique(cfg['data_dir'], code))
     for lg in ('fr', 'en', 'es', 'de', 'it', 'pt'):
         lignes += ['  [technique.text.%s]' % lg, '  name = %s' % _q(demande['nom'])]
         if desc:
@@ -478,7 +530,11 @@ def exporter(cfg, demande, infos_technique):
             continue
         if acteur not in objets:
             continue
-        copie = copie_objet(acteur, ev)
+        commun = bool(objets[acteur].get('commun'))
+        # (23/11, muku : « je veux tout modifier ») EFFET COMMUN (ega0001 = traits de vitesse…) : VRFW (winmm.dll, LU) « Or the
+        # object of a pooled effect (ega0001). New stem: write a recoloured copy (egz0001), the original stays » -> copie
+        # « egz<4 chiffres de l'id><reste du nom> » (même longueur), chargée à la place de l'original par la cinématique
+        copie = ('egz' + ev[5:9] + acteur[7:]) if commun else copie_objet(acteur, ev)
         imgs = reglage.get('textures') or {}
         # (22/11, chasse aux bugs : journal VRFW de muku « [[recolor]] 1 (ev62891050): image not used: BallAura0010 (no such
         # texture) ») une texture EMPRUNTÉE à un autre objet (info 'source', ex. BallAura0010 de ev62006200 dans Muraille
@@ -493,17 +549,43 @@ def exporter(cfg, demande, infos_technique):
         mats = reglage.get('materiaux') or {}      # (14/11/2026) couleurs de matériau : {nom ou crc : [r, v, b]}
         # (14/11/2026) teintes des sommets {pièce : [H, C]} et des particules [H, C] : un bloc [[recolor]] par teinte sur la copie
         # (hue + colorize, mode = "set", saturation = valeur = 1 ; vertex_colors = pièces, particles = true)
+        # (23/11) + S = `saturation` de VRFW (multiplicateur, LU par émulation : nie_outils/emu_vrfw.py) : [H, C] ou [H, C, S]
+        def _hcs(t):                               # (23/11) + V = `value` (luminosité, multiplicateur) : [H, C, S, V]
+            t = list(t) + [1.0, 1.0]
+            return (round(float(t[0]), 1), round(float(t[1]), 3), round(float(t[2]), 3), round(float(t[3]), 3))
         groupes = {}
-        for piece, (h, c) in sorted((reglage.get('sommets') or {}).items()):
-            groupes.setdefault((round(float(h), 1), round(float(c), 3)), [[], False])[0].append(piece)
+        for piece, t in sorted((reglage.get('sommets') or {}).items()):
+            groupes.setdefault(_hcs(t), [[], False])[0].append(piece)
         if reglage.get('particules'):
-            h, c = reglage['particules']
-            groupes.setdefault((round(float(h), 1), round(float(c), 3)), [[], False])[1] = True
-        if not imgs and not lueurs and not mats and not groupes:
+            groupes.setdefault(_hcs(reglage['particules']), [[], False])[1] = True
+        lumiere = reglage.get('lumiere')
+        lumiere = None if lumiere is None or commun or abs(float(lumiere) - 1.0) < 1e-6 else float(lumiere)
+        if not imgs and not lueurs and not mats and not groupes and lumiere is None:
             continue
-        e += ['[[recolor]]', 'object = %s' % _q(acteur), 'copy = %s' % _q(copie)]
-        def _teinte(h, c, pieces, ptl):
-            t = ['textures = "none"', 'materials = "none"', 'hue = %.1f' % h, 'mode = "set"', 'saturation = 1.0', 'value = 1.0',
+        source = acteur
+        # (23/11, ESSAYÉ EN JEU par muku, journal VRFW : « [[recolor]] 1 (ev63891000): data/common/effect/event/ev63/ev63791000/
+        # ev63791000.objbin: no files (skipped) » puis « effect object … not found: that effect does not show ») VRFW ne prend
+        # comme SOURCE d'un [[recolor]] que les fichiers DU JEU : la copie intermédiaire est refusée et la copie n'existe pas.
+        # -> intensité des lumières PAS écrite (aperçu seulement) tant qu'une autre voie n'est pas trouvée
+        if lumiere is not None and not LUMIERES_EN_JEU:
+            rapport.append('objet %s : intensité des lumières (× %.2f) visible dans l\'Atelier seulement : VRFW n\'accepte pas de '
+                           'copie fournie par un mod (essai en jeu du 23/11) -> lumières comme le jeu' % (acteur, lumiere))
+            lumiere = None
+            if not imgs and not lueurs and not mats and not groupes:
+                continue
+        if lumiere is not None:
+            # (23/11, « intensité seulement ») LUMIÈRES DE L'EFFET : VRFW n'a pas de réglage -> l'Atelier livre une COPIE
+            # INTERMÉDIAIRE de l'objet (renommée comme VRFW le fait, animation de la couleur de lumière × k, voir
+            # moteur/lumieres_effet.py) et VRFW fait sa copie recolorée À PARTIR D'ELLE (object = son objbin)
+            try:
+                source, r_l = objet_intermediaire_lumiere(cfg, sortie, objets[acteur]['chemin'], acteur, copie, lumiere)
+                rapport.append('objet %s : lumières × %.2f (%s) via la copie intermédiaire %s' % (acteur, lumiere, '; '.join(r_l), source))
+            except Exception as ex:
+                source = acteur
+                rapport.append('objet %s : intensité des lumières NON appliquée (%s)' % (acteur, ex))
+        e += ['[[recolor]]', 'object = %s' % _q(source), 'copy = %s' % _q(copie)]
+        def _teinte(h, c, s, v, pieces, ptl):
+            t = ['textures = "none"', 'materials = "none"', 'hue = %.1f' % h, 'mode = "set"', 'saturation = %.3f' % s, 'value = %.3f' % v,
                  'colorize = %.3f' % c]
             if pieces:
                 t.append('vertex_colors = [%s]' % ', '.join(_q(x) for x in pieces))
@@ -513,8 +595,8 @@ def exporter(cfg, demande, infos_technique):
         g_liste = sorted(groupes.items())
         if not imgs and not lueurs:                 # pas de textures : le 1er bloc (la copie) porte la 1re teinte, ou rien
             if g_liste:
-                (h, c), (pcs, ptl) = g_liste.pop(0)
-                e += _teinte(h, c, pcs, ptl)
+                (h, c, s_, v_), (pcs, ptl) = g_liste.pop(0)
+                e += _teinte(h, c, s_, v_, pcs, ptl)
             else:
                 e += ['textures = "none"', 'materials = "none"']
         if imgs:
@@ -536,10 +618,28 @@ def exporter(cfg, demande, infos_technique):
                   'hue = %.1f' % float(lueurs['hue']), 'mode = "set"', 'saturation = %.2f' % float(lueurs.get('saturation', 1.2)),
                   'value = %.2f' % float(lueurs.get('value', 1.0)), 'mask_hue = [70, 330]' if lueurs.get('garder_or') else 'mask_hue = [0, 360]',
                   'vertex_colors = "all"', 'particles = true', '']
-        for (h, c), (pcs, ptl) in g_liste:          # teintes suivantes : sur la copie, APRÈS les lueurs (sinon écrasées)
-            e += ['[[recolor]]', 'object = %s' % _q(copie)] + _teinte(h, c, pcs, ptl) + ['']
-        e += ['[[event_command]]', 'event = %s' % _q(ev), 'command = "CMD_799A1EBA"', 'args = [%s]' % _q(acteur),
-              'set = [%s, %s]' % (_q(acteur), _q(objets[acteur]['chemin'].replace('/' + acteur + '/', '/' + copie + '/').replace(acteur + '.objbin', copie + '.objbin'))), '']
+        for (h, c, s_, v_), (pcs, ptl) in g_liste:  # teintes suivantes : sur la copie, APRÈS les lueurs (sinon écrasées)
+            e += ['[[recolor]]', 'object = %s' % _q(copie)] + _teinte(h, c, s_, v_, pcs, ptl) + ['']
+        if commun:
+            # l'effet commun est chargé, créé et joué PAR SON NOM (LU dans les 3 400 scènes qui l'utilisent : 0x96CCCA47 [nom],
+            # 0x27B4468E [nom, nom], 0x36E5B708 [nom, 1, 0, 0, 0]) : chaque commande qui le cite prend le nom de la copie
+            # (VRFW [[event_command]] : « New values of the first arguments », sur place)
+            from . import techniques as _tq
+            vus = set()
+            for liste, suf in (('eff', '_eff'), ('evt', '')):
+                for c_, a_ in _tq._commandes(os.path.join(cfg['data_dir'], 'common', 'event_cfg', liste, ev0 + suf + '.cfg.bin')):
+                    n_ = 0
+                    while n_ < len(a_) and a_[n_] == acteur:
+                        n_ += 1
+                    if n_ and (liste, c_, n_) not in vus:
+                        vus.add((liste, c_, n_))
+                        e += ['[[event_command]]', 'event = %s' % _q(ev), 'list = %s' % _q(liste), 'command = "CMD_%08X"' % c_,
+                              'args = [%s]' % _q(acteur), 'set = [%s]' % ', '.join([_q(copie)] * n_), '']
+            if not vus:
+                rapport.append('effet commun %s : aucune commande ne le cite dans %s -> copie non chargée' % (acteur, ev0))
+        else:
+            e += ['[[event_command]]', 'event = %s' % _q(ev), 'command = "CMD_799A1EBA"', 'args = [%s]' % _q(acteur),
+                  'set = [%s, %s]' % (_q(acteur), _q(objets[acteur]['chemin'].replace('/' + acteur + '/', '/' + copie + '/').replace(acteur + '.objbin', copie + '.objbin'))), '']
         rapport.append('objet %s -> %s : %d texture(s) remplacée(s)%s%s' % (acteur, copie, len(imgs), ', lueurs recolorées' if lueurs else '',
                                                                           ', %d couleur(s) de matériau' % len(mats) if mats else '')
                        + (', %d teinte(s) de sommets / particules' % len(groupes) if groupes else ''))
@@ -579,21 +679,18 @@ def exporter(cfg, demande, infos_technique):
         if b.get('image'):                      # bannière faite dans l'éditeur de bannières
             ecrire_png_banniere(b['image'], png)
         else:
-            banniere(b['texte'], b.get('couleur', '#f5c842'), b.get('contour', '#0d1a4a'), png)
+            banniere(b['texte'], b.get('couleur', '#f5c842'), b.get('contour', '#0d1a4a'), png,
+                     element=(_stats_avant or {}).get('element') or infos_technique.get('element'), style=b.get('style', 'jeu'))
         var_ = ecrire_telops(cfg, sortie, key, infos_technique['telop'])
         rapport.append('bannière ' + ('de l\'éditeur' if b.get('image') else '« %s »' % b['texte'])
                        + (' (aussi sous ses variantes %s)' % ', '.join(var_) if var_ else ''))
 
     # --- boutique d'Inazuma Fantasy
-    if demande.get('prix'):
-        _ecrire(os.path.join(sortie, 'addons', 'InazumaFantasy', 'content', 'shops', nom + '.toml'), '\n'.join([
-            'schema = "VRFW.shop/2"', '', '[[edit]]', 'target = "InazumaFantasy.technique_shop"', '',
-            '  [[edit.entry]]', '  technique = %s' % _q(nom), '  price = %d' % int(demande['prix']), '  currency = "tk_bb000001"', '']))
-        rapport.append('boutique : %d jetons' % int(demande['prix']))
+    rapport += _ecrire_boutique(sortie, nom, demande.get('prix'))
 
     deja = _deja_dans_le_mod(sortie)
     deja[nom] = dict({'key': key, 'id': ev, 'base': code, 'nom': demande['nom'], 'date': datetime.datetime.now().isoformat(timespec='seconds')},
-                     **({'stats': _stats_avant} if _stats_avant is not None else {}))
+                     **({'stats': _stats_avant} if _stats_avant is not None else {}), cosmetique=cos)
     json.dump(deja, open(os.path.join(sortie, 'outil_techniques.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     # (16/11/2026) PAR DÉFAUT : cinématique livrée en fichiers (scene_en_fichiers ; VÉRIFIÉ EN JEU le 16/11 par muku :
     # Feinte angélique (couleurs), l'adversaire garde son visage). Si la scène ne s'y prête pas, la copie automatique de
@@ -655,8 +752,167 @@ def enregistrer_banniere(cfg, nom, image, telop_origine):
     key = deja[nom]['key']
     ecrire_png_banniere(image, os.path.join(sortie, 'content', 'telops', 'any', key + '.png'))
     ecrire_telops(cfg, sortie, key, telop_origine)      # (22/11) + variantes par lanceur, images refaites
+    cos = cosmetique_actuelle(sortie, nom)               # (23/11) bannière de l'éditeur : gardée telle quelle ensuite
+    cos['banniere'] = {'editeur': True}
+    deja[nom]['cosmetique'] = cos
+    json.dump(deja, open(os.path.join(sortie, 'outil_techniques.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     return {'ok': True, 'dossier': sortie, 'rapport': ['bannière de %s (%s) remplacée' % (deja[nom]['nom'], key),
                                                        'pas encore dans le jeu : « Installer dans le jeu » (onglet Techniques)']}
+
+
+# ------------------------------------------------------------------ (23/11) COSMÉTIQUE d'une technique créée
+# couleur_tir : None (celle d'origine) ou 0-6 ; prix : None (pas en vente) ou jetons ; trainee : None ou {famille, element} ;
+# banniere : None (aucune), {texte, couleur, contour, auto} (auto = suit le nom), {editeur: True} (faite dans l'éditeur de
+# bannières) ou {garder: True} (créée avant : texte inconnu, l'image reste).
+COSMETIQUE_DEFAUT = {'couleur_tir': None, 'prix': 18, 'trainee': None, 'banniere': None}
+
+
+def _fichier_boutique(sortie, nom):
+    return os.path.join(sortie, 'addons', 'InazumaFantasy', 'content', 'shops', nom + '.toml')
+
+
+def _ecrire_boutique(sortie, nom, prix):
+    f = _fichier_boutique(sortie, nom)
+    if prix:
+        _ecrire(f, '\n'.join([
+            'schema = "VRFW.shop/2"', '', '[[edit]]', 'target = "InazumaFantasy.technique_shop"', '',
+            '  [[edit.entry]]', '  technique = %s' % _q(nom), '  price = %d' % int(prix), '  currency = "tk_bb000001"', '']))
+        return ['boutique : %d jetons' % int(prix)]
+    if os.path.exists(f):
+        os.remove(f)
+        return ['boutique : plus en vente']
+    return []
+
+
+def cosmetique_actuelle(sortie, nom):
+    """réglages cosmétiques d'une technique déjà créée : ceux du registre, sinon LUS dans ses fichiers (créations d'avant)"""
+    e = _deja_dans_le_mod(sortie).get(nom) or {}
+    if isinstance(e.get('cosmetique'), dict):
+        return dict(COSMETIQUE_DEFAUT, **e['cosmetique'])
+    c = dict(COSMETIQUE_DEFAUT, prix=None)
+    try:
+        t = open(os.path.join(sortie, 'content', 'techniques', nom + '.toml'), encoding='utf-8').read()
+        m = re.search(r'(?m)^color = (\d+)$', t)
+        c['couleur_tir'] = int(m.group(1)) if m else None
+    except OSError:
+        pass
+    try:
+        m = re.search(r'(?m)^\s*price = (\d+)', open(_fichier_boutique(sortie, nom), encoding='utf-8').read())
+        c['prix'] = int(m.group(1)) if m else None
+    except OSError:
+        pass
+    try:
+        t = open(os.path.join(sortie, 'content', 'effects', nom + '.toml'), encoding='utf-8').read()
+        m = re.search(r'\[\[shot_aura\]\]\n(?:[^\n]+\n)*?aura = "(\w+)"\ncolor = "(\w+)"', t)
+        if m:
+            c['trainee'] = {'famille': m.group(1), 'element': m.group(2)}
+    except OSError:
+        pass
+    if e.get('key') and os.path.exists(os.path.join(sortie, 'content', 'telops', 'any', e['key'] + '.png')):
+        c['banniere'] = {'garder': True}
+    return c
+
+
+def cosmetique_pour_export(sortie, nom, demande):
+    """technique refaite : sa cosmétique gardée ; nouvelle : valeurs par défaut (en vente à 18 jetons, bannière = son nom)"""
+    if nom in _deja_dans_le_mod(sortie):
+        cos = cosmetique_actuelle(sortie, nom)
+    else:
+        cos = dict(COSMETIQUE_DEFAUT, banniere={'texte': '', 'couleur': '#f5c842', 'contour': '#0d1a4a', 'auto': True, 'style': 'jeu'})
+    if (demande.get('banniere') or {}).get('image'):           # bannière de l'éditeur liée au projet
+        cos['banniere'] = {'editeur': True}
+    b = cos.get('banniere') or {}
+    if b.get('auto'):
+        n_ = str(demande.get('nom') or '')
+        cos['banniere'] = dict(b, texte=n_ if b.get('style', 'jeu') == 'jeu' else n_.upper())
+    return cos
+
+
+def _banniere_a_ecrire(cos, demande):
+    img = (demande.get('banniere') or {}).get('image')
+    if img:
+        return {'image': img}
+    b = cos.get('banniere') or {}
+    return {'texte': b['texte'], 'couleur': b.get('couleur', '#f5c842'), 'contour': b.get('contour', '#0d1a4a'),
+            'style': b.get('style', 'jeu')} if b.get('texte') else {}
+
+
+def nettoyer_cosmetique(brut, avant):
+    """valeurs reçues de la page -> valeurs sûres ; bannière : texte vide = garder l'actuelle"""
+    brut = brut or {}
+    c = dict(avant)
+    v = brut.get('couleur_tir')
+    c['couleur_tir'] = int(v) if str(v) in ('0', '1', '2', '3', '4', '6') else None
+    try:
+        c['prix'] = max(1, min(99999, int(brut['prix']))) if brut.get('prix') not in (None, '', 0, '0') else None
+    except (TypeError, ValueError):
+        c['prix'] = None
+    t = brut.get('trainee') or {}
+    c['trainee'] = ({'famille': t['famille'], 'element': t.get('element') if t.get('element') in ('void', 'wind', 'fire', 'forest', 'mountain') else 'void'}
+                    if t.get('famille') in ('ega0075', 'ega0080', 'ega0085') else None)
+    b = brut.get('banniere') or {}
+    coul = lambda x, d: x if isinstance(x, str) and re.fullmatch(r'#[0-9a-fA-F]{6}', x) else d
+    if str(b.get('texte') or '').strip():
+        b0 = avant.get('banniere') or {}
+        auto = bool(b0.get('auto')) and str(b['texte']).strip() == b0.get('texte')
+        c['banniere'] = {'texte': str(b['texte']).strip()[:60], 'couleur': coul(b.get('couleur'), '#f5c842'),
+                         'contour': coul(b.get('contour'), '#0d1a4a'), 'auto': auto,
+                         'style': b.get('style') if b.get('style') in ('jeu', 'simple') else 'jeu'}
+    return c
+
+
+def appliquer_cosmetique(cfg, nom, brut, telop_origine):
+    """règle la cosmétique d'une technique déjà créée (sortie/MesTechniques), sans refaire le reste"""
+    sortie = os.path.join(cfg['outil_dir'], 'sortie', MOD_ID)
+    deja = _deja_dans_le_mod(sortie)
+    if nom not in deja:
+        return {'ok': False, 'erreur': 'Technique « %s » introuvable dans MesTechniques.' % nom}
+    e = deja[nom]
+    avant = cosmetique_actuelle(sortie, nom)
+    cos = nettoyer_cosmetique(brut, avant)
+    rapport = []
+    # couleur du tir : ligne color du bloc [[technique]]
+    f = os.path.join(sortie, 'content', 'techniques', nom + '.toml')
+    L = open(f, encoding='utf-8').read().split('\n')
+    i = L.index('[[technique]]')
+    j = i + 1
+    while j < len(L) and L[j].strip() and not L[j].startswith((' ', '[')):
+        j += 1
+    bloc = [l for l in L[i + 1:j] if l.split('=')[0].strip() != 'color']
+    if cos['couleur_tir'] is not None:
+        bloc.append('color = %d' % cos['couleur_tir'])
+    L[i + 1:j] = bloc
+    _ecrire(f, '\n'.join(L))
+    if cos['couleur_tir'] != avant.get('couleur_tir'):
+        rapport.append('couleur du tir : ' + ('celle d\'origine' if cos['couleur_tir'] is None else str(cos['couleur_tir'])))
+    # traînée : bloc [[shot_aura]] du fichier d'effets de la technique (tirs seulement)
+    fe = os.path.join(sortie, 'content', 'effects', nom + '.toml')
+    if os.path.exists(fe):
+        t = open(fe, encoding='utf-8').read()
+        t = re.sub(r'\[\[shot_aura\]\]\n(?:[^\n]+\n)*\n?', '', t).rstrip('\n') + '\n'
+        if cos['trainee'] and str(e.get('base', '')).startswith('whs'):
+            tr = cos['trainee']
+            t = t.rstrip('\n') + '\n\n' + '\n'.join(['[[shot_aura]]', 'name = %s' % _q(nom), 'when = { techniques = [%s] }' % _q(e['key']),
+                                                   'aura = %s' % _q(tr['famille']), 'color = %s' % _q(tr['element']), '']) + '\n'
+        _ecrire(fe, t)
+    if cos['trainee'] != avant.get('trainee'):
+        rapport.append('traînée : ' + ('celle du jeu' if not cos['trainee'] else '%s en %s' % (cos['trainee']['famille'], cos['trainee']['element'])))
+    # boutique
+    if cos['prix'] != avant.get('prix'):
+        rapport += _ecrire_boutique(sortie, nom, cos['prix'])
+    # bannière (texte changé seulement : celle de l'éditeur ou d'avant reste sinon)
+    b = cos.get('banniere') or {}
+    if b.get('texte') and b != avant.get('banniere') and telop_origine:
+        png = os.path.join(sortie, 'content', 'telops', 'any', e['key'] + '.png')
+        os.makedirs(os.path.dirname(png), exist_ok=True)
+        from . import stats as _st
+        el_ = (e.get('stats') or {}).get('element') or _st.jeu_technique(cfg['data_dir'], e.get('base')).get('element')
+        banniere(b['texte'], b['couleur'], b['contour'], png, element=el_, style=b.get('style', 'jeu'))
+        ecrire_telops(cfg, sortie, e['key'], telop_origine)
+        rapport.append('bannière « %s »' % b['texte'])
+    e['cosmetique'] = cos
+    json.dump(deja, open(os.path.join(sortie, 'outil_techniques.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    return {'ok': True, 'cosmetique': cos, 'rapport': rapport}
 
 
 def jeu_ouvert():
@@ -776,7 +1032,13 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
     src = os.path.join(cfg['outil_dir'], 'sortie', mod_id)
     if not os.path.isfile(os.path.join(src, 'mod.toml')):
         return {'ok': False, 'erreur': 'Rien à installer : crée d\'abord le mod.'}
-    repares = reparer_assignes(cfg, src) if mod_id == 'MesTechniques' else []      # (22/11) copies à totem faites avant
+    repares = reparer_assignes(cfg, src) if mod_id == 'MesTechniques' else []
+    if mod_id == 'MesEsprits':                     # (23/11) bannières des copies faites avant : ajoutées à l'installation
+        try:
+            from . import esprits as _esp
+            _esp.ecrire_bannieres(cfg, src, _esp.registre(src))
+        except Exception as ex:
+            print('bannières des esprits :', ex)      # (22/11) copies à totem faites avant
     if mod_id == 'MesTechniques':                       # (22/11) copies sans leur cinématique d'échec (fail_event)
         repares += reparer_echecs(cfg, src)
     if mod_id == 'MesEsprits':                          # (23/11) armures d'avant : un seul modèle (corps 0) -> un par corps

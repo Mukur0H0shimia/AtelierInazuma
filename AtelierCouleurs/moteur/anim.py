@@ -197,7 +197,7 @@ def dossier_ev(c, ev):
     return ev
 
 
-def cinematique(data_dir, ev, objets):
+def cinematique(data_dir, ev, objets, assign_anim=None):
     """tout ce qu'il faut pour rejouer la cinématique dans l'aperçu :
     plans, caméra, squelette + mouvements + visibilité de chaque objet d'effet, ballon, et les ordres (jouer / montrer / cacher)"""
     c = os.path.join(data_dir, 'common')
@@ -340,19 +340,27 @@ def cinematique(data_dir, ev, objets):
     if clips_b and os.path.exists(sk_b):
         acc = next((v for k, v in accroches.items() if k.startswith('b000001')), 'evp05')
         res['balle'] = {'os': lire_paquet(sk_b)['squelette'], 'clips': clips_b, 'os_balle': 'c_add_1_0', 'accroche': acc}
-    res['points'], res['acteurs'] = points_et_acteurs(c, evd, dos, cmds, plans)
+    res['points'], res['acteurs'] = points_et_acteurs(c, evd, dos, cmds, plans, assign_anim)
     # bannière : « soccer10_01_<code> » chargée, montrée (0xFD6E24AB [0]) puis cachée (0xFD6E24AB [1])
-    tel = {'code': None, 'debut': None, 'fin': None}
+    # (24/11) plusieurs bannières : la commande nomme la sienne ([0|1, 'soccer10_01_<code>'] ; mise en armure : celle de
+    # l'esprit « <CHARA_ID> » 35 -> 100 puis « aura_armed01 » 170 -> 240) ; sans nom (techniques, invocations) : la 1re chargée
+    tels, premier = {}, None
     for f, cmd, a in cmds:
         for x in a:
-            if isinstance(x, str) and x.startswith('soccer10_01_') and not tel['code']:
-                tel['code'] = x[len('soccer10_01_'):]
+            if isinstance(x, str) and x.startswith('soccer10_01_') and premier is None:
+                premier = x[len('soccer10_01_'):]
         if cmd == TELOP and a:
-            if a[0] == 0 and tel['debut'] is None:
-                tel['debut'] = f
-            elif a[0] == 1 and tel['debut'] is not None and tel['fin'] is None:
-                tel['fin'] = f
-    res['telop'] = tel if tel['code'] and tel['debut'] is not None else None
+            nom = a[1][len('soccer10_01_'):] if len(a) > 1 and isinstance(a[1], str) and a[1].startswith('soccer10_01_') else premier
+            if not nom:
+                continue
+            t_ = tels.setdefault(nom, {'code': nom, 'debut': None, 'fin': None})
+            if a[0] == 0 and t_['debut'] is None:
+                t_['debut'] = f
+            elif a[0] == 1 and t_['debut'] is not None and t_['fin'] is None:
+                t_['fin'] = f
+    L_tel = sorted((t_ for t_ in tels.values() if t_['debut'] is not None), key=lambda t_: t_['debut'])
+    res['telop'] = L_tel[0] if L_tel else None
+    res['telop2'] = L_tel[1] if len(L_tel) > 1 else None
     if res['telop']:
         # (14/11/2026) animation du modèle de menu du jeu (common/menu/00_soccer/soccer10/soccer10_01/soccer10_01.g4pkm) :
         # courbes LUES dans ses clips ; MESURÉ sur les vidéos (recalage image par image, corrélation 0,97) : bannière 1:1 dans
@@ -372,6 +380,9 @@ def cinematique(data_dir, ev, objets):
                                        'fondu_in': courbe('G4MA', '_sma_fade_in_mat_01', 19), 'fondu_out': courbe('G4MA', '_sma_fade_out_mat_01', 19)}
             res['telop']['centre'] = [960, 856]
             res['telop']['vitesse_in'], res['telop']['vitesse_out'] = 0.5, 1.0
+            if res['telop2']:                          # (24/11) même modèle de menu pour la 2e bannière
+                for k_ in ('courbes', 'centre', 'vitesse_in', 'vitesse_out'):
+                    res['telop2'][k_] = res['telop'][k_]
         except (OSError, ValueError, KeyError):
             pass
     # décor (stade) caché / remontré : 0x3DB3FBEB [0] / [1] (Frappe stellaire : caché de 57 à 302, la galaxie le remplace)
@@ -561,7 +572,7 @@ def _dossier_chr(c, code):
     return None
 
 
-def points_et_acteurs(c, ev, dos, cmds, plans):
+def points_et_acteurs(c, ev, dos, cmds, plans, assign_anim=None):
     """squelettes « point » (point_eff, point_s00, point_s80…) et acteurs (joueur, esprit / totem, objets, ballon) :
     modèle, squelette, clips par plan, accroche (point, os) et ordres (jouer, montrer / cacher)"""
     points = {}
@@ -590,7 +601,9 @@ def points_et_acteurs(c, ev, dos, cmds, plans):
         if nom.startswith('c00<TYPE><NO>'):
             code, modele = 'c000101', 'joueur'
         elif nom.startswith('<ASSIGN>'):
-            code = next((x for x in codes if x[0] in 'ka' and x not in explicites), None); modele = 'chr'
+            # (23/11) assign_anim : l'esprit dont les gestes sont joués (invocation choisie dans l'Atelier : « apparition de
+            # tel esprit » ; le modèle montré est remplacé ensuite par la copie, [[event]] assigned)
+            code = assign_anim if assign_anim in codes else next((x for x in codes if x[0] in 'ka' and x not in explicites), None); modele = 'chr'
         elif re.fullmatch(r'[a-z]\d{6}', src):
             code, modele = src, 'chr'
         elif _dossier_chr(c, src):

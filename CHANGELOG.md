@@ -2,6 +2,44 @@
 
 *English below.*
 
+## 3.0
+### Joueurs : l'écran du Tableau des compétences
+- **Stats** d'un joueur (Mes créations) s'ouvre maintenant sur un écran fait comme le **Tableau des compétences du jeu** :
+  - à gauche : la carte, le poste, **la case de l'esprit guerrier ou du totem**, puis les **6 techniques** ;
+  - au centre : le joueur en 3D ;
+  - sous son nom : **les 8 stats à régler** (− / +, la barre, ↺), le 2e poste et l'élément ;
+  - en bas à droite : la fiche de la case choisie (puissance, TENSION, niveau d'apprentissage) et la liste pour la remplir.
+- Stats et techniques s'enregistrent ensemble. « Choisir ses techniques » ouvre le même écran.
+
+### Esprits guerriers, totems et armures
+- **Fiche faite comme la carte Keshin du jeu** : bandeau de l'élément, portrait, barre de sa technique avec sa puissance, élément, Niv. 1.
+- **Apparition** : tu choisis l'invocation parmi tous les esprits du jeu (Pégase : 89 choix au lieu de 17), ceux qui ont les mêmes os en premier. « Selon l'élément » suit l'élément choisi, et l'aperçu change tout de suite.
+- **Bonus et effet unique** : jusqu'à 6 bonus et 3 effets uniques, choisis parmi ceux du jeu (et des mods activés), comme les esprits du jeu.
+- **Totems** : l'aperçu montre l'invocation du totem en match (ta copie, avec ses couleurs). Tu peux aussi lui donner les gestes d'un des 22 totems.
+- **Fiche d'armure** : « Stats » sur une armure règle sa puissance, son élément, ses bonus, son effet unique et sa **mise en armure** (80 scènes, ou « Selon l'élément »). Avant : « création inconnue ».
+- **Aperçus** : la bannière de ta copie s'affiche pendant l'invocation. La mise en armure montre ses deux bannières, et à la fin le joueur porte vraiment l'armure, avec tes couleurs.
+
+### Bannières
+- L'onglet Bannières fait aussi celles de tes **esprits guerriers**, **totems** (bannière de leur nom) et **armures** (bannière ARMED). Leur fiche a une case « Bannière » avec « ✎ Personnaliser la bannière ».
+- **Styles d'écriture du jeu** dans les polices (groupe « Styles des esprits ») : Esprit guerrier (un par élément), Totem et Armure, refaits à partir des vraies bannières du jeu. Les bannières automatiques de tes copies prennent ces styles.
+
+### Techniques
+- **Le lecteur du jeu partout** : une technique s'ouvre directement dans le lecteur (les vraies couleurs du jeu), en pause sur l'image 0. Le curseur d'image l'ouvre aussi. L'aperçu approché ne se voit plus que pendant le chargement.
+- **Couleurs plus fidèles** : « Remplacer une couleur partout » vers une couleur pâle (jaune → blanc) blanchit maintenant aussi les couleurs des sommets et des particules, comme VRFW. Nouveau réglage de **luminosité** pour les sommets et les particules.
+- **Effets communs** (traits de vitesse…) : maintenant recolorables.
+- **Tir lointain** : la copie d'un tir lointain s'utilise dans tous les duels.
+- **Lumières de l'effet** (intensité) : réglage visible dans l'Atelier seulement pour l'instant (VRFW ne l'accepte pas encore en jeu).
+
+### Maillots
+- **Dessiner l'icône de la boutique et l'emblème** (✎ Dessiner), comme dans l'Atelier Maillots. L'icône part de celle du maillot de base dans le jeu.
+
+### Corrections
+- **Écran à 125 % (ou plus)** : le lecteur s'ouvrait décalé, trop petit et impossible à fermer. Corrigé.
+- Changer d'apparition rapidement pouvait poser le lecteur au mauvais endroit, ou laisser l'aperçu vide jusqu'à sortir et revenir.
+- La bannière de l'aperçu restait affichée par-dessus le lecteur et dans les autres onglets. Une technique restait « encore là » (barre de lecture, compteurs) après un changement d'onglet.
+- Fiche d'esprit : les cases restent sur une ligne (Montagne…), et l'effet unique ne disparaît plus après plusieurs bonus.
+- Tous les nouveaux textes en anglais et en espagnol.
+
 ## 2.0.6
 - **Corbeille** (⚙ Paramètres) : tout ce que tu as supprimé (projets, créations, maillots) se voit dans une liste avec sa date et sa taille. « Restaurer » le remet comme avant ; « Supprimer définitivement » l'efface pour gagner de la place.
 - **Vider le cache** (⚙ Paramètres) : libère la place prise par ce que l'Atelier a déjà lu du jeu et des mods. Tes créations ne sont pas touchées, et le terrain des cinématiques est gardé.
@@ -134,6 +172,44 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 3.0
+### Players: the Skill board screen
+- A player's **Stats** (My creations) now opens a screen made like the **game's Skill board**:
+  - left: the card, the position, **the Keshin or totem slot**, then the **6 techniques**;
+  - centre: the player in 3D;
+  - under the name: **the 8 stats to set** (− / +, the bar, ↺), the 2nd position and the element;
+  - bottom right: the selected slot's sheet (power, TENSION, level learnt) and the list to fill it.
+- Stats and techniques are saved together. The techniques button on a player opens the same screen too.
+
+### Keshin, totems and armours
+- **Sheet made like the game's Keshin card**: element banner, portrait, its technique bar with its power, element, Lv. 1.
+- **Appearance**: choose the summon among every Keshin in the game (Pegasus: 89 choices instead of 17), the ones with the same bones first. "By element" follows the chosen element, and the preview changes straight away.
+- **Bonuses and unique effect**: up to 6 bonuses and 3 unique effects, picked from the game's own (and enabled mods'), like the game's Keshin.
+- **Totems**: the preview shows the totem's in-match summon (your copy, in its colours). You can also give it the moves of one of 22 totems.
+- **Armour sheet**: "Stats" on an armour sets its power, element, bonuses, unique effect and its **Armour transformation** (80 scenes, or "By element"). Before: "unknown creation".
+- **Previews**: your copy's banner shows during the summon. The armour transformation shows both its banners, and at the end the player really wears the armour, in your colours.
+
+### Banners
+- The Banners tab also makes those of your **Keshin**, **totems** (their name banner) and **armours** (ARMED banner). Their sheet has a "Banner" box with "✎ Customise the banner".
+- **The game's lettering styles** in the fonts ("Keshin styles" group): Keshin (one per element), Totem and Armour, rebuilt from the game's real banners. Your copies' automatic banners use these styles.
+
+### Techniques
+- **The game's player everywhere**: a technique opens straight in the player (the game's real colours), paused on frame 0. The frame slider opens it too. The approximate preview only shows while loading.
+- **Truer colours**: "Replace a colour everywhere" towards a pale colour (yellow → white) now also whitens the vertex and particle colours, like VRFW. New **brightness** setting for vertices and particles.
+- **Shared effects** (speed lines…): can now be recoloured.
+- **Long shot**: a copy of a long shot can be used in every duel.
+- **Effect lights** (intensity): shown in the Atelier only for now (VRFW doesn't accept it in game yet).
+
+### Kits
+- **Draw the shop icon and the crest** (✎ Draw), like in the Atelier Maillots. The icon starts from the base kit's icon in the game.
+
+### Fixes
+- **Screen at 125 % (or more)**: the player opened offset, too small and impossible to close. Fixed.
+- Switching appearance quickly could put the player in the wrong place, or leave the preview empty until you left and came back.
+- The preview banner stayed on top of the player and in the other tabs. A technique stayed "still there" (playback bar, counters) after changing tab.
+- Keshin sheet: the boxes stay on one line (Mountain…), and the unique effect no longer disappears after several bonuses.
+- All new texts in English and Spanish.
 
 ## 2.0.6
 - **Trash** (⚙ Settings): everything you deleted (projects, creations, kits) shows in a list with its date and size. "Restore" puts it back as before; "Delete permanently" erases it to free up space.

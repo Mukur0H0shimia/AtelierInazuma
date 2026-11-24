@@ -449,13 +449,14 @@ def recomposer(res, ev, dossier_mod, cameras=()):
         return sorted(r, key=lambda x: x['image'])
     out['sons'] = images(res.get('sons'))
     out['decor'] = images(res.get('decor'))
-    if isinstance(res.get('telop'), dict):
-        t = dict(res['telop'])
-        for k in ('debut', 'fin'):
-            f = next((m.inv(t[k]) for m in morceaux if m.inv(t[k]) is not None), None)
-            if f is not None:
-                t[k] = int(round(f))
-        out['telop'] = t
+    for cle_t in ('telop', 'telop2'):                # (24/11) + 2e bannière (mise en armure)
+        if isinstance(res.get(cle_t), dict):
+            t = dict(res[cle_t])
+            for k in ('debut', 'fin'):
+                f = next((m.inv(t[k]) for m in morceaux if t[k] is not None and m.inv(t[k]) is not None), None)
+                if f is not None:
+                    t[k] = int(round(f))
+            out[cle_t] = t
     return out
 
 

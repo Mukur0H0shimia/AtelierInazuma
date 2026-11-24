@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atelier Inazuma</title>
 <link rel="stylesheet" href="/web/style.css">
+<link rel="stylesheet" href="/web/theme_jeu.css">
 <script src="/web/parametres.js"></script>
 </head>
 <body>
@@ -56,7 +57,7 @@
     <div class="hub-section" id="jm-s-continuer"><h2>À continuer</h2><span>sauvegardé tout seul, pas encore transformé en mod</span></div>
     <div id="hub-projets" class="hub-grille"></div>
     <!-- (22/11, idée de muku) d'abord le visuel, ensuite les valeurs : créations qui attendent leurs stats -->
-    <div class="hub-section" id="jm-s-attente"><h2>En attente de stats</h2><span>le visuel est fait : règle ses valeurs (puissance, PT, élément…) ou garde celles de l'original</span></div>
+    <div class="hub-section" id="jm-s-attente"><h2>En attente de stats / cosmétique</h2><span>le visuel est fait : règle ses valeurs (puissance, PT, élément…) ou garde celles de l'original</span></div>
     <div id="hub-attente" class="hub-grille"></div>
     <div class="hub-section" id="jm-s-terminees"><h2>Terminées</h2><span>faites avec « Créer »</span></div>
     <div id="hub-creations" class="hub-grille"></div>
@@ -69,7 +70,7 @@
 
 <section id="page-bannieres">
   <aside class="panneau">
-    <h2>Pour quelle technique ?</h2>
+    <h2>Pour quelle création ?</h2>
     <div id="b-choix" class="liste"></div>
     <p class="aide">« Technique ouverte » = celle de l'onglet Techniques (la bannière partira avec « Créer »).
       Les autres = tes copies déjà créées (MesTechniques).</p>
@@ -88,7 +89,7 @@
   </div>
   <aside class="panneau formulaire" id="b-reglages">
     <h2>Texte</h2>
-    <label>Texte <input id="b-texte"></label>
+    <label title="Style esprit guerrier : « / » coupe le texte en deux lignes (nom / titre), comme les bannières du jeu">Texte <input id="b-texte"></label>
     <label>Police <select id="b-police"></select></label>
     <div class="ligne"><label>Taille (0 = auto) <input type="range" id="b-taille" min="0" max="300" value="0"></label></div>
     <div class="ligne"><label>Espacement <input type="range" id="b-espacement" min="-20" max="60" value="2"></label></div>
@@ -260,6 +261,12 @@
     <div id="teintes"></div>
     </details>
 
+    <details class="bloc avance" id="bloc-lumieres"><summary>Lumières de l'effet <span class="compte" id="cpt-lum"></span></summary>
+    <p class="aide">Les lumières que l'effet pose sur les joueurs et le stade (souvent une lueur jaune ou orange). Intensité seulement :
+    0 % = éteinte, 100 % = comme le jeu. <b>Pour l'instant visible dans l'Atelier seulement</b> : VRFW refuse la copie qui porterait ce réglage en jeu (essai du 23/11).</p>
+    <div id="lumieres-effet"></div>
+    </details>
+
     <details class="bloc avance"><summary>Lueurs (tout l'effet d'un coup)</summary>
     <p class="aide">Couleur des sommets, des matériaux et des particules (ce qui n'est pas dans les textures).</p>
     <div class="ligne"><label><input type="checkbox" id="lueurs-on"> Recolorer les lueurs</label></div>
@@ -276,6 +283,8 @@
     <div class="formulaire">
       <label>Nom <input id="f-nom" placeholder="Frappe galactique"></label>
       <label>Description <textarea id="f-desc" rows="2"></textarea></label>
+      <!-- (23/11, demande de muku) couleur du tir, traînée, prix et bannière : réglés dans « En attente de stats / cosmétique » (fenêtre de la technique créée) ; gardés ici cachés pour les anciens projets -->
+      <div class="cosm-cache" hidden style="display:none">
       <label>Couleur du tir
         <select id="f-couleur">
           <option value="">Garder celle d'origine</option>
@@ -300,6 +309,7 @@
       <label>Bannière (texte) <input id="f-ban" placeholder="FRAPPE GALACTIQUE"></label>
       <button id="f-ban-perso" type="button" title="Ouvre l'éditeur de bannière pour cette technique ; « Utiliser » te ramène ici avec l'aperçu à jour">✎ Personnaliser la bannière</button>
       <div class="ligne"><label>Lettres <input type="color" id="f-ban-c" value="#f5c842"></label><label>Contour <input type="color" id="f-ban-o" value="#0d1a4a"></label></div>
+      </div>
       <div class="ligne">
         <button id="exporter" class="primaire">Créer le mod</button>
         <button id="installer">Installer dans le jeu</button>
@@ -339,8 +349,10 @@
             Couleurs : réglage de VRFW. Taille, hauteur et nom : à vérifier en jeu.</p>
         </details>
         <details class="bloc"><summary>Icône et emblème</summary>
-          <div class="ligne"><img id="mm-icone-img" class="mm-vign" alt=""><label>Icône de la boutique (256 × 256, fond transparent) <input type="file" id="mm-icone" accept="image/png"></label></div>
-          <div class="ligne"><img id="mm-embleme-img" class="mm-vign" alt=""><label>Emblème d'équipe (512 × 512, fond transparent ; vendu avec le maillot) <input type="file" id="mm-embleme" accept="image/png"></label></div>
+          <div class="ligne"><img id="mm-icone-img" class="mm-vign" alt=""><label>Icône de la boutique (256 × 256, fond transparent) <input type="file" id="mm-icone" accept="image/png"></label>
+            <button id="mm-icone-dessin" title="Dessiner l'icône (mode dessin) : elle part de ton image, sinon de l'icône du maillot de base">✎ Dessiner</button></div>
+          <div class="ligne"><img id="mm-embleme-img" class="mm-vign" alt=""><label>Emblème d'équipe (512 × 512, fond transparent ; vendu avec le maillot) <input type="file" id="mm-embleme" accept="image/png"></label>
+            <button id="mm-embleme-dessin" title="Dessiner l'emblème (mode dessin) : il part de ton image, sinon d'une image vide">✎ Dessiner</button></div>
         </details>
         <div class="ligne">
           <button id="mm-enregistrer" class="avance" title="Garde le maillot sans refaire le mod (pour le finir plus tard)">Enregistrer sans construire</button>

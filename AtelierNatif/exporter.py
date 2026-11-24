@@ -645,7 +645,7 @@ def ecrire_images(chemin, images_, effets=None):
 # web/vue3d.js et web/app.js) : la page n'a plus rien à calculer. Ici, une fois par technique (gardé dans
 # scenes/tech_<code>), ce que la page prépare au chargement : données d'animation (/api/anim), pièces dans l'ordre de la
 # vue (V.pieces), émetteurs de particules, lumières ponctuelles, personnages, réglages de lumière des plans.
-VERSION_TECH = 36           # (30 : 17/11/2026, techniques des mods recomposées par VRFW) à changer à chaque modification de tech.json / effets.bin (la technique est alors refaite)
+VERSION_TECH = 37           # (30 : 17/11/2026, techniques des mods recomposées par VRFW) à changer à chaque modification de tech.json / effets.bin (la technique est alors refaite)
 VERSION_SCENE = 5          # décor seul (scene.bin) : ne dépend plus des réglages de la technique
 SRV = None                 # module du serveur de l'Atelier (posé par serveur.py ; sinon importé)
 
@@ -687,15 +687,20 @@ def _seulement_corps(an, corps=1):
         a.pop('corps', None)
 
 
-def _ecrire_telop(dos, code, telop, S_):
+def _ecrire_telop(dos, code, telop, S_, fichier='telop.bin'):
     """telop.bin de la scène (u32 largeur, hauteur, puis pixels RVBA) ; (21/11) la bannière PERSO de la technique si elle
-    existe (onglet Bannières, copie déjà créée : serveur.telop_apercu), sinon celle du jeu. Refait à chaque ouverture."""
-    f_tel = os.path.join(dos, 'telop.bin')
+    existe (onglet Bannières, copie déjà créée : serveur.telop_apercu), sinon celle du jeu. Refait à chaque ouverture.
+    (24/11) invocation / mise en armure d'une copie (« invoc_… », « armure_… ») : « <CHARA_ID> » = ma copie, sa bannière
+    (son nom, ou celle de l'éditeur) ; « aura_armed01 » = la bannière ARMED de mon armure si je l'ai faite (serveur.telop_invocation)"""
+    f_tel = os.path.join(dos, fichier)
     if os.path.exists(f_tel):
         os.remove(f_tel)
     if telop and telop.get('courbes'):
         try:
-            png = S_.telop_apercu(code, telop['code']) if hasattr(S_, 'telop_apercu') else S_.telop_png(telop['code'])
+            if str(code).startswith(('invoc_', 'armure_')) and hasattr(S_, 'telop_invocation'):
+                png = S_.telop_invocation(code, telop['code'])
+            else:
+                png = S_.telop_apercu(code, telop['code']) if hasattr(S_, 'telop_apercu') else S_.telop_png(telop['code'])
             if os.path.exists(png):
                 w, h, rows = images.lire_png(png)
                 n = len(rows[0]) // w
@@ -724,7 +729,9 @@ def exporter_technique(code, force=False):
     emp = 'tech %d / effets %d' % (VERSION_TECH, VERSION_FORMAT)
     if not force and os.path.exists(f_emp) and open(f_emp).read() == emp and os.path.exists(os.path.join(dos, 'tech.json')):
         try:                                       # (21/11) scène gardée, mais bannière refaite : elle peut avoir changé
-            _ecrire_telop(dos, code, json.load(open(os.path.join(dos, 'tech.json'), encoding='utf-8')).get('telop'), S_)
+            tj_ = json.load(open(os.path.join(dos, 'tech.json'), encoding='utf-8'))
+            _ecrire_telop(dos, code, tj_.get('telop'), S_)
+            _ecrire_telop(dos, code, tj_.get('telop2'), S_, 'telop2.bin')
         except Exception as ex:
             print('bannière :', ex)
         return {'dossier': dos, 'technique': 'gardée'}
@@ -733,8 +740,8 @@ def exporter_technique(code, force=False):
     det = S_.details(code)
     D_, cin, an = S_.anim_de(t)                       # (17/11/2026) + recomposition VRFW, objets ajoutés, son du mod
     _seulement_corps(an)
-    telop = an.get('telop')
-    for k in ('sons', 'telop', 'joueurs', 'utilisateurs'):
+    telop, telop2 = an.get('telop'), an.get('telop2')
+    for k in ('sons', 'telop', 'telop2', 'joueurs', 'utilisateurs'):
         an.pop(k, None)
     couleur_tir = det.get('couleur_tir') or 0
     # (14/11/2026) LU nie.exe 0x140f12490 / 0x140eff4c0 : la colonne du dégradé BallAura (u_grdValue) vient de la couleur de tir
@@ -813,6 +820,9 @@ def exporter_technique(code, force=False):
     acteurs = []                                      # 4) personnages (acteurs.Acteur) dans l'ordre de d.acteurs
     for a in an.get('acteurs') or []:
         quoi, c = ('joueur', '') if a.get('modele') == 'joueur' else ('chr', a.get('code'))
+        # (24/11, retour de muku) mise en armure : le 2e joueur (« c00<TYPE><NO>_s01 », plan c0020) PORTE l'armure de ma copie
+        if quoi == 'joueur' and str(code).startswith('armure_') and '_s01_' in str(a.get('acteur')):
+            c = 'armure:' + str(code)[len('armure_'):].split('~')[0]
         try:
             k = E.acteur(quoi, c)
         except Exception as ex:
@@ -851,8 +861,10 @@ def exporter_technique(code, force=False):
     # bannière (14/11/2026) : image de la technique (celle que montre l'Atelier : dx11/menu/220_img/telop_waza/fr) en RVBA brut
     # -> telop.bin (u32 largeur, hauteur, puis les pixels) ; instants et courbes du modèle de menu du jeu dans tech.json
     f_tel = _ecrire_telop(dos, code, telop, S_)
+    f_tel2 = _ecrire_telop(dos, code, telop2, S_, 'telop2.bin')         # (24/11) 2e bannière (mise en armure : ARMED)
     tech = {'code': code, 'anim': an, 'pieces': pieces, 'emetteurs': emetteurs, 'lumieres': lumieres, 'acteurs': acteurs,
-            'reglages': regl, 'plan_lum': plan_lum, 'telop': telop if (telop and os.path.exists(f_tel)) else None}
+            'reglages': regl, 'plan_lum': plan_lum, 'telop': telop if (telop and os.path.exists(f_tel)) else None,
+            'telop2': telop2 if (telop2 and os.path.exists(f_tel2)) else None}
     json.dump(tech, open(os.path.join(dos, 'tech.json'), 'w', encoding='utf-8'), separators=(',', ':'))
     json.dump({k: v for k, v in E.S.tex_i.items() if v >= 0}, open(os.path.join(dos, 'textures.json'), 'w', encoding='utf-8'))
     E.ecrire(os.path.join(dos, 'effets.bin'))

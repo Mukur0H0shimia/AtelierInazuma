@@ -101,7 +101,7 @@ struct Prog {
 };
 struct Geo { std::vector<ID3D11Buffer*> vb; std::vector<UINT> pas; ID3D11Buffer* ib = nullptr; UINT n = 0;
              std::vector<std::vector<uint8_t>> cpu;      // (14/11/2026) copie des flux de 4 octets (couleurs) pour les teintes de l'Atelier
-             bool teinte = false; double tH = 0, tC = 0; }; // (15/11/2026) teinte posée sur le flux COLOR (pour la retirer en direct)
+             bool teinte = false; double tH = 0, tC = 0, tS = 1, tV = 1; }; // (15/11/2026) teinte posée sur le flux COLOR (pour la retirer en direct)
 
 enum VarId { V_AUTRE = -1, V_LW, V_LV, V_LP, V_LWOLD, V_LVOLD, V_UB, V_DIFF, V_AMB, V_SPEC, V_ATTACH, V_GRD, V_TEXPROJ, V_UVRANGE,
              V_SP0, V_SP1, V_SP2, V_SP3, V_SP4, V_SP5, V_SP6, V_SP7,
@@ -195,6 +195,7 @@ struct App {
     ID3D11VertexShader *vsSS = nullptr, *vs1 = nullptr, *vs2 = nullptr, *vsg = nullptr, *vsNoir = nullptr;
     ID3D11PixelShader *psCopie = nullptr, *psCopieBrut = nullptr, *psCopieV2 = nullptr, *psLum = nullptr, *psNoir = nullptr, *psMasque = nullptr, *psBan = nullptr;
     ID3D11VertexShader* vsBan = nullptr; ID3D11ShaderResourceView* telSrv = nullptr; int telW = 0, telH = 0;     // bannière
+    ID3D11ShaderResourceView* telSrv2 = nullptr; int telW2 = 0, telH2 = 0;  // (24/11) 2e bannière (mise en armure : ARMED)
     ID3D11InputLayout* dispNoir = nullptr;
     ID3D11VertexShader* vsNoirSt = nullptr; ID3D11PixelShader* psNoirSt = nullptr; ID3D11InputLayout* dispNoirSt = nullptr;   // mannequin + aura
     ID3D11Buffer *quadPos = nullptr, *quadUv = nullptr, *quadCol = nullptr, *quadIb = nullptr, *cubeVb = nullptr, *cubeIb = nullptr;
@@ -540,12 +541,12 @@ static void teintes_sommets() {
     for (const PieceT& p : T.pieces) { if (p.elem >= A.elems.size()) continue; const Element& X = A.elems[p.elem];
         if (X.part || X.geo < 0 || (size_t)X.geo >= A.eff.geos.size()) continue; Geo& G = A.eff.geos[X.geo]; const Prog& P = A.eff.progs[X.prog];
         // (15/11/2026) relu en direct : refait seulement si la teinte a changé (posée, changée ou retirée -> couleurs d'origine)
-        if (G.teinte == p.aTeinteS && (!p.aTeinteS || (G.tH == p.tH && G.tC == p.tC))) continue;
-        G.teinte = p.aTeinteS; G.tH = p.tH; G.tC = p.tC;
+        if (G.teinte == p.aTeinteS && (!p.aTeinteS || (G.tH == p.tH && G.tC == p.tC && G.tS == p.tS && G.tV == p.tV))) continue;
+        G.teinte = p.aTeinteS; G.tH = p.tH; G.tC = p.tC; G.tS = p.tS; G.tV = p.tV;
         for (size_t e = 0; e < P.sem.size() && e < G.vb.size(); e++) {
             if (P.sem[e] != "COLOR" || P.el[e].SemanticIndex != 0 || e >= G.cpu.size() || G.cpu[e].empty()) continue;
             std::vector<uint8_t> b = G.cpu[e];
-            if (p.aTeinteS) for (size_t i = 0; i + 3 < b.size(); i += 4) { double c[3] = {b[i] / 255.0, b[i + 1] / 255.0, b[i + 2] / 255.0}; teinter_hsv(c, p.tH, p.tC);
+            if (p.aTeinteS) for (size_t i = 0; i + 3 < b.size(); i += 4) { double c[3] = {b[i] / 255.0, b[i + 1] / 255.0, b[i + 2] / 255.0}; teinter_hsv(c, p.tH, p.tC, p.tS, p.tV);
                 for (int k = 0; k < 3; k++) b[i + k] = (uint8_t)std::max(0.0, std::min(255.0, floor(c[k] * 255 + 0.5))); }
             if (G.vb[e]) G.vb[e]->Release(); G.vb[e] = tampon(b.data(), b.size(), D3D11_BIND_VERTEX_BUFFER); } }
 }
@@ -554,7 +555,7 @@ static void particules_gpu(Image& im) {
         // (15/11/2026) teinte de l'Atelier posée sur une copie des couleurs (bCol garde celles d'origine : refaites en direct)
         const bool t = D.srcE >= 0 && D.srcE < (int)T.ems.size() && T.ems[D.srcE].aTeinte;
         std::vector<float> orig; if (t) { orig = D.bCol; const EmetT& e = T.ems[D.srcE];
-            for (size_t i = 0; i + 3 < D.bCol.size(); i += 4) { double c[3] = {D.bCol[i], D.bCol[i + 1], D.bCol[i + 2]}; teinter_hsv(c, e.tH, e.tC);
+            for (size_t i = 0; i + 3 < D.bCol.size(); i += 4) { double c[3] = {D.bCol[i], D.bCol[i + 1], D.bCol[i + 2]}; teinter_hsv(c, e.tH, e.tC, e.tS, e.tV);
                 for (int k = 0; k < 3; k++) D.bCol[i + k] = (float)c[k]; } }
         for (auto* b : D.geoP.vb) if (b) b->Release(); if (D.geoP.ib) D.geoP.ib->Release(); D.geoP = Geo();
         D.geoP = geo_particules(D, A.eff.progs[A.elems[D.elem].prog]);
@@ -1741,8 +1742,22 @@ static void passe_couleur(const Image& im, const Lum* lum) {
 
 // BANNIÈRE (14/11/2026) : telop.bin (u32 largeur, hauteur + RVBA), dessinée par-dessus l'image finale (couche du menu)
 static std::wstring F_TELOP;                   // (22/11) relu sur la commande « telop » (bannière changée dans l'Atelier, sans relancer)
+// (24/11) une bannière (telop.bin / telop2.bin) -> texture ; false si absente
+static bool lire_telop(const std::wstring& f, ID3D11ShaderResourceView*& srv, int& w, int& h) {
+    if (srv) { srv->Release(); srv = nullptr; } w = h = 0;
+    FILE* x = _wfopen(f.c_str(), L"rb"); if (!x) return false;
+    uint32_t wh[2] = {0, 0}; if (fread(wh, 4, 2, x) != 2 || !wh[0] || !wh[1] || wh[0] > 8192 || wh[1] > 8192) { fclose(x); return false; }
+    std::vector<uint8_t> px((size_t)wh[0] * wh[1] * 4); const size_t lu = fread(px.data(), 1, px.size(), x); fclose(x);
+    if (lu != px.size()) return false;
+    D3D11_TEXTURE2D_DESC d = {wh[0], wh[1], 1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, {1, 0}, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, 0};
+    D3D11_SUBRESOURCE_DATA s = {px.data(), wh[0] * 4, 0}; ID3D11Texture2D* t = nullptr;
+    if (FAILED(A.dev->CreateTexture2D(&d, &s, &t))) return false;
+    A.dev->CreateShaderResourceView(t, nullptr, &srv); t->Release(); w = (int)wh[0]; h = (int)wh[1];
+    return true;
+}
 static void charger_telop(const std::wstring& f) {
     F_TELOP = f;
+    { std::wstring f2 = f; const size_t k = f2.rfind(L"telop.bin"); if (k != std::wstring::npos) { f2.replace(k, 9, L"telop2.bin"); lire_telop(f2, A.telSrv2, A.telW2, A.telH2); } }
     if (A.telSrv) { A.telSrv->Release(); A.telSrv = nullptr; } A.telW = A.telH = 0;
     FILE* x = _wfopen(f.c_str(), L"rb"); if (!x) return;
     uint32_t wh[2] = {0, 0}; if (fread(wh, 4, 2, x) != 2 || !wh[0] || !wh[1] || wh[0] > 8192 || wh[1] > 8192) { fclose(x); return; }
@@ -1753,22 +1768,27 @@ static void charger_telop(const std::wstring& f) {
     if (FAILED(A.dev->CreateTexture2D(&d, &s, &t))) return;
     A.dev->CreateShaderResourceView(t, nullptr, &A.telSrv); t->Release(); A.telW = (int)wh[0]; A.telH = (int)wh[1];
 }
+static void dessiner_une_telop(int f, const decltype(T.telop)& tl, ID3D11ShaderResourceView* srv, int tw, int th);
 static void dessiner_telop(int f) {
-    if (!modeTech || !A.telSrv || !A.vsBan || !A.psBan) return;
-    double s, a; T.telop.etat(f, s, a); if (a <= 0.001) return;
+    if (!modeTech || !A.vsBan || !A.psBan) return;
+    if (A.telSrv) dessiner_une_telop(f, T.telop, A.telSrv, A.telW, A.telH);
+    if (A.telSrv2) dessiner_une_telop(f, T.telop2, A.telSrv2, A.telW2, A.telH2);      // (24/11) 2e bannière
+}
+static void dessiner_une_telop(int f, const decltype(T.telop)& tl, ID3D11ShaderResourceView* srv, int tw, int th) {
+    double s, a; tl.etat(f, s, a); if (a <= 0.001) return;
     static ID3D11BlendState* mel = nullptr;
     if (!mel) mel = melange(true, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA, D3D11_BLEND_OP_ADD, D3D11_BLEND_ONE, D3D11_BLEND_INV_SRC_ALPHA, 0x0F);
     const int W = A.Wf ? A.Wf : A.W, H = A.Hf ? A.Hf : A.H;
     vider_srv(); sortie1(A.rtvEcran, nullptr, W, H);
     // espace du menu 1920 x 1080 -> écran (16:9) ; image 1:1 à l'échelle s, centrée en (cx, cy)
-    float cb[8] = {(float)(T.telop.cx / 960.0 - 1), (float)(1 - T.telop.cy / 540.0), (float)(A.telW * 0.5 * s / 960.0), (float)(A.telH * 0.5 * s / 540.0),
+    float cb[8] = {(float)(tl.cx / 960.0 - 1), (float)(1 - tl.cy / 540.0), (float)(tw * 0.5 * s / 960.0), (float)(th * 0.5 * s / 540.0),
                    (float)std::min(1.0, a), 0, 0, 0};
     ID3D11Buffer* b = cb_valeurs(cb, 8);
     A.ctx->IASetInputLayout(nullptr); A.ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     A.ctx->VSSetShader(A.vsBan, nullptr, 0); A.ctx->VSSetConstantBuffers(1, 1, &b);
     A.ctx->PSSetShader(A.psBan, nullptr, 0); A.ctx->GSSetShader(nullptr, nullptr, 0);
     ID3D11SamplerState* lin = echantillonneur(3, 3, 3);
-    A.ctx->PSSetShaderResources(0, 1, &A.telSrv); A.ctx->PSSetSamplers(0, 1, &lin);
+    A.ctx->PSSetShaderResources(0, 1, &srv); A.ctx->PSSetSamplers(0, 1, &lin);
     etats(mel, etat_profondeur(false, false), A.rasDouble);
     A.ctx->Draw(6, 0);
     vider_srv();
@@ -1923,9 +1943,9 @@ static bool pause = false; static double temps = 0; static int pasManuel = 0;
 static void options_rel() {
     if (F_MODIFS.empty()) return;
     const size_t k = F_MODIFS.find_last_of(L"\\/"); if (k == std::wstring::npos) return;
-    std::string avant; for (auto& e : T.ems) { char t[64]; sprintf_s(t, "%d %.4f %.4f;", e.aTeinte ? 1 : 0, e.tH, e.tC); avant += t; }
+    std::string avant; for (auto& e : T.ems) { char t[64]; sprintf_s(t, "%d %.4f %.4f %.4f %.4f;", e.aTeinte ? 1 : 0, e.tH, e.tC, e.tS, e.tV); avant += t; }
     T.lire_options(F_MODIFS.substr(0, k)); teintes_sommets();
-    std::string apres; for (auto& e : T.ems) { char t[64]; sprintf_s(t, "%d %.4f %.4f;", e.aTeinte ? 1 : 0, e.tH, e.tC); apres += t; }
+    std::string apres; for (auto& e : T.ems) { char t[64]; sprintf_s(t, "%d %.4f %.4f %.4f %.4f;", e.aTeinte ? 1 : 0, e.tH, e.tC, e.tS, e.tV); apres += t; }
     if (avant != apres) for (int i = 0; i < calcules && i < (int)A.images.size(); i++) particules_gpu(A.images[i]);   // (15/11/2026) aussi en pause
     FILE* x = fopen("lecteur_incruste.txt", "a"); if (x) { fprintf(x, "options relues\n"); fclose(x); }
 }

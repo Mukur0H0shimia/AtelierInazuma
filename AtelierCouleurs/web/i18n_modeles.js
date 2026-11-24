@@ -1145,6 +1145,11 @@ window.MODELES_FR = [
 " »"
 ],
 [
+"bannières ",
+" : ",
+""
+],
+[
 "matériau ",
 " (",
 ")"

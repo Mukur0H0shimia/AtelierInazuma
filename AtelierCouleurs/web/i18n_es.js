@@ -1076,6 +1076,8 @@ window.I18N_ES = {
 "Cet objet n’a pas de maillage à montrer seul (particules ou image).": "Este objeto no tiene malla que mostrar sola (partículas o imagen).",
 "seul dans l’aperçu de l’Atelier : glisse pour tourner, molette pour zoomer. Tes retouches s’y voient tout de suite. « ✕ Tout revoir » pour revenir à la technique.": "solo en la vista previa del Atelier: arrastra para girar, rueda para hacer zoom. Tus retoques se ven al instante. «✕ Verlo todo» para volver a la supertécnica.",
 "Chargement du modèle…": "Cargando el modelo…",
+"Auras (ballon et joueurs)": "Auras (balón y jugadores)",
+"Lueurs du ballon et des joueurs (body_aura…) : coche une aura et choisis sa couleur. Elle se voit en jeu ; l'aperçu ne la montre pas encore. Une aura grisée est choisie par le match (aura du ballon du moment).": "Brillos del balón y de los jugadores (body_aura…): marca un aura y elige su color. Se ve en el juego; la vista previa todavía no lo muestra. Un aura en gris la elige el partido (el aura actual del balón).",
 "Aucune création ne correspond": "Ninguna creación coincide",
 "Aucun projet ne correspond": "Ningún proyecto coincide",
 "Essaie un autre mot.": "Prueba otra palabra.",

@@ -37,12 +37,25 @@ def _noms_evt(evt_dir):
 
 
 def construire_index(data_dir, cache_dir):
-    f = os.path.join(cache_dir, 'index_techniques.json')
+    # (24/11, retour d'enhanca : « il manque des techniques, comme Meteor Blade A ») v2 : + les techniques SANS bannière à elles
+    # (47 : Météore géant A whs03410, Volée de manchots whs02875, variantes de totems whs02701…, « Rêve : … ») ; ancien cache refait
+    f = os.path.join(cache_dir, 'index_techniques_v2.json')
     if os.path.exists(f):
         return json.load(open(f, encoding='utf-8'))
     noms = _textes(data_dir)
     sc = open(glob.glob(os.path.join(data_dir, 'common', 'gamedata', 'skill', 'skill_config_*.cfg.bin'))[0], 'rb').read()
-    codes = sorted({os.path.basename(p)[:-5] for p in glob.glob(os.path.join(data_dir, 'dx11', 'menu', '220_img', 'telop_waza', 'fr', 'wh*.g4tx'))})
+    codes = {os.path.basename(p)[:-5] for p in glob.glob(os.path.join(data_dir, 'dx11', 'menu', '220_img', 'telop_waza', 'fr', 'wh*.g4tx'))}
+    # (24/11) codes de skill_config sans bannière : le code n'y est qu'en crc32 -> on essaie tous les <genre><5 chiffres>
+    # (400 000 crc, < 1 s) ; gardés s'ils ont un nom (et, plus bas, une cinématique qui existe)
+    mots = {struct.unpack_from('<I', sc, o)[0] for o in range(8, len(sc) - 4, 4)}
+    for pre in GENRES:
+        for n in range(100000):
+            c = '%s%05d' % (pre, n)
+            if c not in codes and zlib.crc32(c.encode()) in mots:
+                i = sc.find(struct.pack('<I', zlib.crc32(c.encode())))
+                if i >= 8 and noms.get(struct.unpack_from('<20i', sc, i - 8)[8]):
+                    codes.add(c)
+    codes = sorted(codes)
     evt_dir = os.path.join(data_dir, 'common', 'event_cfg', 'evt')
     index = []
     for code in codes:
@@ -69,8 +82,14 @@ def construire_index(data_dir, cache_dir):
             # gardiens (178) et une partie des défenses (44) : cinématique en DEUX parties <ev>_1 / <ev>_2 (deux issues),
             # qui partagent le dossier d'animation <ev> (13/11/2026 : avant, ces 222 techniques manquaient)
             if not os.path.exists(os.path.join(evt_dir, ev + '_1.cfg.bin')):
-                continue
-            ev, ev2 = ev + '_1', ev + '_2' if os.path.exists(os.path.join(evt_dir, ev + '_2.cfg.bin')) else None
+                # (24/11) technique sans bannière ni cinématique à son code (variantes de totems…) : celle de sa fiche
+                ev_f = _noms_evt(evt_dir).get(r[4] & 0xFFFFFFFF)
+                if not ev_f or not os.path.exists(os.path.join(evt_dir, ev_f + '.cfg.bin')):
+                    continue
+                ev = ev_f            # déjà la bonne partie (…_1 pour les gardiens) ; 2e partie : …_2 si elle existe
+                ev2 = ev[:-2] + '_2' if ev.endswith('_1') and os.path.exists(os.path.join(evt_dir, ev[:-2] + '_2.cfg.bin')) else None
+            else:
+                ev, ev2 = ev + '_1', ev + '_2' if os.path.exists(os.path.join(evt_dir, ev + '_2.cfg.bin')) else None
         # (14/11/2026) CINÉMATIQUE LUE DANS LA FICHE DE COMPÉTENCE : le mot qui suit le crc du code (r[4]) est le crc32 du
         # nom de la cinématique jouée. Elle diffère du nom déduit du code pour 3 techniques : whs03280 Dernier recours Σ ->
         # ev60_03285 (version complète, 4 joueurs : durée et coupes identiques à la vidéo officielle), whs03180 -> ev60_03185,

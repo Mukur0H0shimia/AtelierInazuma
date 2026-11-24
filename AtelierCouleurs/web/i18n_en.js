@@ -864,6 +864,8 @@ window.I18N_EN = {
 "Cet objet n’a pas de maillage à montrer seul (particules ou image).": "This object has no mesh to show alone (particles or image).",
 "seul dans l’aperçu de l’Atelier : glisse pour tourner, molette pour zoomer. Tes retouches s’y voient tout de suite. « ✕ Tout revoir » pour revenir à la technique.": "alone in the Atelier preview: drag to turn, wheel to zoom. Your retouches show there straight away. “✕ Show everything” to go back to the technique.",
 "Chargement du modèle…": "Loading the model…",
+"Auras (ballon et joueurs)": "Auras (ball and players)",
+"Lueurs du ballon et des joueurs (body_aura…) : coche une aura et choisis sa couleur. Elle se voit en jeu ; l'aperçu ne la montre pas encore. Une aura grisée est choisie par le match (aura du ballon du moment).": "Glows of the ball and the players (body_aura…): tick an aura and pick its colour. It shows in game; the preview doesn't show it yet. A greyed-out aura is chosen by the match (the ball's current aura).",
 "Clique dans la grande vignette pour prendre une couleur (ex. seulement les ailes, seulement l'armure).": "Click in the large thumbnail to pick a colour (e.g. only the wings, only the armour).",
 "Appliquer aux textures choisies": "Apply to the chosen textures",
 "Aléatoire": "Random",

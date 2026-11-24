@@ -2,6 +2,10 @@
 
 *English below.*
 
+## 3.0.3
+- **47 techniques en plus** : celles qui n'ont pas de bannière à elles dans le jeu manquaient (Météore géant A, Volée de manchots, Dernier recours, Frappe du loup argenté et les autres variantes des totems, les « Rêve : … », Tempête de feu, Impact lumineux…). Elles sont maintenant dans la liste, avec leur cinématique.
+- **Lueurs des joueurs** (Main céleste de l'amitié, Requin ténébreux…) : elles n'étaient pas bloquées, mais leur bloc s'appelait « Aura du ballon » et était caché en mode simple. Il s'appelle maintenant **« Auras (ballon et joueurs) »** et se voit en mode simple : coche une aura et choisis sa couleur. Elle se voit en jeu ; l'aperçu ne la montre pas encore. Seule l'aura du ballon choisie par le match reste grisée.
+
 ## 3.0.2
 - **⚙ Paramètres coupé** : avec la palette « Comme le jeu » (celle par défaut), la fenêtre ne défilait pas ; le bas (Dossier du jeu, Corbeille, Cache) était caché, même en plein écran à 100 %. Elle défile maintenant jusqu'en bas.
 - **Mode dessin sur un petit écran** : la barre de lecture de la vue 3D passe à la ligne ; « Bannière », « Son » et le bouton vidéo ne sortent plus de l'écran.
@@ -182,6 +186,10 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 3.0.3
+- **47 more techniques**: the ones without their own banner in the game were missing (Meteor Blade A, Penguin Volley, Last Resort, Silver Wolf Strike and the other totem variants, the "Dreamscape: …" ones, Fireball Storm, Luminous Orb…). They are now in the list, with their cutscene.
+- **Player glows** (God Hand of Friendship, Shark Shooter…): they weren't locked, but their block was called "Ball aura" and was hidden in simple mode. It is now called **"Auras (ball and players)"** and shows in simple mode: tick an aura and pick its colour. It shows in game; the preview doesn't show it yet. Only the ball aura chosen by the match stays greyed out.
 
 ## 3.0.2
 - **⚙ Settings cut off**: with the "Like the game" palette (the default one), the window didn't scroll; its bottom (Game folder, Trash, Cache) was hidden, even full screen at 100 %. It now scrolls all the way down.

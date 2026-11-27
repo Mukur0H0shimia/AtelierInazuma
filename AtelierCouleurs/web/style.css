@@ -1295,3 +1295,9 @@ html header .titre-tech { flex-shrink: 1; min-width: 40px; }
 .menu-carte button:hover { background: #3f6fae; }
 .menu-carte button.primaire { font-weight: bold; color: #ffd36b; border-bottom: 1px solid #4b5961; }
 .menu-carte button.supprimer { color: #ff8a80; }
+
+/* (28/11) barre de lecture : boutons sur une ligne (« ⬇ Rendu vidéo » et « Vidéo du jeu » se coupaient en deux) */
+#l-rendu, #l-rendu-q, #l-video { white-space: nowrap; flex: none; }
+/* (28/11) petit écran (1366) : la barre passe à la ligne au lieu de serrer le texte « Lecteur natif… » en colonne et de couper « Vidéo du jeu » */
+#lecteur { flex-wrap: wrap; row-gap: 4px; }
+#l-film-info { flex: 1 1 220px; min-width: 160px; }

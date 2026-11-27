@@ -105,8 +105,12 @@ def _lire(f, abime):
         return []
 
 
+# (28/11) esprits spéciaux sans nom dans les tables du jeu (nom affiché dans l'Atelier ; vus dans l'Atelier)
+NOMS_SPECIAUX = {c: 'Esprit spécial (%s)' % c for c in ('kx000010', 'me000010', 'mx000010')}
+
+
 def construire(data_dir, cache_dir):
-    f_cache = os.path.join(cache_dir, 'index_personnages.json')
+    f_cache = os.path.join(cache_dir, 'index_personnages_v3.json')     # (28/11) v3 : esprits spéciaux, noms complets
     if os.path.exists(f_cache):
         return json.load(open(f_cache, encoding='utf-8'))
     c = os.path.join(data_dir, 'common')
@@ -127,11 +131,14 @@ def construire(data_dir, cache_dir):
             techniques.setdefault(v[7] & 0xFFFFFFFF, []).append(v[1])         # crc32 du modèle -> techniques
             if isinstance(v[2], int):
                 noms_aura.setdefault(v[7] & 0xFFFFFFFF, v[2])                  # 3e champ = id du nom (skill_text)
-    textes = _textes(data_dir)
+    textes = _textes(data_dir, longs=True)          # (28/11) nom complet des esprits (« Éminent, le génie Majin »)
     liste = []
     for genre, dossier, prefixe in (('Esprit guerrier', '_keshin', 'k'), ('Totem', '_waza', 'a')):
         for code in sorted(os.listdir(os.path.join(c, 'chr', dossier))):
-            if not (code.startswith(prefixe) and code[len(prefixe):].isdigit()):
+            # (28/11, retour d'un joueur : « l'esprit de Mark n'y est pas », c'est le Majin) esprits SPÉCIAUX du dossier _keshin
+            # avec deux lettres (kx000010, mx000010, me000010) : avant, seuls « k » + chiffres étaient listés
+            speciaux = dossier == '_keshin' and len(code) == 8 and code[:2].isalpha() and code[2:].isdigit()
+            if not ((code.startswith(prefixe) and code[len(prefixe):].isdigit()) or speciaux):
                 continue
             if not os.path.exists(os.path.join(c, 'chr', dossier, code, code + '.g4pkm')):
                 continue
@@ -139,6 +146,8 @@ def construire(data_dir, cache_dir):
             nom = noms.get(id_nom.get(crc))
             if _japonais(nom):                     # beaucoup de noms d'esprits ne sont pas traduits dans chara_text
                 nom = textes.get(noms_aura.get(crc)) or nom
+            if not nom and code in NOMS_SPECIAUX:  # (28/11) sans nom dans les tables du jeu
+                nom = NOMS_SPECIAUX[code]
             liste.append({'code': code, 'nom': nom or code, 'genre': genre, 'dossier': dossier,
                           'techniques': techniques.get(crc, [])})
     if not abime:                                  # liste incomplète (noms manquants) : pas gardée en cache

@@ -702,7 +702,7 @@ def lier_technique(cfg, neuf, technique, cache_dir=None):
                                             if c.get('technique_liee') else 'd\'origine (celle de %s)' % c['nom_base'])]
     pl = (c.get('technique_liee') or {}).get('scene') or {}
     try:                                      # nom de l'esprit (index des esprits de l'Atelier)
-        nom_k = next((x['nom'] for x in json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'cache', 'index_personnages.json'), encoding='utf-8'))
+        nom_k = next((x['nom'] for x in json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'cache', 'index_personnages_v3.json'), encoding='utf-8'))
                       if x['code'] == pl.get('esprit')), pl.get('esprit'))
     except (OSError, ValueError):
         nom_k = pl.get('esprit')

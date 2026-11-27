@@ -249,6 +249,7 @@
     var d = boiteCorbeille(), L = d.querySelector('.c-liste'); L.innerHTML = '';
     var l = CORB.liste.filter(function (x) { return !CORB.filtre || x.genre === CORB.filtre; });
     d.querySelector('.c-total').textContent = l.length + ' · ' + enOctets(l.reduce(function (a, x) { return a + (x.taille || 0); }, 0));
+    d.querySelector('.c-vider').disabled = !l.length;     // (27/11, essai profond) corbeille vide : bouton grisé (avant : clic sans effet)
     if (!l.length) { L.innerHTML = '<p class="p-note c-vide">La corbeille est vide.</p>'; return; }
     l.forEach(function (x) {
       var r = document.createElement('div'); r.className = 'c-ligne';

@@ -16,13 +16,19 @@ GENRES = {'whs': ('ev60', 'Tir'), 'who': ('ev61', 'Dribble'), 'whd': ('ev62', 'D
 LETTRE_TIR = {'mountain': 'a', 'wind': 'b', 'fire': 'c', 'forest': 'd', 'void': 'e'}
 
 
-def _textes(data_dir, langue=None):
+def _textes(data_dir, langue=None, longs=False):
+    """skill_text : id -> nom. (28/11, retour d'un joueur : « l'esprit de Mark n'y est pas », Majin the Great listé « Éminent »)
+    LU : un esprit guerrier a DEUX lignes, v[1] = 0 « Éminent » (court) et v[1] = 11 « Éminent, le génie Majin » (son vrai
+    nom, celui du jeu) ; longs=True -> la ligne 11 quand elle existe"""
     langue = langue or _langue.code()                  # (FR / EN)
     L = cfgbin.lire(open(os.path.join(data_dir, 'common', 'text', langue, 'skill_text.cfg.bin'), 'rb').read())
     t = {}
     for c, v in L:
         if len(v) > 5 and isinstance(v[0], int) and isinstance(v[5], str):
-            t.setdefault(v[0], v[5])
+            if longs and v[1] == 11:
+                t[v[0]] = v[5]
+            else:
+                t.setdefault(v[0], v[5])
     return t
 
 

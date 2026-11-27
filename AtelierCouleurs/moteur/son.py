@@ -139,12 +139,37 @@ class Banque:
             return f.read(offs[k + 1] - debut)
 
 
+_BANQUES = {}
+
+
 def trouver_banque(data_dir, nom):
-    """le .acb (de sound_asset, langues comprises) qui contient ce nom de son"""
+    """le .acb (de sound_asset, langues comprises) qui contient ce nom de son.
+    (27/11, essai de l'Atelier public en lecture directe : « Permission denied … ev07_01900.acb ») chaque son relisait TOUS les
+    .acb (et, en lecture directe, les sortait des paquets) : un fichier tout juste sorti, encore tenu par Windows (antivirus),
+    faisait planter le son. Réponse gardée en mémoire ; fichier illisible : réessayé, puis passé."""
+    cle = (data_dir, nom)
+    if cle in _BANQUES:
+        return _BANQUES[cle]
+    trouve = None
     for f in sorted(glob.glob(os.path.join(data_dir, 'common', 'sound_asset', '**', '*.acb'), recursive=True)):
-        if nom.encode() in open(f, 'rb').read():
-            return f
-    return None
+        for essai in range(5):
+            try:
+                with open(f, 'rb') as fo:
+                    lu = fo.read()
+                break
+            except PermissionError:
+                import time
+                time.sleep(0.2)
+            except OSError:
+                lu = b''
+                break
+        else:
+            lu = b''
+        if nom.encode() in lu:
+            trouve = f
+            break
+    _BANQUES[cle] = trouve
+    return trouve
 
 
 def en_ogg(data_dir, nom, cache_dir, perso=None):

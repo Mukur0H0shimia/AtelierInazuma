@@ -6,7 +6,7 @@ dossiers (os.listdir, glob, os.walk…) répondent avec tous les fichiers du jeu
 
 Virtual "data" folder: game files are taken out of their pack on first use, then read normally.
 """
-import os, sys, glob, fnmatch, threading, builtins, shutil
+import os, sys, glob, fnmatch, threading, builtins, shutil, time
 
 _J = None            # paquets_jeu.Jeu
 _RACINE = None       # dossier où les fichiers sortis sont rangés (normcase)
@@ -95,6 +95,14 @@ def _open(file, mode='r', *a, **k):
     if isinstance(file, (str, os.PathLike)) and not any(c in mode for c in 'wax+'):
         if not _o['exists'](file):
             sortir(file)
+        # (27/11) fichier tout juste sorti du paquet, encore tenu un instant par Windows (antivirus) : réessayé (1 s au plus)
+        for _i in range(5):
+            try:
+                return _o['open'](file, mode, *a, **k)
+            except PermissionError:
+                if _i == 4:
+                    raise
+                time.sleep(0.2)
     return _o['open'](file, mode, *a, **k)
 
 

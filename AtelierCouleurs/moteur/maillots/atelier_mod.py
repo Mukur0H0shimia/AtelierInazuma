@@ -113,8 +113,42 @@ def noms_maillots(donnees):
     return noms
 
 
+def _recaler(v, racine, repere):
+    """(27/11, retour de Hibou : « No such file … C:\\Users\\…\\OneDrive\\Desktop\\AtelierInazuma\\…\\u080601_10.g4tx » alors que
+    l'Atelier tourne depuis D:\\AtelierInazuma) le catalogue et les maillots gardaient des chemins COMPLETS : Atelier déplacé
+    ou réinstallé ailleurs -> chemins morts. Un chemin absent est recalé sur le dossier actuel à partir du repère
+    (« dx11 » / « common » pour les fichiers du jeu, « travail » pour mes images)."""
+    if not isinstance(v, str) or not v or os.path.exists(v):
+        return v
+    p = v.replace('/', os.sep).split(os.sep)
+    for r in repere:
+        if r in p:
+            n = os.path.join(racine, *p[p.index(r) + (0 if r in ('dx11', 'common') else 1):])
+            return n if os.path.exists(n) else v
+    return v
+
+
+def _recaler_catalogue(cat, donnees):
+    for e in cat:
+        for k, v in list(e.items()):
+            if isinstance(v, str) and ('dx11' in v or 'common' in v) and (os.sep in v or '/' in v):
+                e[k] = _recaler(v, donnees, ('dx11', 'common'))
+    return cat
+
+
+def _recaler_projet(p):
+    for m in p.get('maillots', []):
+        for k, v in list(m.items()):
+            if isinstance(v, str) and 'travail' in v:
+                m[k] = _recaler(v, TRAVAIL, ('travail',))
+            elif isinstance(v, dict) and isinstance(v.get('png'), str):
+                v['png'] = _recaler(v['png'], TRAVAIL, ('travail',))
+    return p
+
+
 def catalogue(donnees, journal=print):
     cat = json.load(open(CATALOGUE, encoding='utf-8')) if os.path.exists(CATALOGUE) else construire_catalogue(donnees, journal)
+    cat = _recaler_catalogue(cat, donnees)
     try:                                       # (23/11) noms dans la langue choisie (le catalogue garde ceux de sa création)
         noms = noms_maillots(donnees)
         for e in cat:
@@ -132,7 +166,7 @@ def planche_icones(donnees):
 # ------------------------------------------------------------------------------------------------ projet
 def charger_projet():
     if os.path.exists(PROJET):
-        return json.load(open(PROJET, encoding='utf-8'))
+        return _recaler_projet(json.load(open(PROJET, encoding='utf-8')))
     return {'maillots': []}
 
 

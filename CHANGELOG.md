@@ -2,6 +2,15 @@
 
 *English below.*
 
+## 4.1.1
+
+- **Maillots** : « Créer » échouait (« No such file or directory … .g4tx ») quand l'Atelier avait été déplacé ou réinstallé dans un autre dossier. Les maillots retrouvent maintenant leurs fichiers tout seuls.
+- **Noms des esprits guerriers** : ils étaient coupés (« Éminent » au lieu de « Éminent, le génie Majin », « Pégase » au lieu de « Pégase, l'étalon ailé »), donc introuvables en cherchant « Majin ». Ils ont maintenant leur nom complet du jeu, dans la liste et dans l'écran du joueur. Trois esprits spéciaux du jeu, sans nom, sont aussi dans la liste.
+- **Sons** (Atelier sans dossier « data » extrait) : un son de technique pouvait planter (« Permission denied »). Corrigé.
+- **Barre de lecture** sur les petits écrans : elle passe à la ligne au lieu de couper « Vidéo du jeu ».
+- **Corbeille vide** : « Tout supprimer définitivement » est grisé.
+- **Journal** (`serveur.log`) : plus de messages d'erreur à chaque son interrompu.
+
 ## 4.1
 
 - **Partager une création** : clic droit sur une carte de Mes créations → « ⇪ Partager… » → un fichier `.atelier` (dossier `AtelierCouleurs\exports`). Les autres font « ⬆ Importer une création » (ou glissent le fichier sur Mes créations), puis « Continuer » et « Créer » : la création est refaite chez eux avec ses couleurs, sa bannière, ses stats, son élément et ses réglages, sans rien écraser (un nom déjà pris devient « … (2) »). Les maillots arrivent directement dans l'onglet Maillots.
@@ -273,6 +282,15 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 4.1.1
+
+- **Kits**: "Create" failed ("No such file or directory … .g4tx") when the Atelier had been moved or reinstalled in another folder. Kits now find their files again by themselves.
+- **Keshin names**: they were cut short ("The Great" style short names instead of "The Great Genie Majin", "Pegasus" instead of the full name), so searching "Majin" found nothing. They now have their full in-game name, in the list and on the player screen. Three special Keshin of the game, with no name, are in the list too.
+- **Sounds** (Atelier without an extracted "data" folder): a technique sound could fail ("Permission denied"). Fixed.
+- **Playback bar** on small screens: it wraps instead of cutting "Game video".
+- **Empty trash**: "Delete all permanently" is greyed out.
+- **Log** (`serveur.log`): no more error messages each time a sound is interrupted.
 
 ## 4.1
 

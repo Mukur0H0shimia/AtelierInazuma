@@ -270,6 +270,9 @@ def _series_voisines():
     num = lambda c: int(_re.sub(r'\D', '', c) or 0)
     for _p in PERSOS:
         c = _p['code']
+        if c[:2] in ('kx', 'mx', 'me'):   # (28/11) esprits spéciaux (Majin…) : scènes de l'histoire de Victory Road (ev74)
+            SERIE_VOISINE[c] = ['Victory Road']; _p['series'] = ['Victory Road']
+            continue
         if c in connus:
             SERIE_VOISINE[c] = [connus[c]]
             continue
@@ -2920,8 +2923,13 @@ class Gestion(BaseHTTPRequestHandler):
         self.send_header('Content-Type', type_)
         self.send_header('Content-Length', str(len(corps)))
         self.send_header('Cache-Control', 'no-store')
-        self.end_headers()
-        self.wfile.write(corps)
+        # (27/11) page fermée, son ou image interrompus par la page : rien à signaler (avant : 3 tracebacks par son coupé dans
+        # serveur.log, le journal qu'on demande aux joueurs)
+        try:
+            self.end_headers()
+            self.wfile.write(corps)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
 
     def do_GET(self):
         u = urlparse(self.path)

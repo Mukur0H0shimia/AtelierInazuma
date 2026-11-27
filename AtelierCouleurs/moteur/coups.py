@@ -32,10 +32,11 @@ def famille(code):
 
 def catalogue(data_dir, cache_dir):
     """toutes les techniques du jeu qu'une carte peut apprendre : [{id, code, nom, genre}]"""
-    f = os.path.join(cache_dir, 'index_coups.json')
+    f = os.path.join(cache_dir, 'index_coups_v2.json')          # (28/11) v2 : noms complets des esprits
     if os.path.exists(f):
         return json.load(open(f, encoding='utf-8'))
     noms = _textes(data_dir)
+    noms_longs = _textes(data_dir, longs=True)          # (28/11) esprits / totems / armures : leur nom complet
     S = os.path.join(data_dir, 'common', 'gamedata', 'skill')
     out, vus = [], set()
     sc = open(_dernier(os.path.join(S, 'skill_config_*.cfg.bin')), 'rb').read()
@@ -46,7 +47,7 @@ def catalogue(data_dir, cache_dir):
             out.append({'id': zlib.crc32(code.encode()), 'code': code, 'nom': nom, 'genre': famille(code)}); vus.add(code)
     for k, v in cfgbin.lire(open(_dernier(os.path.join(S, 'aura_skill_config_*.cfg.bin')), 'rb').read()):
         if len(v) > 6 and isinstance(v[1], str) and isinstance(v[0], int) and (v[0] & 0xFFFFFFFF) == zlib.crc32(v[1].encode()) and v[1] not in vus:
-            nom = noms.get(v[2]) if isinstance(v[2], int) else None
+            nom = noms_longs.get(v[2]) if isinstance(v[2], int) else None
             if nom:
                 out.append({'id': v[0] & 0xFFFFFFFF, 'code': v[1], 'nom': nom, 'genre': famille(v[1]),
                             'liee': v[6] & 0xFFFFFFFF if isinstance(v[6], int) else 0}); vus.add(v[1])

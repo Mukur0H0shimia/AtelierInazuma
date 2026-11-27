@@ -5,6 +5,7 @@
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atelier Inazuma</title>
+<link rel="icon" href="/web/favicon.ico">  <!-- (28/11) l'icône de l'Atelier (avant : /favicon.ico introuvable, erreur 404 à chaque ouverture) -->
 <link rel="stylesheet" href="/web/style.css">
 <link rel="stylesheet" href="/web/theme_jeu.css">
 <script src="/web/parametres.js"></script>
@@ -57,8 +58,11 @@
     <div class="hub-section" id="jm-s-continuer"><h2>À continuer</h2><span>sauvegardé tout seul, pas encore transformé en mod</span></div>
     <div id="hub-projets" class="hub-grille"></div>
     <!-- (22/11, idée de muku) d'abord le visuel, ensuite les valeurs : créations qui attendent leurs stats -->
-    <div class="hub-section" id="jm-s-attente"><h2>En attente de stats / cosmétique</h2><span>le visuel est fait : règle ses valeurs (puissance, PT, élément…) ou garde celles de l'original</span></div>
+    <div class="hub-section" id="jm-s-attente"><h2>En attente de stats</h2><span>le visuel est fait : règle ses valeurs (puissance, PT, élément…) ou garde celles de l'original</span></div>
     <div id="hub-attente" class="hub-grille"></div>
+    <!-- (26/11, demande de muku) objets, tenues et maillots à part : le visuel seulement, pas de stats -->
+    <div class="hub-section" id="jm-s-cosmetique"><h2>Cosmétique</h2><span>objets, tenues et maillots : le visuel seulement, pas de stats</span></div>
+    <div id="hub-cosmetique" class="hub-grille"></div>
     <div class="hub-section" id="jm-s-terminees"><h2>Terminées</h2><span>faites avec « Créer »</span></div>
     <div id="hub-creations" class="hub-grille"></div>
     <div class="hub-section" id="jm-s-prereglages"><h2>Préréglages <b id="hub-n-prereglages"></b></h2><span>à appliquer sur n'importe quelle technique (bloc « Remplacer une couleur partout »)</span></div>
@@ -91,6 +95,8 @@
     <h2>Texte</h2>
     <label title="Style esprit guerrier : « / » coupe le texte en deux lignes (nom / titre), comme les bannières du jeu">Texte <input id="b-texte"></label>
     <label>Police <select id="b-police"></select></label>
+    <!-- (27/11, essai profond : réglages sans effet) les lettres du jeu sont des images du jeu : seuls texte et position comptent -->
+    <p class="aide" id="b-jeu-note" hidden>Lettres du jeu : leurs couleurs, contours, ombre et forme sont ceux du jeu. Ici, seuls le texte et la position se règlent.</p>
     <div class="ligne"><label>Taille (0 = auto) <input type="range" id="b-taille" min="0" max="300" value="0"></label></div>
     <div class="ligne"><label>Espacement <input type="range" id="b-espacement" min="-20" max="60" value="2"></label></div>
     <h2>Forme</h2>
@@ -131,7 +137,7 @@
       <button id="rien-sel">Rien</button>
     </div>
     <div class="ligne">
-      <button id="isoler">Isoler la sélection</button>
+      <button id="isoler" class="avance">Isoler la sélection</button>
       <button id="tout-voir">Tout afficher</button>
     </div>
     <div id="pieces" class="liste"></div>
@@ -183,7 +189,7 @@
     <div id="info-sel" class="info-sel"></div>
     <!-- (15/11/2026) entrée du MODE DESSIN (atelier.js) : les outils façon Photoshop ne vivent que dans ce mode -->
     <div class="at-entree seul-perso"><button id="at-entrer" class="primaire">✎ Mode dessin</button>
-      <span class="aide">Calques, réglages, pinceaux… Clique une partie de l'esprit pour ne colorier qu'elle.</span></div>
+      <span class="aide">Calques, réglages, pinceaux… Clique une partie du modèle pour ne colorier qu'elle.</span></div>
     <div id="reprise" class="reprise" style="display:none"><span id="reprise-texte"></span>
       <div class="ligne"><button id="reprise-oui" class="primaire">Reprendre</button><button id="reprise-non">Repartir de zéro</button></div>
       <p class="aide">Rien n'est sauvegardé tant que tu n'as pas choisi.</p></div>
@@ -193,24 +199,29 @@
     <div class="sous">Couleurs de la technique (clic : la choisir)</div>
     <div id="rc-palette" class="rc-palette"></div>
     <div class="ligne"><label>Remplacer <input type="color" id="rc-de" value="#ff8800"></label><button id="rc-inverser" title="Échanger les deux couleurs">⇄</button><label>par <input type="color" id="rc-vers" value="#2a6cff"></label></div>
-    <div class="ligne"><label>Tolérance <input type="range" id="rc-tol" min="5" max="90" value="30"></label><span id="v-rc-tol" class="aide">30°</span></div>
-    <div class="ligne rc-cibles"><label><input type="checkbox" id="rc-tex" checked> Textures</label><label><input type="checkbox" id="rc-mat" checked> Matériaux</label>
+    <div class="ligne avance"><label>Tolérance <input type="range" id="rc-tol" min="5" max="90" value="30"></label><span id="v-rc-tol" class="aide">30°</span></div>
+    <div class="ligne rc-cibles avance"><label><input type="checkbox" id="rc-tex" checked> Textures</label><label><input type="checkbox" id="rc-mat" checked> Matériaux</label>
       <label><input type="checkbox" id="rc-som" checked> Sommets</label><label><input type="checkbox" id="rc-ptl" checked> Particules</label></div>
     <div class="ligne"><button id="rc-ok" class="primaire">Remplacer</button><button id="rc-annuler">Annuler le dernier</button></div>
     <div id="rc-recette" class="rc-recette"></div>
-    <div class="sous">Préréglages (réutilisables sur d'autres techniques)</div>
-    <div class="ligne"><select id="pr-liste"></select><button id="pr-appliquer">Appliquer</button><button id="pr-suppr" title="Supprimer ce préréglage">✕</button></div>
-    <div class="ligne"><input id="pr-nom" placeholder="Nom (ex. Tout en bleu)"><button id="pr-garder">Garder</button></div>
-    <p class="aide">Garde les remplacements faits ici (dans l'ordre) + aura du ballon, couleur du tir, traînée et lueurs.</p>
+    <div class="sous avance">Préréglages (réutilisables sur d'autres techniques)</div>
+    <div class="ligne avance"><select id="pr-liste"></select><button id="pr-appliquer">Appliquer</button><button id="pr-suppr" title="Supprimer ce préréglage">✕</button></div>
+    <div class="ligne avance"><input id="pr-nom" placeholder="Nom (ex. Tout en bleu)"><button id="pr-garder">Garder</button></div>
+    <p class="aide avance">Garde les remplacements faits ici (dans l'ordre) + aura du ballon, couleur du tir, traînée et lueurs.</p>
     </details>
     <details class="bloc" open><summary>Textures <span class="compte" id="cpt-tex"></span></summary>
-    <div class="ligne">
+    <div class="ligne avance">
       <label><input type="checkbox" id="filtre-sel" checked> Seulement celles des pièces sélectionnées</label>
     </div>
     <div class="ligne">
       <button id="tex-tout">Toutes</button><button id="tex-rien">Aucune</button>
       <button id="tex-dessiner" class="primaire" title="Ouvrir la texture choisie en grand pour dessiner (ou double-clic sur une vignette)">✎ Dessiner</button>
-      <button id="tex-isoler" title="Montrer seul l'objet de la texture choisie, au repos, pour le retoucher (comme un esprit guerrier)">◎ Voir seul</button>
+      <button id="tex-isoler" class="avance" title="Montrer seul l'objet de la texture choisie, au repos, pour le retoucher (comme un esprit guerrier)">◎ Voir seul</button>
+    </div>
+    <div class="ligne avance">
+      <button id="tex-png" title="Enregistrer la texture choisie en PNG, telle qu'elle est (retouches comprises), pour la peindre ailleurs">⬇ PNG</button>
+      <button id="tex-importer" title="Mettre une image PNG à la place de la texture choisie (même taille, sinon mise à sa taille). Plusieurs images : chacune va à la texture dont le nom est dans le nom du fichier">⬆ Remplacer par une image</button>
+      <button id="tex-glb" title="Enregistrer le modèle ouvert (pièces visibles, au repos, UV et textures PNG) en .glb, pour Substance Painter ou Blender">⬇ Modèle (.glb)</button>
     </div>
     <div id="textures" class="grille"></div>
 
@@ -228,11 +239,11 @@
     </div>
     <div class="ligne"><label>Saturation <input type="range" id="sat" min="0" max="250" value="120"></label><span id="v-sat">1,2</span></div>
     <div class="ligne"><label>Luminosité <input type="range" id="lum" min="20" max="250" value="100"></label><span id="v-lum">1,0</span></div>
-    <div class="ligne">
+    <div class="ligne avance">
       <label><input type="checkbox" id="garder-or"> Garder l'or / le jaune</label>
       <label><input type="checkbox" id="garder-blanc" checked> Garder les blancs</label>
     </div>
-    <div class="ligne"><label><input type="checkbox" id="zone-on"> Seulement une couleur de la texture</label></div>
+    <div class="ligne avance"><label><input type="checkbox" id="zone-on"> Seulement une couleur de la texture</label></div>
     <div id="zone" class="zone">
       <div class="ligne"><label>Couleur à changer <input type="color" id="zone-c" value="#f5c842"></label>
         <label>Tolérance <input type="range" id="zone-t" min="5" max="100" value="30"></label></div>
@@ -278,7 +289,7 @@
     <!-- (24/11, retour d'enhanca : « les lueurs des personnages sont bloquées ») bloc visible aussi en mode simple, titre qui dit
          qu'il contient les lueurs des joueurs (body_aura…, shark_aura…), et où la couleur se voit -->
     <details class="bloc"><summary>Auras (ballon et joueurs)</summary>
-    <p class="aide">Lueurs du ballon et des joueurs (body_aura…) : coche une aura et choisis sa couleur. Elle se voit en jeu ; l'aperçu ne la montre pas encore. Une aura grisée est choisie par le match (aura du ballon du moment).</p>
+    <p class="aide">Lueurs du ballon et des joueurs (body_aura…) : coche une aura et choisis sa couleur. Elle se voit en jeu et dans l'aperçu (lueur des joueurs et du ballon). Une aura grisée est choisie par le match (aura du ballon du moment).</p>
     <div id="auras"></div>
     </details>
 
@@ -334,7 +345,8 @@
         <div class="ligne mm-cotes"><button data-mm-cote="10" class="actif">Domicile</button><button data-mm-cote="20">Extérieur</button></div>
         <p class="aide" id="mm-parties"></p>
         <label>Nom <input id="mm-nom" placeholder="Maillot Galaxie"></label>
-        <label>Prix (jetons de la boutique générale d'Inazuma Fantasy) <input id="mm-prix" type="number" min="1" value="1"></label>
+        <!-- (26/11, demande de muku) prix réglé dans l'étape « Cosmétique » (Mes créations) -->
+        <label hidden>Prix (jetons de la boutique générale d'Inazuma Fantasy) <input id="mm-prix" type="number" min="1" value="1"></label>
         <label>Relief du tissu <select id="mm-plis"><option value="simples">Plis simples (conseillé)</option><option value="base">Comme le maillot d'origine</option><option value="plat">Tout plat</option></select></label>
         <details class="bloc"><summary>Numéro dans le dos</summary>
           <label><input type="checkbox" id="mm-num-perso"> Personnaliser le numéro</label>
@@ -352,12 +364,8 @@
           <p class="aide">Polices de l'ordinateur : l'Atelier refait la planche des chiffres 0 à 99 (comme celle du jeu) à l'enregistrement.
             Couleurs : réglage de VRFW. Taille, hauteur et nom : à vérifier en jeu.</p>
         </details>
-        <details class="bloc"><summary>Icône et emblème</summary>
-          <div class="ligne"><img id="mm-icone-img" class="mm-vign" alt=""><label>Icône de la boutique (256 × 256, fond transparent) <input type="file" id="mm-icone" accept="image/png"></label>
-            <button id="mm-icone-dessin" title="Dessiner l'icône (mode dessin) : elle part de ton image, sinon de l'icône du maillot de base">✎ Dessiner</button></div>
-          <div class="ligne"><img id="mm-embleme-img" class="mm-vign" alt=""><label>Emblème d'équipe (512 × 512, fond transparent ; vendu avec le maillot) <input type="file" id="mm-embleme" accept="image/png"></label>
-            <button id="mm-embleme-dessin" title="Dessiner l'emblème (mode dessin) : il part de ton image, sinon d'une image vide">✎ Dessiner</button></div>
-        </details>
+        <!-- (27/11, muku) icône et emblème : réglés dans Mes créations -> Cosmétique (écran de la boutique) -->
+        <p class="aide">L’icône de la boutique et l’emblème se règlent ensuite dans Mes créations → « Cosmétique » (dessin ou image).</p>
         <div class="ligne">
           <button id="mm-enregistrer" class="avance" title="Garde le maillot sans refaire le mod (pour le finir plus tard)">Enregistrer sans construire</button>
           <button id="mm-nouveau" title="Le prochain enregistrement crée un nouveau maillot">Nouveau</button>
@@ -379,16 +387,28 @@
     <!-- (15/11/2026) tenues et objets : COPIE = un nouveau joueur qui les porte (moteur/copies_tenues.py, mod MesPersonnages) -->
     <div class="seul-copie-outfit" id="bloc-outfit">
       <h2>Créer une copie (tenue à équiper)</h2>
-      <p class="aide avertissement">Une <b>nouvelle tenue</b> en boutique : tes joueurs la mettent comme les tenues du jeu. La tenue du jeu ne change pas.
-        Elle va à <b>chaque corpulence</b> qui a un maillage (comme les tenues de ChronicleDeluxe et d'Inazuma Fantasy).</p>
-      <p class="aide" id="co-corps"></p>
-      <div class="cu-corps-titre">Qui peut la mettre ? <small>(coché = a sa version dans le jeu ; « emprunte » = prend la version d'un corps au même squelette, à vérifier en jeu)</small></div>
+      <p class="aide avertissement">Une nouvelle tenue à acheter en boutique. La tenue du jeu ne change pas.</p>
+      <p class="aide avance" id="co-corps"></p>
+      <div class="cu-corps-titre">Qui peut la mettre ? <small>(coché = prêt dans le jeu)</small></div>
       <div id="cu-corps" class="cu-corps"></div>
+      <p class="aide" id="cu-corps-non"></p>
       <div class="formulaire">
         <label>Nom de la tenue <input id="cu-nom" placeholder="Costume de Jude (rouge)"></label>
-        <label>Description <textarea id="cu-desc" rows="2"></textarea></label>
-        <label>Prix (jetons) <input id="cu-prix" type="number" min="1" value="28"></label>
-        <div class="ligne"><img id="cu-icone-img" class="mm-vign" alt=""><label>Icône (256 × 256, sinon la texture réduite) <input type="file" id="cu-icone" accept="image/png"></label></div>
+        <label>Description <textarea id="cu-desc" rows="2" placeholder="Seuls les joueurs de même gabarit peuvent la porter."></textarea></label>
+        <!-- (27/11, muku : « l'outil doit être simple ») réglages facultatifs repliés ; sans y toucher, tout est automatique -->
+        <details class="cu-plus"><summary>Plus de réglages <small>(facultatif)</small></summary>
+          <p class="aide" id="cu-auto">Sans y toucher : les chaussures du jeu, une icône faite toute seule, en vente à la boutique.</p>
+          <label>Chaussures <select id="cu-chaussures"><option value="origine">Celles du jeu pour ce vêtement</option>
+            <option value="raimon">Crampons de Raimon</option><option value="aucune">Aucune</option></select></label>
+          <div class="ligne"><label>Rareté <select id="cu-rarete"><option value="1">1 (normale)</option><option value="2">2 (rare)</option></select></label>
+            <label>Nombre max dans le sac <input id="cu-max" type="number" min="1" max="99" value="1"></label></div>
+          <label>Seulement ces joueurs <small>(sinon : tous ceux de la bonne corpulence)</small>
+            <input id="cu-joueurs" list="cu-joueurs-liste" placeholder="Nom d'un joueur, puis Entrée"></label>
+          <datalist id="cu-joueurs-liste"></datalist><div id="cu-joueurs-choisis" class="cu-joueurs"></div>
+        </details>
+        <!-- (26/11, demande de muku) prix et icône réglés dans l'étape « Cosmétique » (Mes créations) -->
+        <label hidden>Prix (jetons) <input id="cu-prix" type="number" min="1" value="28"></label>
+        <div class="ligne" hidden><img id="cu-icone-img" class="mm-vign" alt=""><label>Icône (256 × 256, sinon la texture réduite) <input type="file" id="cu-icone" accept="image/png"></label></div>
         <div class="ligne"><button id="cu-exporter" class="primaire">Créer la tenue</button><button id="cu-installer">Installer dans le jeu</button></div>
       </div>
     </div>
@@ -414,7 +434,10 @@
       <div class="formulaire" id="oj-formulaire">
         <label>Nom <input id="oj-nom-copie"></label>
         <label>Description <textarea id="oj-desc-copie" rows="3"></textarea></label>
-        <label>Prix (jetons, boutique générale d'Inazuma Fantasy) <input id="oj-prix" type="number" min="1" value="10"></label>
+        <!-- (26/11, demande de muku) prix réglé dans l'étape « Cosmétique » (Mes créations) -->
+        <label hidden>Prix (jetons, boutique générale d'Inazuma Fantasy) <input id="oj-prix" type="number" min="1" value="10"></label>
+        <!-- (27/11, muku : « il faut régler des trucs dans la création directement ») réglages propres au genre d'objet (bonus…) -->
+        <div id="oj-reglages"></div>
         <div class="ligne"><button id="oj-exporter" class="primaire">Créer la copie</button><button id="oj-installer">Installer dans le jeu</button></div>
         <p class="aide">Mêmes effets que l'original (copie de l'objet du jeu). Écrit comme les objets de CharacterReforged et de MesMaillots.</p>
       </div>
@@ -459,6 +482,17 @@
       <div class="formulaire">
         <label>Nom du joueur <input id="cp-nom" placeholder="Mark Galaxie"></label>
         <label>Description <textarea id="cp-desc" rows="2"></textarea></label>
+        <!-- (26/11) peau du corps (chara_model skin_color) : bras, jambes et cou ne sont pas dans la texture de la tête -->
+        <div class="ligne cp-peau-ligne">
+          <label>Peau des bras et des jambes <input type="color" id="cp-peau" value="#F0CFB0"></label>
+          <button id="cp-peau-tete" type="button">Comme la tête</button>
+          <button id="cp-peau-origine" type="button">Celle de l'original</button>
+        </div>
+        <p class="aide" id="cp-peau-etat"></p>
+        <p class="aide">Dans le jeu, la peau du visage est peinte dans la texture de la tête, mais les bras, les jambes et le cou sont blancs et prennent la couleur de peau du personnage. Elle suit automatiquement la peau du visage recoloré ; tu peux la changer.</p>
+        <!-- (27/11, muku) morphologie : corps du nouveau joueur (chara_model [4] -> CHARA_BODY_INFO, cellule « body » de VRFW) -->
+        <label>Morphologie <select id="cp-corps"><option value="">Comme l'original</option></select></label>
+        <p class="aide" id="cp-corps-etat">La taille et la forme du corps. Le maillot de l'équipe s'adapte tout seul.</p>
         <div class="ligne">
           <button id="cp-exporter" class="primaire">Créer la copie</button>
           <button id="cp-installer">Installer dans le jeu</button>
@@ -505,7 +539,8 @@
         <label><input type="checkbox" id="at-contigu" checked> Contiguë</label></span>
       <span id="at-opt-mode" class="zn-mode"><button data-at-mode="ombrage" title="Sur le fond : la couleur prend la place, l'ombrage peint reste">Garder l'ombrage</button><button data-at-mode="couvrir" title="Couleur unie">Couvrir</button></span>
       <span id="at-opt-gomme" class="at-opt" style="display:none"><label title="Sinon : remet la texture du jeu"><input type="checkbox" id="at-gomme-transp"> Rend transparent</label></span>
-      <label class="seul-tech at-verrou" title="Coché : on recolore l'intérieur de la forme sans déborder. Décoché : on peut ajouter de nouvelles formes (elles deviennent visibles)."><input type="checkbox" id="at-verrou" checked> Garder la forme (transparence)</label>
+      <!-- (27/11, muku : « on ne peut pas dessiner dans le vide, fais un paramètre ») partout : pinceau, seau, dégradé, formes -->
+      <label class="at-vide" title="Coché : on peut peindre dans les parties transparentes (nouvelles formes, dessin sur un fond vide). Décoché : on recolore seulement ce qui existe déjà, sans déborder."><input type="checkbox" id="at-vide"> Dessiner dans le vide</label>
       <span id="at-recentes" class="zn-recentes"></span></div>
     <div class="ad-toile"><canvas id="zn-plat" width="600" height="600" title="Molette : zoom · clic droit ou Espace + glisser : déplacer"></canvas>
       <div class="at-zoom"><button id="at-zoom-moins" title="Zoom arrière">−</button><button id="at-zoom-ajuster" title="Tout voir">Ajuster</button><button id="at-zoom-plus" title="Zoom avant">+</button>
@@ -559,5 +594,6 @@
 <script src="/web/zones.js"></script>
 <script src="/web/atelier.js"></script>
 <script src="/web/atelier_outils.js"></script>
+<script src="/web/export_modele.js"></script>
 </body>
 </html>

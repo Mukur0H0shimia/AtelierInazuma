@@ -448,6 +448,8 @@ def acteurs_appels(stade, notes):
                 ps2 = mat['ps'] + '_effstatus'                 # aura du ballon : effet de statut du jeu (chr_toon_effstatus…)
                 if code_shader(ps2, 'pfxo'):
                     mat = dict(mat, ps=ps2, statut=st)
+            if A.get('peau'):                                   # (26/11) couleur de peau du personnage (chara_model skin_color), [r, g, b] 0-1
+                mat = dict(mat, peau=list(A['peau'])[:3])
             out.append({'geo': {'POSITION': P, 'NORMAL': N, 'TANGENT': T, 'COLOR': col, 'TEXCOORD': uvs, 'idx': idx},
                         'mat': mat, 'dossier': p['dossier'], 'cle': '%s/%d' % (A['acteur'], i)})
     return out
@@ -606,7 +608,7 @@ V2 vs(uint id : SV_VertexID) { V2 o; float2 p = float2((id << 1) & 2, id & 2); o
         tp = [(t + [0] * 8)[:8] for t in m['texproj']]
         aa = {'modele': I4, 'mvp': cascade if cascade is not None else mul(stade['P'], stade['V']), 'V': stade['V'], 'P': stade['P'],
               'uv': (tp + [[1, 0, 0, 0, 0, 1, 0, 0]] * 6)[:6], 'params': m['params'], 'diffuse': m['diffuse'], 'ambient': m['ambient'],
-              'acteur': True, 'statut': m.get('statut') if cascade is None else None}
+              'acteur': True, 'statut': m.get('statut') if cascade is None else None, 'peau': m.get('peau')}
         for slot, (nom_cb, b) in self.tampons(aa, prog).items():
             buf = d.tampon(b, D.BIND_CB)
             d.cb('vs', slot, buf); d.cb('ps', slot, buf)
@@ -1366,7 +1368,9 @@ float4 ps(V2 i) : SV_Target { return t0.Sample(s0, i.uv); }"""
                             # .w = intensité du contour : LU (0x140f0aa40) = 5e valeur des clés × poids du fondu ('rim_w')
                             'u_charaStatusRimColor': list(st.get('rim') or [0, 0, 0])[:3] + [float(st.get('rim_w', 1.0))],
                             'u_charaStatusPowInOutDis': [float(st.get('pow') or 1), 0.0, 0.0, 0.0]})
-            val.update({'u_skinColor': [1, 1, 1, 0], 'u_hairColor': [1, 1, 1, 0], 'u_subColor1': [0, 0, 0, 0], 'u_subColor2': [0, 0, 0, 0],
+            # (26/11) u_skinColor (cb10[0]) : chr_toon_edit fait couleur = texture × lerp(1, u_skinColor.rgb, msk.r) (LU) ; sans couleur
+            # donnée par la page : blanc (la texture telle quelle, comme avant)
+            val.update({'u_skinColor': (list(a['peau'])[:3] + [1.0]) if a.get('peau') else [1, 1, 1, 0], 'u_hairColor': [1, 1, 1, 0], 'u_subColor1': [0, 0, 0, 0], 'u_subColor2': [0, 0, 0, 0],
                         'u_pointLightHeader0': [0, 0, 0, 0], 'u_pointLightHeader1': [0, 0, 0, 0]})
             c = getattr(self, 'csm', None)
             if c:      # ombres : 3 cascades Direct3D (u_mtxLightWP[3] de cb6, choix de la cascade par u_shadowCascadeMinMax[k].y)

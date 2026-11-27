@@ -30,7 +30,8 @@ button.primaire { background: var(--accent); color: #111; border-color: var(--ac
 #vue { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: radial-gradient(#1a1f2b, #07080b); }
 .barre-vue { position: absolute; top: 8px; left: 8px; display: flex; gap: 10px; align-items: center; background: #0009; padding: 5px 8px; border-radius: 6px; }
 .note-vue { position: absolute; bottom: 8px; left: 8px; right: 8px; color: var(--doux); font-size: 12px; background: #0008; padding: 4px 8px; border-radius: 6px; }
-.grille { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.grille { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }   /* (26/11, capture de muku : vignettes hors de l'écran) minmax(0, …) : une case plus large (avertissement, nom long) n'élargit plus les colonnes */
+.grille > * { min-width: 0; }
 .tex { position: relative; border: 2px solid transparent; border-radius: 5px; background: #0b0d12; cursor: pointer; }
 .tex.sel { border-color: var(--sel); }
 .tex.modif::after { content: ""; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
@@ -311,7 +312,7 @@ body.dessin #atelier-dessin { grid-template-columns: 104px minmax(0, 1fr) 300px;
 #at-carte-contenu > button.primaire { margin-top: 6px; width: 100%; }
 .at-fonds { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; font-size: 11px; color: var(--doux); background: #11141bdd; padding: 2px 6px; border-radius: 6px; }
 .at-fonds button { padding: 2px 6px; font-size: 11px; } .at-fonds button.actif { border-color: var(--accent); color: var(--accent); }
-.at-verrou { display: inline-flex; align-items: center; gap: 4px; }
+.at-verrou, .at-vide { display: inline-flex; align-items: center; gap: 4px; }
 /* (15/11/2026) tout le jeu : maillots (Atelier Maillots), tenues, armures, personnages, objets */
 .seul-maillot, .seul-jeu-autre { display: none; }
 body.onglet-maillots .seul-maillot { display: block; }
@@ -602,6 +603,11 @@ body.onglet-objets .seul-jeu-autre { display: none !important; }
 .tc-maillot-choix select { font-family: inherit; font-size: 15px; background: #2c363c; color: #fff; border: 1px solid #4b5961; padding: 4px; max-width: 260px; }
 .tc-maillot-choix button { font-family: inherit; background: #2c363c; color: #d8e0e4; border: 1px solid #4b5961; border-radius: 0; padding: 4px 10px; cursor: pointer; }
 .tc-maillot-choix button.sel { background: linear-gradient(#2f86ff, #1b5ed8); color: #fff; border-color: #2f86ff; }
+/* (26/11) peau des bras et des jambes de la copie, en bas de la vue */
+.tc-peau-choix { top: auto; bottom: 14px; font-size: 14px; flex-wrap: wrap; justify-content: center; max-width: 94%; width: max-content; }
+.tc-peau-choix input[type=color] { width: 38px; height: 28px; padding: 0; border: 1px solid #4b5961; background: #2c363c; cursor: pointer; }
+.tc-peau-etat { color: #9fb0b8; font-size: 13px; }
+.cp-peau-ligne input[type=color] { width: 44px; height: 30px; padding: 0; cursor: pointer; }
 
 /* (21/11, avis de muku « que ça ne prenne pas la tête ») mode simple / avancé, bouton unique, rapports en langage normal,
    fenêtres moyennes (avant : barre de recherche écrasée à ~15 px et panneau de droite qui débordait vers 800-1000 px de large) */
@@ -1038,3 +1044,244 @@ canvas, #atelier-dessin, #centre { touch-action: none; }
 body:not(.onglet-techniques) #tex-isoler { display: none; }
 /* (24/11) mode dessin sur un petit écran : la vue 3D est étroite, la barre de lecture passe à la ligne (Bannière, Son, vidéo n'étaient plus visibles) */
 body.dessin #lecteur { flex-wrap: wrap; row-gap: 4px; }
+
+/* (26/11) avertissement : textures modifiées × couleurs de sommets (panneau Textures) */
+.conseil-sommets { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; margin-bottom: 6px;
+  border: 1px solid #c98a1b; border-radius: 4px; background: rgba(201, 138, 27, .12); font-size: 12px; line-height: 1.35; }
+.conseil-sommets .cs-pastille { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .4); flex: none; }
+.conseil-sommets button { margin-left: auto; white-space: normal; max-width: 100%; }
+.conseil-sommets > span:not(.cs-pastille) { min-width: 0; flex: 1 1 160px; }
+
+/* (26/11, muku : « comme dans la boutique du jeu », puis « fais tous les menus que je t'ai envoyés ») étape Cosmétique = écrans
+   de la boutique du jeu (images 150_shop/shop01, cmn06, 200_icon) ; places des calques du jeu (.g4pkm) et des 7 captures de
+   muku en 1920 × 1080 : --u = 1 px du jeu (unités du conteneur) ; chaque pièce est posée en absolu dans l'écran */
+/* (27/11, muku : « fais en sorte que le menu prenne tout l'écran comme les stats ») plein écran comme #menu-stats : le fond du jeu
+   couvre toute la fenêtre (posé sur la boîte), l'écran 16:9 est centré sans bord ; la barre du haut et le bandeau du message
+   vont d'un bord à l'autre de la fenêtre */
+#boutique-cosm { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; overflow: hidden;
+  background: #7cc456 center / cover no-repeat; }
+#boutique-cosm[open] { display: flex; align-items: center; justify-content: center; }
+#boutique-cosm::backdrop { background: rgba(0, 0, 0, .6); }
+#boutique-cosm .bq-ecran { position: relative; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9; background: none !important;
+  container-type: inline-size; overflow: visible; font-family: "Inazuma Jeu", "Bahnschrift", "Segoe UI", sans-serif; }
+#boutique-cosm .bq-ecran, #boutique-cosm .bq-ecran * { --u: calc(100cqw / 1920); }
+#boutique-cosm .bq-ecran > * { position: absolute; }
+/* (27/11) le décor ne prend jamais les clics (avant : le nom de la catégorie couvrait les touches W / C) */
+#boutique-cosm .bq-ecran > img, #boutique-cosm .bq-categorie, #boutique-cosm .bq-carte-nom, #boutique-cosm .bq-sans, #boutique-cosm .bq-message, #boutique-cosm .bq-c-equipe, #boutique-cosm .bq-c-avoir { pointer-events: none; }
+#boutique-cosm .bq-haut { left: calc((100% - 100vw) / 2); top: calc((100% - 100vh) / 2); width: 100vw; padding-left: calc((100vw - 100%) / 2); box-sizing: border-box; height: calc(var(--u) * 66); background: rgba(52, 60, 62, .93); display: flex; align-items: center; gap: calc(var(--u) * 14); color: #fff; }
+#boutique-cosm .bq-coin { width: calc(var(--u) * 96); height: 100%; background: #59c63a; clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%); display: flex; align-items: center; justify-content: center; }
+#boutique-cosm .bq-coin img { height: 70%; filter: brightness(1.7) saturate(.3); }
+#boutique-cosm .bq-haut b { font-size: calc(var(--u) * 24); font-weight: 400; }
+#boutique-cosm .bq-haut small { font-size: calc(var(--u) * 18); color: #cfe9c2; margin-left: calc(var(--u) * 20); }
+/* barre d'onglets : cmn06_01 list_tab_base02 (verte, 1036 × 76) en (-78, 156) ; case choisie cmn06_20 icon_base01 (92 × 52) ;
+   icônes 72 × 48 tous les 80 px, centrées sur x = 440 (captures : 9 onglets de 120 à 760, 7 onglets de 200 à 680) */
+#boutique-cosm .bq-barre { left: calc(var(--u) * -78); top: calc(var(--u) * 156); width: calc(var(--u) * 1036); height: calc(var(--u) * 76); }
+#boutique-cosm .bq-case { top: calc(var(--u) * 168); width: calc(var(--u) * 92); height: calc(var(--u) * 52); }
+/* (27/11, muku : « on ne peut cliquer sur rien ») onglets = boutons (icône masquée dedans) ; onglet sans création : pâle */
+#boutique-cosm .bq-onglet { top: calc(var(--u) * 168); width: calc(var(--u) * 80); height: calc(var(--u) * 52); background: none; border: 0; padding: 0; cursor: pointer; }
+#boutique-cosm .bq-onglet i { position: absolute; left: 50%; top: calc(var(--u) * 2); width: calc(var(--u) * 72 * var(--ech, 1)); height: calc(var(--u) * 48); transform: translateX(-50%); background: #1c7a3c;
+  -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+#boutique-cosm .bq-onglet.bq-actif i { background: #fff; }
+#boutique-cosm .bq-onglet:not(.bq-actif):hover i { background: #fff; }
+#boutique-cosm .bq-onglet.bq-vide:not(.bq-actif) { opacity: .45; }
+#boutique-cosm .bq-onglet, #boutique-cosm .bq-touche-w, #boutique-cosm .bq-touche-c, #boutique-cosm .bq-x { -webkit-appearance: none; appearance: none; box-shadow: none; outline-offset: 0; min-width: 0; min-height: 0; border-radius: 0; background: none; }
+#boutique-cosm .bq-tri { left: calc(var(--u) * 850); top: calc(var(--u) * 178); width: calc(var(--u) * 48); height: calc(var(--u) * 32); }
+#boutique-cosm .bq-touche-w, #boutique-cosm .bq-touche-c { top: calc(var(--u) * 230); background: none; border: 0; padding: 0; cursor: pointer; }
+#boutique-cosm .bq-touche-w { left: calc(var(--u) * 165); }
+#boutique-cosm .bq-touche-c { left: calc(var(--u) * 682); }
+#boutique-cosm .bq-touche-w img, #boutique-cosm .bq-touche-c img { height: calc(var(--u) * 32); display: block; }
+#boutique-cosm .bq-touche-w:hover, #boutique-cosm .bq-touche-c:hover { filter: brightness(1.6); }
+#boutique-cosm .bq-categorie { left: 0; top: calc(var(--u) * 230); width: calc(var(--u) * 880); text-align: center; color: #27a046; font-size: calc(var(--u) * 31); font-weight: 600; }
+/* lignes : image 524 × 104 dont le contenu (508 × 88) commence à (8, 8) ; grise visible de x 0 à 888, bleue de 0 à 920 */
+/* liste qui défile (6 lignes visibles, comme le jeu) ; chaque ligne se choisit au clic */
+#boutique-cosm .bq-liste { left: 0; top: calc(var(--u) * 285); width: calc(var(--u) * 950); height: calc(var(--u) * 612); overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: #fff8 #0002; }
+#boutique-cosm .bq-ligne { position: relative; width: calc(var(--u) * 890); height: calc(var(--u) * 88); margin: 0 0 calc(var(--u) * 14); cursor: pointer; }
+#boutique-cosm .bq-ligne.bq-on { width: calc(var(--u) * 920); cursor: default; }
+#boutique-cosm .bq-ligne:not(.bq-on):hover .bq-lfond { filter: drop-shadow(0 0 calc(var(--u) * 6) #2fe6dc); }
+#boutique-cosm .bq-fait { right: calc(var(--u) * 160); top: calc(var(--u) * 58); color: #1f9d48; font-size: calc(var(--u) * 22); font-weight: 600; }
+#boutique-cosm .bq-on .bq-fait { color: #b9ffcf; }
+#boutique-cosm .bq-crayon { position: absolute; right: calc(var(--u) * -30); top: 50%; transform: translateY(-50%); color: #fff; font-style: normal; font-size: calc(var(--u) * 26); pointer-events: none; }
+#boutique-cosm .bq-vide-txt { margin: calc(var(--u) * 30) 0 0 calc(var(--u) * 60); color: #24461f; font-size: calc(var(--u) * 28); }
+#boutique-cosm .bq-ligne > * { position: absolute; }
+#boutique-cosm .bq-lfond { left: calc(var(--u) * -14); top: calc(var(--u) * -8); width: calc(var(--u) * 917); height: calc(var(--u) * 104); }
+#boutique-cosm .bq-on .bq-lfond { left: calc(var(--u) * -15); width: calc(var(--u) * 949); }
+#boutique-cosm .bq-fleche { left: calc(var(--u) * 16); top: 50%; transform: translateY(-50%); width: calc(var(--u) * 56); height: calc(var(--u) * 64);
+  background: linear-gradient(90deg, #2bd36a, #b7f43a); clip-path: polygon(0 0, 100% 50%, 0 100%, 22% 50%); }
+#boutique-cosm .bq-ic { left: calc(var(--u) * 48); top: calc(var(--u) * 3); width: calc(var(--u) * 80); height: calc(var(--u) * 80); }
+#boutique-cosm .bq-ic img { width: 100%; height: 100%; object-fit: contain; }
+#boutique-cosm .bq-nom { left: calc(var(--u) * 140); top: calc(var(--u) * 8); color: #2d5fb5; font-size: calc(var(--u) * 35); letter-spacing: calc(var(--u) * -1);
+  max-width: calc(var(--u) * 600); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#boutique-cosm .bq-on .bq-ic { left: calc(var(--u) * 78); }
+#boutique-cosm .bq-on .bq-nom { left: calc(var(--u) * 170); color: #c3cde0; }
+/* compteurs : fond (120 × 28) + icône + chiffre à droite */
+#boutique-cosm .bq-ligne .bq-avoir, #boutique-cosm .bq-ligne .bq-equipe, #boutique-cosm .bq-ligne .bq-stock { top: calc(var(--u) * 55); width: calc(var(--u) * 120); height: calc(var(--u) * 28); }
+#boutique-cosm .bq-ligne .bq-avoir, #boutique-cosm .bq-ligne .bq-equipe { left: calc(var(--u) * 140); }
+#boutique-cosm .bq-ligne .bq-avoir2 { left: calc(var(--u) * 264); }
+#boutique-cosm .bq-ligne .bq-stock { left: calc(var(--u) * 760); top: calc(var(--u) * 5); width: calc(var(--u) * 112); }
+#boutique-cosm .bq-on .bq-avoir, #boutique-cosm .bq-on .bq-equipe { left: calc(var(--u) * 170); }
+#boutique-cosm .bq-on .bq-avoir2 { left: calc(var(--u) * 294); }
+#boutique-cosm .bq-on .bq-stock { left: calc(var(--u) * 790); }
+#boutique-cosm .bq-cfond { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+#boutique-cosm .bq-cic { position: absolute; left: calc(var(--u) * 3); top: 50%; transform: translateY(-50%); height: 100%; }
+#boutique-cosm .bq-ligne b { position: absolute; right: calc(var(--u) * 8); top: 50%; transform: translateY(-52%); color: #fff; font-weight: 400;
+  font-family: "Inazuma Chiffres", "Inazuma Jeu", sans-serif; font-size: calc(var(--u) * 26); line-height: 1; }
+#boutique-cosm .bq-prix { left: calc(var(--u) * 755); top: calc(var(--u) * 43); width: calc(var(--u) * 120); height: calc(var(--u) * 40); }
+#boutique-cosm .bq-on .bq-prix { left: calc(var(--u) * 785); cursor: text; }
+#boutique-cosm .bq-pfond { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+#boutique-cosm .bq-jeton { position: absolute; left: calc(var(--u) * 6); top: calc(var(--u) * -6); width: calc(var(--u) * 46); height: calc(var(--u) * 46); }
+#boutique-cosm .bq-prix b, #boutique-cosm .bq-prix input { position: absolute; right: calc(var(--u) * 8); top: 50%; transform: translateY(-50%); color: #2468d8;
+  font-family: "Inazuma Chiffres", "Inazuma Jeu", sans-serif; font-size: calc(var(--u) * 36); font-weight: 400; line-height: 1; }
+#boutique-cosm .bq-prix input { width: calc(var(--u) * 64); background: transparent; border: 0; outline: none; text-align: right; padding: 0; -moz-appearance: textfield; }
+#boutique-cosm .bq-prix input::-webkit-inner-spin-button { display: none; }
+#boutique-cosm .bq-on .bq-prix:focus-within { outline: calc(var(--u) * 3) solid #2fe6dc; border-radius: calc(var(--u) * 6); }
+
+#boutique-cosm .bq-tokens-trait { left: calc(var(--u) * 990); top: calc(var(--u) * 166); width: calc(var(--u) * 8); height: calc(var(--u) * 40); }
+#boutique-cosm .bq-tokens { left: calc(var(--u) * 1000); top: calc(var(--u) * 166); height: calc(var(--u) * 40); }
+/* carte de l'article (shop01_05, calques du .g4pkm) */
+#boutique-cosm .bq-win { left: calc(var(--u) * 962); top: calc(var(--u) * 338); width: calc(var(--u) * 924); height: calc(var(--u) * 552); }
+#boutique-cosm .bq-bande { left: calc(var(--u) * 982); top: calc(var(--u) * 538); width: calc(var(--u) * 852); height: calc(var(--u) * 204); }
+#boutique-cosm .bq-filigrane { left: calc(var(--u) * 1565); top: calc(var(--u) * 540); width: calc(var(--u) * 256); height: calc(var(--u) * 200); object-fit: contain; opacity: .22; filter: brightness(3); }
+#boutique-cosm .bq-grande-emb { left: calc(var(--u) * 1099); top: calc(var(--u) * 436); width: calc(var(--u) * 240); height: calc(var(--u) * 240); object-fit: contain; filter: drop-shadow(calc(var(--u) * 10) calc(var(--u) * 10) 0 #0003); }
+#boutique-cosm .bq-grande-eq { left: calc(var(--u) * 1127); top: calc(var(--u) * 478); width: calc(var(--u) * 184); height: calc(var(--u) * 184); object-fit: contain; filter: drop-shadow(calc(var(--u) * 10) calc(var(--u) * 10) 0 #0003); }
+#boutique-cosm .bq-sans { left: calc(var(--u) * 1040); top: calc(var(--u) * 560); color: #fff; font-size: calc(var(--u) * 26); opacity: .85; }
+#boutique-cosm .bq-carte-nom { left: calc(var(--u) * 998); top: calc(var(--u) * 690); color: #fff; font-size: calc(var(--u) * 38); max-width: calc(var(--u) * 820); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+#boutique-cosm .bq-c-equipe, #boutique-cosm .bq-c-avoir { top: calc(var(--u) * 554); width: calc(var(--u) * 188); height: calc(var(--u) * 52); }
+#boutique-cosm .bq-c-equipe { left: calc(var(--u) * 1432); }
+#boutique-cosm .bq-c-avoir { left: calc(var(--u) * 1626); }
+#boutique-cosm .bq-c-equipe .bq-cic, #boutique-cosm .bq-c-avoir .bq-cic { left: calc(var(--u) * 7); height: calc(var(--u) * 48); }
+#boutique-cosm .bq-c-equipe b, #boutique-cosm .bq-c-avoir b { position: absolute; right: calc(var(--u) * 14); top: 50%; transform: translateY(-50%); color: #fff; font-weight: 400;
+  font-family: "Inazuma Chiffres", "Inazuma Jeu", sans-serif; font-size: calc(var(--u) * 44); line-height: 1; }
+/* bas de l'écran : bandeau du message (y 915 à 982) et touches (y ≈ 1027) */
+#boutique-cosm .bq-message { left: calc((100% - 100vw) / 2); padding-left: calc((100vw - 100%) / 2); box-sizing: border-box; top: calc(var(--u) * 915); width: calc(var(--u) * 1860 + (100vw - 100%) / 2); height: calc(var(--u) * 68); background: rgba(52, 66, 52, .62); display: flex; align-items: center; }
+#boutique-cosm .bq-message span { margin-left: calc(var(--u) * 50); color: #fff; font-size: calc(var(--u) * 28); }
+/* (27/11) en bas : de VRAIS boutons (avant : des « touches » du jeu qu'on ne voyait pas comme des boutons) */
+#boutique-cosm .bq-bas { left: 0; top: calc(var(--u) * 994); width: 100%; height: calc(var(--u) * 70); display: flex; align-items: center; justify-content: center; gap: calc(var(--u) * 14); }
+#boutique-cosm .bq-btn { background: rgba(40, 52, 44, .82); border: calc(var(--u) * 3) solid #ffffffb0; border-radius: calc(var(--u) * 14); color: #fff; font-family: inherit;
+  font-size: calc(var(--u) * 26); padding: calc(var(--u) * 7) calc(var(--u) * 18); cursor: pointer; box-shadow: 0 calc(var(--u) * 4) 0 #0005; white-space: nowrap; }
+#boutique-cosm .bq-btn:hover { border-color: #2fe6dc; background: rgba(30, 90, 80, .9); }
+#boutique-cosm .bq-btn.bq-ok { background: #ffd84a; color: #2a2a10; border-color: #fff; font-weight: 600; }
+#boutique-cosm .bq-btn.bq-ok:hover { background: #ffe680; }
+#boutique-cosm .bq-x { margin-left: auto; margin-right: calc(var(--u) * 20); background: none; border: 0; color: #fff; font-size: calc(var(--u) * 34); cursor: pointer; }
+#boutique-cosm .bq-x:hover { color: #2fe6dc; }
+/* maillot : joueurs habillés (vue 3D) + « DOMICILE / EXTÉRIEUR » du jeu (shop01_07) derrière eux */
+#boutique-cosm .bq-cotes { left: calc(var(--u) * 985); top: calc(var(--u) * 330); width: calc(var(--u) * 890); display: flex; justify-content: space-between; opacity: .55; pointer-events: none; }
+#boutique-cosm .bq-cotes img { width: calc(var(--u) * 440); }
+#boutique-cosm .bq-joueurs { left: calc(var(--u) * 985); top: calc(var(--u) * 350); width: calc(var(--u) * 890); height: calc(var(--u) * 560); }
+#boutique-cosm .bq-vue { width: 100%; height: 100%; display: block; background: transparent; }
+#boutique-cosm .bq-vue-msg { position: absolute; left: 0; bottom: 0; width: 100%; text-align: center; color: #24461f; font-size: calc(var(--u) * 20); }
+/* (27/11) dessin de l'icône / de l'emblème dans l'écran de la boutique : l'éditeur de l'Atelier par-dessus */
+#boutique-cosm .bq-dessin { left: 0; top: calc(var(--u) * 66); width: 100%; height: calc(100% - var(--u) * 66); z-index: 5; background: #000c; }
+#boutique-cosm .bq-dessin iframe { width: 100%; height: 100%; border: 0; display: block; }
+#boutique-cosm .bq-dessin #atelier-dessin { height: 100%; }
+#boutique-cosm .bq-btn.bq-auto-btn { border-color: #ffe680; }
+#boutique-cosm .bq-ligne .bq-sans-emb { color: #7a8a7a; font-weight: 400; }
+#boutique-cosm .bq-on .bq-sans-emb { color: #cfd8e6; }
+#boutique-cosm .bq-x:focus { outline: none; }
+/* (27/11) réglages d'un objet dans sa création (bonus d'un équipement…) */
+#oj-reglages h3 { margin: 10px 0 4px; font-size: 15px; }
+#oj-reglages .oj-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px 10px; }
+#oj-reglages .oj-stats label { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+#oj-reglages .oj-stats input { width: 70px; }
+#oj-reglages .oj-apercu { font-weight: 600; margin: 6px 0; }
+#oj-reglages .oj-syn-effet { display: flex; gap: 6px; align-items: center; margin: 4px 0; flex-wrap: wrap; }
+#oj-reglages .oj-syn-effet select:first-child { flex: 1 1 260px; min-width: 0; }
+#oj-reglages .oj-syn-effet input { width: 60px; }
+#oj-reglages .oj-syn-joueurs { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+#oj-reglages .oj-puce { background: var(--panneau2, #2a3140); border-radius: 12px; padding: 2px 4px 2px 10px; display: inline-flex; gap: 4px; align-items: center; }
+#oj-reglages .oj-puce button { padding: 0 6px; }
+#oj-reglages .oj-syn-cherche { width: 100%; }
+/* (27/11) synergie : chaque effet = l'effet sur une ligne, puis « % · ligne · ✕ » (panneau étroit) */
+#oj-reglages > b { display: block; margin: 10px 0 4px; }
+#oj-reglages .oj-syn-effet { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 6px; align-items: center; padding: 6px; margin: 4px 0;
+  border: 1px solid var(--bord, #3a4150); border-radius: 8px; }
+#oj-reglages .oj-syn-effet select[data-k="0"] { grid-column: 1 / -1; width: 100%; }
+#oj-reglages .oj-syn-effet label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+#oj-reglages .oj-syn-effet select[data-k="2"] { min-width: 0; }
+#oj-reglages .oj-commun { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 6px 0 10px; }
+#oj-reglages .oj-commun input { width: 100px; }
+
+/* (27/11) tenues : joueurs choisis (« Seulement ces joueurs ») */
+.cu-joueurs { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; }
+.cu-joueur { background: var(--fond2, #2a3140); border-radius: 10px; padding: 1px 4px 1px 8px; font-size: 12px; }
+.cu-joueur button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 2px; }
+#bloc-outfit [hidden] { display: none !important; }   /* (27/11) prix et icône : réglés dans la boutique (étape Cosmétique) */
+.cu-plus { margin: 6px 0; border: 1px solid var(--bord); border-radius: 8px; padding: 4px 8px; }
+.cu-plus summary { cursor: pointer; font-weight: 600; } .cu-plus summary small { font-weight: 400; color: var(--doux); }
+/* (27/11) crampons / gants : le modèle 3D se voit et se recolore (l'icône reste dans la liste des textures) */
+body.onglet-objets.objet-3d .objet-grand { display: none; }
+
+/* (27/11, muku) réglages d'un objet dans l'étape Cosmétique : panneau sur la carte, résumé façon jeu dans la partie blanche */
+#boutique-cosm .bq-resume { left: calc(var(--u) * 1000); top: calc(var(--u) * 770); width: calc(var(--u) * 850); color: #2c3a52; font-size: calc(var(--u) * 26); font-weight: 600; pointer-events: none; }
+#boutique-cosm .bq-reglages { left: calc(var(--u) * 962); top: calc(var(--u) * 120); width: calc(var(--u) * 924); height: calc(var(--u) * 770); background: #141c2c; border: 2px solid #ffc83d; border-radius: calc(var(--u) * 14); padding: calc(var(--u) * 18); box-sizing: border-box; display: flex; flex-direction: column; color: #f2f4f8; font-size: calc(var(--u) * 22); z-index: 5; }
+#boutique-cosm .bq-reglages-titre { display: flex; align-items: center; justify-content: space-between; margin-bottom: calc(var(--u) * 10); font-size: calc(var(--u) * 28); }
+#boutique-cosm .bq-reglages-corps { overflow: auto; flex: 1; }
+#boutique-cosm .bq-reglages-corps label { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+#boutique-cosm .bq-reglages-corps .oj-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+#boutique-cosm .bq-reglages-corps input[type=number] { width: 6em; }
+#boutique-cosm .bq-regl-btn.bq-actif { outline: 2px solid #ffc83d; }
+#boutique-cosm .bq-reglages-corps h3, #boutique-cosm .bq-reglages-corps b { display: block; font-size: calc(var(--u) * 26); margin: calc(var(--u) * 12) 0 calc(var(--u) * 6); }
+#boutique-cosm .bq-reglages-corps .aide, #boutique-cosm .bq-reglages-corps .oj-apercu { font-size: calc(var(--u) * 21); color: #b9c2d3; margin: calc(var(--u) * 4) 0; }
+#boutique-cosm .bq-reglages-corps input, #boutique-cosm .bq-reglages-corps select, #boutique-cosm .bq-reglages-corps button { font-size: calc(var(--u) * 21); }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet { display: flex; gap: calc(var(--u) * 10); align-items: center; margin: calc(var(--u) * 4) 0; }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet select:first-child { flex: 1; min-width: 0; }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet label { margin: 0; white-space: nowrap; }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet input { width: 4em; }
+#boutique-cosm .bq-reglages-corps .oj-syn-cherche { width: 60%; }
+
+/* (27/11, muku : « un bel affichage dans l'esprit du shop ») panneau des réglages = carte blanche de la boutique, bandeau bleu,
+   sections en onglets verts, bonus en lignes avec − / + et barre, joueurs en pastilles */
+#boutique-cosm .bq-reglages { background: #f3f5f9; border: none; border-radius: calc(var(--u) * 22); box-shadow: 0 calc(var(--u) * 10) calc(var(--u) * 30) #0005; color: #23324d; padding: 0; overflow: hidden; }
+#boutique-cosm .bq-reglages-titre { margin: 0; padding: calc(var(--u) * 16) calc(var(--u) * 24); background: linear-gradient(180deg, #4a86f0, #2559cf); color: #fff; font-size: calc(var(--u) * 32); box-shadow: inset 0 calc(var(--u) * -4) 0 #1b44a3; }
+#boutique-cosm .bq-reglages-titre b { text-shadow: 0 2px 0 #0004; }
+#boutique-cosm .bq-reglages-titre .bq-btn { background: #fff2; border: 2px solid #fff8; color: #fff; padding: 0 calc(var(--u) * 14); }
+#boutique-cosm .bq-reglages-corps { padding: calc(var(--u) * 14) calc(var(--u) * 26) calc(var(--u) * 20); }
+#boutique-cosm .bq-reglages-corps h3, #boutique-cosm .bq-reglages-corps > b { display: inline-block; background: linear-gradient(180deg, #45d066, #23a845); color: #fff; padding: calc(var(--u) * 4) calc(var(--u) * 28);
+  clip-path: polygon(calc(var(--u) * 14) 0, 100% 0, calc(100% - calc(var(--u) * 14)) 100%, 0 100%); font-size: calc(var(--u) * 24); margin: calc(var(--u) * 16) 0 calc(var(--u) * 8); text-shadow: 0 1px 0 #0003; }
+#boutique-cosm .bq-reglages-corps .aide, #boutique-cosm .bq-reglages-corps .oj-apercu { color: #5b6b85; }
+#boutique-cosm .bq-reglages-corps .oj-apercu { background: #fff; border-left: calc(var(--u) * 6) solid #2559cf; padding: calc(var(--u) * 8) calc(var(--u) * 14); color: #23324d; font-weight: 600; border-radius: calc(var(--u) * 6); }
+#boutique-cosm .bq-reglages-corps .oj-commun { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * 8) calc(var(--u) * 24); background: #fff; border-radius: calc(var(--u) * 10); padding: calc(var(--u) * 10) calc(var(--u) * 16); box-shadow: 0 2px 0 #d5dbe6; }
+#boutique-cosm .bq-reglages-corps input, #boutique-cosm .bq-reglages-corps select { background: #fff; color: #23324d; border: 2px solid #c9d2e3; border-radius: calc(var(--u) * 8); padding: calc(var(--u) * 4) calc(var(--u) * 8); }
+#boutique-cosm .bq-reglages-corps input:focus, #boutique-cosm .bq-reglages-corps select:focus { outline: none; border-color: #2559cf; }
+#boutique-cosm .bq-reglages-corps .oj-stats { display: flex; flex-direction: column; gap: calc(var(--u) * 6); }
+#boutique-cosm .bq-stat { display: grid !important; grid-template-columns: calc(var(--u) * 170) calc(var(--u) * 44) calc(var(--u) * 80) calc(var(--u) * 44) 1fr; align-items: center; gap: calc(var(--u) * 8);
+  background: #fff; border-radius: calc(var(--u) * 10); padding: calc(var(--u) * 6) calc(var(--u) * 14); box-shadow: 0 2px 0 #d5dbe6; margin: 0 !important; }
+#boutique-cosm .bq-stat.bq-stat-zero { opacity: .62; }
+#boutique-cosm .bq-stat-nom { font-weight: 700; font-size: calc(var(--u) * 24); }
+#boutique-cosm .bq-stat input { width: auto !important; text-align: center; font-weight: 700; font-size: calc(var(--u) * 24) !important; -moz-appearance: textfield; }
+#boutique-cosm .bq-stat input::-webkit-inner-spin-button { -webkit-appearance: none; }
+#boutique-cosm .bq-pm { height: calc(var(--u) * 40); border-radius: 50%; border: none; background: linear-gradient(180deg, #4a86f0, #2559cf); color: #fff; font-size: calc(var(--u) * 26) !important; font-weight: 700; cursor: pointer; box-shadow: 0 2px 0 #1b44a3; }
+#boutique-cosm .bq-pm:active { transform: translateY(1px); box-shadow: none; }
+#boutique-cosm .bq-stat-barre { position: relative; height: calc(var(--u) * 14); background: #e3e8f1; border-radius: calc(var(--u) * 7); overflow: hidden; }
+#boutique-cosm .bq-stat-barre::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #9aa8c0; }
+#boutique-cosm .bq-stat-barre i { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #ffb52e, #ff7a1a); border-radius: calc(var(--u) * 7); }
+#boutique-cosm .bq-stat-barre i.neg { background: linear-gradient(90deg, #6f86b3, #9fb0cf); }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet { background: #fff; border-radius: calc(var(--u) * 10); padding: calc(var(--u) * 8) calc(var(--u) * 12); box-shadow: 0 2px 0 #d5dbe6; }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet button, #boutique-cosm .bq-reglages-corps .oj-puce button { border: none; background: #e5484d; color: #fff; border-radius: 50%; width: calc(var(--u) * 34); height: calc(var(--u) * 34); cursor: pointer; }
+#boutique-cosm .bq-reglages-corps .oj-syn-plus-effet { border: none; background: linear-gradient(180deg, #45d066, #23a845); color: #fff; border-radius: calc(var(--u) * 20); padding: calc(var(--u) * 6) calc(var(--u) * 22); margin: calc(var(--u) * 6) 0; cursor: pointer; font-weight: 700; }
+#boutique-cosm .bq-reglages-corps .oj-syn-plus-effet:disabled { opacity: .45; cursor: default; }
+#boutique-cosm .bq-reglages-corps .oj-syn-joueurs { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 8); margin: calc(var(--u) * 6) 0; }
+#boutique-cosm .bq-reglages-corps .oj-puce { display: inline-flex; align-items: center; gap: calc(var(--u) * 8); background: linear-gradient(180deg, #4a86f0, #2559cf); color: #fff; border-radius: calc(var(--u) * 24); padding: calc(var(--u) * 4) calc(var(--u) * 6) calc(var(--u) * 4) calc(var(--u) * 16); font-weight: 600; }
+#boutique-cosm .bq-reglages-corps .oj-syn-etat { border-left-color: #23a845; }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet { flex-wrap: nowrap !important; }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet select:first-child { flex: 1 1 auto; width: 0; }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet select:not(:first-child) { flex: 0 0 auto; width: auto; }
+#boutique-cosm .bq-reglages-corps .oj-syn-effet button, #boutique-cosm .bq-reglages-corps .oj-puce button { flex: 0 0 auto; padding: 0; line-height: 1; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+#boutique-cosm .bq-reglages { height: auto; max-height: calc(var(--u) * 770); }
+#boutique-cosm .bq-reglages-corps .oj-commun label { white-space: nowrap; font-weight: 600; }
+
+/* (28/11, muku) mode simple épuré : noms clairs au lieu des codes ; bouton « Créer » toujours visible */
+.nom-av { display: none; } body:not(.mode-simple) .nom-av { display: inline; } body:not(.mode-simple) .nom-simple { display: none; }
+body.mode-simple .piece button { display: none; }
+
+/* (28/11, grand test à 1366 px en espagnol / anglais) la barre d'onglets ne rétrécissait pas : langue, ⚙ et « Avancé » sortaient
+   de l'écran à droite. Les onglets rétrécissent et défilent (molette / glisser) ; le reste de la barre garde sa place. */
+html header > * { flex-shrink: 0; }
+html header .onglets { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+html header .onglets::-webkit-scrollbar { display: none; }
+html header .onglets button { flex-shrink: 0; white-space: nowrap; }
+html header .recherche { flex-shrink: 1; min-width: 120px; }
+html header .titre-tech { flex-shrink: 1; min-width: 40px; }
+
+/* (27/11) bannières : réglages sans effet avec les lettres du jeu (app.js banniereJeuReglages) */
+#b-reglages .b-inutile { opacity: .4; }

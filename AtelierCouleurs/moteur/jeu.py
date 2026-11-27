@@ -70,15 +70,181 @@ def _modele_uniforme(c, dossier):
     return l[0] if l else None
 
 
-GENRES_TENUE = (('sk', 'Peau (bras, mains)'), ('sh', 'Tenue'), ('s', 'Chaussures'), ('u', 'Tenue'), ('e', 'Tenue'), ('f', 'Tenue'),
+# (28/11) « e… » = CHAUSSURES des tenues (chara_parts : les 36 « e » sont dans shoes ; avant : « Tenue »)
+GENRES_TENUE = (('sk', 'Peau (bras, mains)'), ('sh', 'Tenue'), ('s', 'Chaussures'), ('u', 'Tenue'), ('e', 'Chaussures'), ('f', 'Tenue'),
                 ('g', 'Gants'), ('o', 'Tenue'), ('m', 'Manches'), ('n', 'Numéro'))
+
+
+def noms_armures(data_dir, cache_dir):
+    """(28/11, muku : « les armures n'ont pas de nom simple ») {ka…: « Armure · <esprit> »}. LU dans les tables :
+    chara_model v[5] = crc32(armure) (vêtement de la forme en armure), v[0] = id du modèle -> chara_base v[6] = ce modèle,
+    v[0] = id du personnage en armure, v[9] = personnage d'origine -> chara_param v[1] = ce personnage, v[0] = sa fiche ->
+    aura_skill_config v[13] = cette fiche, v[7] = crc32(esprit). 87 armures sur 89 ; sinon le porteur (chara_text)."""
+    import zlib
+    from . import personnages
+    c = os.path.join(data_dir, 'common')
+    U = lambda x: x & 0xFFFFFFFF
+    L = lambda motif: cfgbin.lire(open(_dernier(os.path.join(c, 'gamedata', *motif.split('/'))), 'rb').read())
+    armures = {zlib.crc32(a.encode()): a for a in os.listdir(os.path.join(c, 'chr', '_armd'))}
+    esprit = {zlib.crc32(p['code'].encode()): p['nom'] for p in personnages.construire(data_dir, cache_dir)
+              if p.get('nom') and p['nom'] != p['code']}
+    modele = {}
+    for k, v in L('character/chara_model_1*.cfg.bin'):
+        if len(v) > 5 and isinstance(v[0], int) and isinstance(v[5], int) and U(v[5]) in armures:
+            modele.setdefault(U(v[0]), armures[U(v[5])])
+    perso, porteur, id_nom = {}, {}, {}
+    for k, v in L('character/chara_base_*.cfg.bin'):
+        if len(v) > 3 and isinstance(v[0], int) and isinstance(v[3], int):
+            id_nom.setdefault(U(v[0]), U(v[3]))
+        if len(v) > 9 and isinstance(v[0], int) and isinstance(v[6], int) and U(v[6]) in modele:
+            perso[U(v[0])] = modele[U(v[6])]
+            porteur.setdefault(modele[U(v[6])], []).extend(U(x) for x in (v[9], v[0]) if isinstance(x, int))
+    fiche = {}
+    for k, v in L('character/chara_param_1*.cfg.bin'):
+        if len(v) > 1 and isinstance(v[0], int) and isinstance(v[1], int) and U(v[1]) in perso:
+            fiche[U(v[0])] = perso[U(v[1])]
+    trouve = {}
+    for k, v in L('skill/aura_skill_config_*.cfg.bin'):
+        if len(v) > 13 and isinstance(v[13], int) and isinstance(v[7], int) and U(v[13]) in fiche and U(v[7]) in esprit:
+            trouve.setdefault(fiche[U(v[13])], esprit[U(v[7])])
+    textes = {}
+    for k, v in cfgbin.lire(open(os.path.join(c, 'text', _langue.code(), 'chara_text.cfg.bin'), 'rb').read()):
+        if len(v) > 5 and isinstance(v[0], int) and v[1] == 0 and isinstance(v[5], str):
+            textes.setdefault(U(v[0]), v[5])
+    out, vus = {}, {}
+    for code in sorted(armures.values()):
+        n = trouve.get(code)
+        for p in ([] if n else porteur.get(code, [])):          # porteur d'origine, puis le personnage en armure
+            t = textes.get(id_nom.get(p))
+            if t and not _japonais(t):
+                n = t; break
+        if n:
+            vus[n] = vus.get(n, 0) + 1
+            out[code] = 'Armure · %s%s' % (n, ' %d' % vus[n] if vus[n] > 1 else '')
+    return out
+
+
+def _nommer_armures(out, data_dir, cache_dir):
+    try:
+        noms = noms_armures(data_dir, cache_dir)
+    except Exception as ex:                          # (sans noms, la liste reste utilisable)
+        print('noms des armures :', ex); return False
+    for x in out.get('armures', []):
+        if x.get('code') in noms:
+            x['nom'] = noms[x['code']]
+    return True
+
+
+COULEURS_MOTS = {'fr': {'noir': 'noir', 'blanc': 'blanc', 'gris': 'gris', 'rouge': 'rouge', 'orange': 'orange', 'jaune': 'jaune', 'vert': 'vert',
+                        'cyan': 'turquoise', 'bleu': 'bleu', 'violet': 'violet', 'rose': 'rose', 'et': 'et'},
+                 'en': {'noir': 'black', 'blanc': 'white', 'gris': 'grey', 'rouge': 'red', 'orange': 'orange', 'jaune': 'yellow', 'vert': 'green',
+                        'cyan': 'turquoise', 'bleu': 'blue', 'violet': 'purple', 'rose': 'pink', 'et': 'and'},
+                 'es': {'noir': 'negro', 'blanc': 'blanco', 'gris': 'gris', 'rouge': 'rojo', 'orange': 'naranja', 'jaune': 'amarillo', 'vert': 'verde',
+                        'cyan': 'turquesa', 'bleu': 'azul', 'violet': 'morado', 'rose': 'rosa', 'et': 'y'}}
+
+
+def _nom_couleur(r, g, b):
+    import colorsys
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    if v < 0.18:
+        return 'noir'
+    if s < 0.18:
+        return 'blanc' if v > 0.78 else 'gris'
+    h *= 360
+    for lim, n in ((12, 'rouge'), (40, 'orange'), (68, 'jaune'), (165, 'vert'), (195, 'cyan'), (255, 'bleu'), (290, 'violet'), (340, 'rose'), (361, 'rouge')):
+        if h < lim:
+            return n
+
+
+def couleurs_tenues(data_dir, cache_dir, tenues):
+    """(28/11, muku : « dans les tenues des trucs ne sont pas simplifiés ») tenues sans porteur connu (1 459 : kits d'équipes,
+    chaussures, gants… que personne ne porte dans chara_model) -> leurs 2 couleurs principales, lues dans l'image de couleurs
+    de leur texture. {code: ['rouge', 'blanc']} ; gardé dans cache/couleurs_tenues.json (le même pour toutes les langues)"""
+    import collections
+    racine = os.path.dirname(cache_dir) if os.path.basename(cache_dir) in COULEURS_MOTS else cache_dir
+    f = os.path.join(racine, 'couleurs_tenues.json')
+    deja = json.load(open(f, encoding='utf-8')) if os.path.exists(f) else {}
+    manque = [x for x in tenues if x['code'] not in deja and '|' in x.get('chemin', '')]
+    if manque:
+        print('couleurs des tenues sans nom : %d (une seule fois)…' % len(manque))
+    for x in manque:
+        try:
+            gt = g4.images.G4TX(open(os.path.join(data_dir, *x['chemin'].split('|')[1].split('/')), 'rb').read())
+            i = next((k for k, n in enumerate(gt.noms) if not any(n.endswith(s) for s in ('line', 'msk', 'spm', 'nrm', 'sp', 'bc'))), 0)
+            w, h, rows = g4.decoder_texture(gt.blocs[i])
+            c = collections.Counter()
+            for y in range(0, h, max(1, h // 64)):
+                row = rows[y]
+                for xx in range(0, w, max(1, w // 64)):
+                    r, g_, b, a = row[xx * 4:xx * 4 + 4]
+                    if a > 40:
+                        c[_nom_couleur(r, g_, b)] += 1
+            tot = sum(c.values()) or 1
+            deja[x['code']] = [n for n, k in c.most_common(3) if k / tot > 0.12][:2]
+        except Exception:
+            deja[x['code']] = []
+    if manque:
+        json.dump(deja, open(f, 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
+    return deja
+
+
+def _nommer_tenues(out, data_dir, cache_dir):
+    """tenues encore nommées par leur code (« Chaussures e000401_10 ») -> « Chaussures · blanc et gris » (numérotées si répétées)"""
+    sans = [x for x in out.get('tenues', []) if ' · ' not in (x.get('nom') or '') and '|' in x.get('chemin', '')
+            and x.get('genre') and (x.get('nom') or '').startswith(x['genre'] + ' ')]
+    try:
+        coul = couleurs_tenues(data_dir, cache_dir, sans)
+    except Exception as ex:
+        print('couleurs des tenues :', ex); return False
+    mots = COULEURS_MOTS.get(_langue.code(), COULEURS_MOTS['fr'])
+    vus = {}
+    for x in sans:
+        l = [mots.get(c, c) for c in coul.get(x['code']) or []]
+        if not l:
+            continue
+        n = '%s · %s' % (x['genre'], (' %s ' % mots['et']).join(l))
+        vus[n] = vus.get(n, 0) + 1
+        x['nom'] = n + (' %d' % vus[n] if vus[n] > 1 else '')
+    return True
+
+
+def nommer_accessoires(liste, data_dir, cache_dir):
+    """(28/11) accessoires de l'onglet Tenues (« Accessoire it000101 ») : nommés par leurs couleurs, comme les tenues"""
+    pseudo = []
+    for x in liste:
+        f = texture_de(data_dir, x.get('chemin', '').split('|')[0])
+        if f:
+            pseudo.append({'code': 'acc:' + x['code'], 'chemin': 'x|' + os.path.relpath(f, data_dir).replace(os.sep, '/'), 'x': x})
+    try:
+        coul = couleurs_tenues(data_dir, cache_dir, pseudo)
+    except Exception as ex:
+        print('couleurs des accessoires :', ex); return
+    mots = COULEURS_MOTS.get(_langue.code(), COULEURS_MOTS['fr']); vus = {}
+    for p in pseudo:
+        l = [mots.get(c, c) for c in coul.get(p['code']) or []]
+        if l:
+            n = '%s · %s' % (p['x'].get('genre') or 'Accessoire', (' %s ' % mots['et']).join(l))
+            vus[n] = vus.get(n, 0) + 1
+            p['x']['nom'] = n + (' %d' % vus[n] if vus[n] > 1 else '')
 
 
 def construire(data_dir, cache_dir, catalogue_maillots=None):
     """{catégorie: [{code, nom, genre, chemin}]} ; gardé dans cache/index_jeu.json"""
     f_cache = os.path.join(cache_dir, 'index_jeu.json')
     if os.path.exists(f_cache):
-        return json.load(open(f_cache, encoding='utf-8'))
+        out = json.load(open(f_cache, encoding='utf-8'))
+        for x in out.get('tenues', []):          # (28/11) index déjà en cache : chaussures « e… » rangées sous « Tenue »
+            if str(x.get('dossier', '')).startswith('e') and x.get('genre') == 'Tenue':
+                x['genre'] = 'Chaussures'; x['nom'] = re.sub(r'^Tenue(?= )', 'Chaussures', x.get('nom') or '')
+        if not out.get('armures_nommees'):         # (28/11) cache d'avant les noms d'armures
+            if _nommer_armures(out, data_dir, cache_dir):
+                out['armures_nommees'] = True
+                json.dump(out, open(f_cache, 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
+        if not out.get('tenues_couleurs'):         # (28/11) cache d'avant les noms par couleurs
+            if _nommer_tenues(out, data_dir, cache_dir):
+                out['tenues_couleurs'] = True
+                json.dump(out, open(f_cache, 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
+        return out
     c = os.path.join(data_dir, 'common')
     out = {'maillots': [], 'tenues': [], 'armures': [], 'personnages': [], 'objets': []}
     # --- maillots (noms de l'Atelier Maillots : item_text) et tenues
@@ -129,6 +295,8 @@ def construire(data_dir, cache_dir, catalogue_maillots=None):
         chemin = 'common/chr/_armd/%s/%s.g4md' % (code, code)
         if os.path.exists(os.path.join(data_dir, chemin)) and texture_de(data_dir, chemin):
             out['armures'].append({'code': code, 'nom': 'Armure ' + code, 'genre': 'Armure', 'chemin': chemin})
+    out['armures_nommees'] = _nommer_armures(out, data_dir, cache_dir)
+    out['tenues_couleurs'] = _nommer_tenues(out, data_dir, cache_dir)
     # --- personnages : tête -> nom du personnage
     noms = {}
     for crc, v in cfgbin.lire(open(os.path.join(c, 'text', _langue.code(), 'chara_text.cfg.bin'), 'rb').read()):

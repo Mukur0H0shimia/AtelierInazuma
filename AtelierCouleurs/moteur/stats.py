@@ -38,6 +38,9 @@ CHAMPS = {
         {'cle': 'users', 'nom': 'Joueurs pour la lancer', 'type': 'nombre', 'min': 1, 'max': 4,
          'aide': 'Plus de 1 : n\'importe quels coéquipiers'},
         {'cle': 'growth', 'nom': 'Courbe de progression (0-7)', 'type': 'nombre', 'min': 0, 'max': 7},
+        # (25/11, demande de danifdez) RECHARGE : clé VRFW `recast` (secondes entières, LUE dans ChronicleDeluxe drill_smasher_a
+        # et HissatsuReforged : « recast = 60 ») = skill_config `recastTime` (flottant, LU par le nom de la colonne)
+        {'cle': 'recast', 'nom': 'Recharge (secondes)', 'type': 'nombre', 'min': 0, 'max': 600},
         # (23/11, demande de muku) TYPE : clé `category` de VRFW (« What the move does: shoot, dribble, block or catch »,
         # LU dans winmm.dll) ; utilisée par IECross (who00220 -> category = "block")
         {'cle': 'category', 'nom': 'Type', 'type': 'choix', 'choix': CHOIX_CATEGORIE},
@@ -95,11 +98,12 @@ def jeu_technique(data_dir, code):
     if not f:
         return {}
     t = _rdbn_lignes(open(f, 'rb').read(), 'm_skillInfoList',
-                     ['skillID', 'power_min', 'power_max', 'element', 'growthType', 'consumeTp', 'partnerType', 'skillEffectBitFlag', 'colorIdx'])
+                     ['skillID', 'power_min', 'power_max', 'element', 'growthType', 'consumeTp', 'partnerType', 'skillEffectBitFlag', 'colorIdx', 'recastTime'])
     r = t.get(zlib.crc32(str(code).encode()))
     if not r:
         return {}
     return {'power_min': r['power_min'], 'power_max': r['power_max'], 'tp': r['consumeTp'],
+            'recast': int(round(struct.unpack('<f', struct.pack('<I', r['recastTime'] & 0xFFFFFFFF))[0])),
             'element': ELEMENTS.get(r['element'], ''), 'users': max(1, r['partnerType']), 'growth': r['growthType'],
             'category': CATEGORIE_PREFIXE.get(str(code)[:3], ''), 'effect_flags': r['skillEffectBitFlag'],
             'specialite': _specialite(CATEGORIE_PREFIXE.get(str(code)[:3], ''), r['skillEffectBitFlag']),
@@ -227,7 +231,7 @@ def jeu_technique_en_jeu(cfg, code):
         ch = stats_mods(cfg).get(code) or {}
     except Exception:
         ch = {}
-    for n, cle in ((0, 'power_min'), (1, 'power_max'), (2, 'tp')):
+    for n, cle in ((0, 'power_min'), (1, 'power_max'), (2, 'tp'), (5, 'recast'), (6, 'growth')):   # (25/11) + recharge, évolution
         if n in ch and cle in jeu:
             jeu[cle] = int(ch[n])
     if ch and jeu:
@@ -243,7 +247,7 @@ def _changes(stats, jeu):
 def lignes_technique(stats, jeu):
     c = _changes(stats, jeu)
     out = []
-    for k in ('power_min', 'power_max', 'tp', 'growth'):
+    for k in ('power_min', 'power_max', 'tp', 'growth', 'recast'):
         if k in c:
             out.append('%s = %d' % (k, int(c[k])))
     if c.get('element') in NUM_ELEMENT:
@@ -314,7 +318,7 @@ def nettoyer(genre, brut):
 
 
 # ------------------------------------------------------------------ réglage d'une création déjà faite
-CLES_TECHNIQUE = ('power_min', 'power_max', 'tp', 'element', 'users', 'partners', 'growth', 'category', 'effect_flags', 'range')
+CLES_TECHNIQUE = ('power_min', 'power_max', 'tp', 'element', 'users', 'partners', 'growth', 'category', 'effect_flags', 'range', 'recast')
 
 
 def appliquer_technique(fichier_toml, lignes):

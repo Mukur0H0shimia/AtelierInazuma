@@ -2,6 +2,80 @@
 
 *English below.*
 
+## 4.0
+
+### Boutique (étape « Cosmétique »)
+- **Nouvelle étape « Cosmétique »** dans Mes créations pour les objets, tenues et maillots : après « Créer », tu y règles le prix en boutique, l'icône et l'emblème, puis « Enregistrer » → Terminées. « En attente de stats » ne sert plus qu'aux techniques, esprits guerriers… Les formulaires de création n'ont plus le prix.
+- **Écrans faits comme les boutiques du jeu**, en plein écran : Boutique générale et Boutique d'entraînement, avec la barre d'onglets du jeu (icônes et noms du jeu, dans la langue de l'Atelier), toutes tes créations de la catégorie, les compteurs et les prix en jetons. Tout se clique (onglets, lignes, W / C, « ⇄ » pour changer de boutique quand tu y as des créations) ; en bas, seulement « ✨ Automatique », « ✎ Dessiner » et « Enregistrer » ; on ferme avec la croix ou Échap, et l'écran reste ouvert après « Enregistrer ».
+- **Chaque article comme dans le jeu** : un maillot avec quatre joueurs debout (à domicile et à l'extérieur, un joueur de champ et le gardien) ; une tenue portée par le mannequin gris en 3D, avec tes couleurs ; l'onglet Emblèmes avec sa carte bleue ; les équipements avec la carte verte de la Boutique d'entraînement. Un maillot sans icône à toi montre celle du maillot de base.
+- **L'icône et l'emblème se font ici** (plus dans l'onglet Maillots) : « ✎ Dessiner » ouvre le mode dessin de l'Atelier (calques, outils façon Photoshop, import d'une image), à partir de l'image actuelle ou de l'icône du maillot de base. Aussi pour les icônes des objets.
+- **« ✨ Automatique »** : l'icône du maillot = celle du maillot de base recolorée à tes couleurs (contours et ombres gardés), l'emblème = un blason à tes couleurs avec tes initiales ; pour une tenue, la tenue posée à plat comme les icônes du jeu. Tu peux ensuite la retoucher au dessin.
+- **L'emblème est facultatif** : l'onglet Emblèmes ne montre que les maillots qui en ont un.
+- **« ⚙ Réglages »** (comme « Régler les stats ») : bonus des équipements, synergie, type de titre et quantité se règlent dans la boutique, avec un résumé sur la carte. La création ne garde que le visuel, le nom et la description.
+- **Tous les types d'objets du jeu** (16) vont dans le bon onglet ; titres, objets importants, animaux et célébrations ont leur onglet au bout de la barre, qui se resserre au-delà de 9 onglets.
+
+### Objets
+- **Création revue pour tous les types d'objets.**
+- **Équipements** (crampons, bracelets / gants, pendentifs, spéciaux) : les 7 bonus se règlent (au départ, les valeurs du jeu) et les postes ATT / MIL / DÉF / GAR se calculent en direct, comme dans le jeu. Ils sont vendus à la Boutique d'entraînement, avec les synergies et les tactiques spéciales ; les autres objets restent à la Boutique générale.
+- **Synergies** : une copie est maintenant une vraie nouvelle synergie : jusqu'à 3 effets choisis dans la liste du jeu (valeur en %) et jusqu'à 8 joueurs nécessaires, choisis par leur nom. Avant, la copie ne pouvait rien changer.
+- **Pour tous** : quantité max réglable ; « Type de titre » (Argenté / Doré) pour les titres, « Fond normal / brillant » pour les consommables, ailleurs la rareté de l'original ; pas de description quand le jeu n'en affiche pas (titres, emblèmes, synergies…) ; « Modifier » reprend les réglages et le nom de la copie.
+- **Crampons et gants en 3D** dans l'onglet Objets : leur modèle se recolore comme une tenue, et la copie le porte en jeu.
+- **Plaques nominatives** : elles se copient (image recolorée, en vente à la Boutique générale).
+- **Boîtes** (Choisissez-votre-personnage, Choisissez-votre-récompense, Boîtes de victoire) : la copie a le même contenu que l'original.
+- **Refusés, avec la raison** (une copie ne ferait rien) : formations, objets internes, Graine Basara, Amélioration de technique (HissatsuReforged), objets importants (tickets, photos, objets de quête). Les tenues se font dans l'onglet Tenues.
+
+### Tenues
+- **Création plus simple** : seulement les corpulences possibles ; l'icône se fait toute seule (le mannequin qui porte la tenue) ; description par défaut traduite (« Seuls les joueurs de même gabarit peuvent la porter. »).
+- **« Plus de réglages »** (facultatif) : chaussures (« Celles du jeu pour ce vêtement », « Crampons de Raimon » ou « Aucune »), rareté, « Nombre max dans le sac », « Seulement ces joueurs ».
+- **Sans Inazuma Fantasy**, la boutique Chronicle vend tes tenues.
+- **Noms clairs** : les tenues, chaussures, gants et accessoires sans porteur connu s'appellent par leurs couleurs (« Chaussures · blanc et gris ») au lieu d'un code.
+
+### Joueurs
+- **Morphologie du nouveau joueur** : garçon / fille, normal, petit, grand, costaud… les 17 corps du jeu, montrés avec des joueurs qui les ont. Par défaut celle de l'original ; « Modifier » la garde.
+- **Peau des bras et des jambes** des copies de joueurs (onglet Personnages, « Créer une copie ») : par défaut comme la peau du visage recoloré, et réglable. Pour une copie déjà faite : fenêtre des techniques → « Garder », puis « Installer ». L'aperçu montre enfin la vraie peau du corps (avant : bras blancs), même pour les joueurs dont le jeu range la peau à part (Briar Bloomhurst…).
+
+### Techniques et esprits guerriers
+- **Recharge et évolution** sur l'écran des stats d'une technique et sur sa fiche dans l'écran d'un joueur : « Recharge » (ex. 90 s, réglable) et les marques d'évolution du jeu (2, 3, 4X, V2, V3, A/S/Z, ∞, N2…).
+- **Niveau sur la bannière** : la marque d'évolution (V3, 3, N2…) se place au bout du nouveau nom, quelle que soit sa longueur.
+- **Techniques de mods faites d'un modèle .glb** (Tiger fang d'Inazuma Fantasy) : le vrai modèle (le tigre) s'affiche et se recolore, et « Créer » en fait une copie qui le garde.
+- **Couleurs de l'apparition d'un esprit guerrier** : Stats de l'esprit → « Apparition » → « Couleurs de l'apparition ». L'invocation se recolore comme une technique, seulement pour cet esprit. Pas encore pour les totems et les armures.
+- **Noms des armures** : « Armure · Pégase », « Armure · Lancelot »… (le nom de l'esprit qui la porte) au lieu d'un code.
+
+### Aperçu, textures et dessin
+- **Couleurs d'aura dans l'aperçu** : cocher une aura et choisir sa couleur la montre tout de suite (lecteur du jeu et aperçu), lueur du contour comprise. Chaque joueur a son aura (avant : un seul joueur à la fois, ex. Main céleste de l'amitié).
+- **Fil de fer de la sélection** aussi dans le lecteur du jeu (mode avancé).
+- **Exporter / importer** dans le panneau Textures : « ⬇ PNG », « ⬆ Remplacer par une image » et « ⬇ Modèle (.glb) », pour peindre dans Blender ou Substance Painter.
+- **Avertissement « sommets colorés »** dans le panneau Textures, avec « Teinter leurs sommets comme la texture » : certaines pièces mélangent la texture et leurs couleurs de sommets (orange × cyan = vert).
+- **« Dessiner dans le vide »** (mode dessin) : peindre aussi les parties transparentes (nouvelles formes, dessin sur fond vide) avec le pinceau, le seau, le dégradé et les formes. Cochée toute seule pour dessiner une icône dans la boutique.
+
+### Plus simple
+- En mode simple, le panneau de droite ne garde que l'essentiel (le reste est dans « Avancé »), avec des noms clairs au lieu des codes (Partie 1, Couleurs, Contours, Icône…, titres sans codes).
+
+### Corrections
+- **Modifier et copies** : deux copies du même original ne partagent plus leurs textures (chaque création a son projet) ; « Modifier » + nouveau nom ne crée plus de double (techniques, esprits guerriers, totems, joueurs, tenues, objets, armures) ; deux créations aux noms longs presque pareils ne s'écrasent plus.
+- **« Modifier »** : le champ Nom montre le nom de la copie d'un objet ; un joueur créé depuis une tenue ou un accessoire rouvre la bonne tenue ; le nom de la copie précédente ne reste plus dans le champ ; une copie de synergie garde ses effets ; renommer une tenue ne change plus son nom interne.
+- Refaire la copie d'un esprit guerrier garde maintenant ses bonus, son effet unique et ses couleurs d'apparition. Avant de remplacer l'armure d'une copie qui en a déjà une, l'Atelier demande.
+- **Mes créations** : une création installée passe dans Terminées, même sans l'étape Cosmétique ou si une autre du même mod attend encore ; le nom de l'original s'affiche dans la langue de l'Atelier.
+- **Boutique** : le prix enregistré dans Cosmétique arrive maintenant dans le mod ; le prix caché ne réapparaît plus sous le formulaire des tenues ; les objets importants sont dans l'onglet Tickets, comme dans le jeu.
+- **Objets « une seule »** (emblèmes, titres, tactiques, synergies, objets importants, célébrations) : ils ne s'achètent plus qu'une fois, comme dans le jeu (avant, les tactiques et synergies achetées en double n'arrivaient pas).
+- **Tenues créées** : elles sont aussi en vente dans la boutique d'Inazuma Fantasy. Même chose pour les consommables copiés d'un objet jamais vendu.
+- **Tenues** : les corpulences qui peuvent les mettre étaient fausses pour plus de la moitié des vêtements ; chaussures et gants : maintenant ceux du vêtement dans le jeu (avant : les crampons de Raimon pour toutes). Pour une tenue déjà créée, refais « Créer ».
+- **Consommables** : seuls ceux que la boutique du jeu sait afficher (orbes…) se copient ; les objets de match (Guts Gear…), trésors et fèves sont refusés avec la raison (avant, la copie n'apparaissait pas). Les copies des orbes de niveau d'Inazuma Fantasy donnent bien leurs niveaux (+1 / +5 / +10).
+- **Icônes des objets** : les icônes des copies sont rangées comme celles du jeu, pour qu'il les trouve ; une copie sans nouvelle icône prend celle de l'original ; synergies, autocollants et tactiques ont leur icône. Dans Objets et la boutique, une seule icône au lieu de toute la planche (synergies, autocollants), les 82 autocollants ont leur icône (avant : 1), et les tactiques la leur (avant : un bandeau de nom en allemand).
+- **Onglet Objets** : tous les objets ajoutés par les mods sont là (formations de BetterQoL, 319 tenues de personnages d'Inazuma Fantasy avec leur icône, célébrations d'IECross et MissingContent, monnaies, modules comme LaLiga). Certaines chaussures s'appelaient « Tenue » dans l'onglet Tenues.
+- **Techniques** : le coût PT affichait la recharge (ex. Fire Tornado : 50 PT, pas 60) ; une bannière enregistrée depuis l'onglet Bannières se voit dans l'aperçu de la technique ; la bannière d'une technique qui change selon le tireur s'affiche dans l'écran des stats.
+- **Lecteur du jeu** : changer la couleur d'aura pendant la lecture refait aussi les images déjà calculées.
+- **Bannières** : avec les lettres du jeu (Lettres du jeu, styles Keshin, Totem, Armure), les réglages de forme, couleurs, contours et ombre ne faisaient rien. Ils sont maintenant grisés, avec une phrase qui dit pourquoi : seuls le texte et la position se règlent.
+- **Mode dessin** : repasser le pinceau sur un dessin fait dans le vide le rendait noir.
+- **Petits écrans** (1366 px) : la langue, ⚙ et « Avancé » ne sortent plus de l'écran, les onglets défilent, et les vignettes de textures restent dans le panneau.
+- Palette « Comme le jeu » : textes clairs plus lisibles sur le fond bleu. Le bouton « Créer » fixe en bas du panneau, qui faisait doublon, est retiré.
+- Messages d'erreur en mode simple : le nom du fichier manquant reste affiché.
+- Crampons, gants, boîtes et création d'objets : plus d'erreur chez ceux qui n'avaient pas de dossier « Chargeur ».
+- La police du style de bannière « Armure » manquait dans le paquet ; plus d'erreur sur l'icône de l'Atelier à l'ouverture.
+- Anglais / espagnol : les textes restés en français (création d'objet, boutique, Mes créations, compteurs de couleurs changées, pièces sélectionnées, barre de lecture, badges des cartes) sont traduits.
+
+Pas encore vérifiés en jeu : la recharge, la copie de Tiger fang, la peau des bras et des jambes, la morphologie d'un nouveau joueur, les couleurs de l'apparition d'un esprit guerrier, la lueur du contour des auras (3.0.4), la nouvelle création des objets (bonus, synergies…) et leur vente à la Boutique d'entraînement, les boîtes, et pour les tenues : le choix des chaussures, « Seulement ces joueurs » et la vente par la boutique Chronicle sans Inazuma Fantasy.
+
 ## 3.0.4
 - **La lueur des joueurs change vraiment de couleur** (Main céleste de l'amitié, Requin ténébreux…) : une aura a deux couleurs dans le jeu, la teinte du joueur et la **lueur de son contour**. L'Atelier ne changeait que la teinte, donc la lueur restait d'origine en jeu. Il change maintenant les deux, à la même force que le jeu. Une aura dont la teinte était neutre (grise) le reste : seule la lueur prend la couleur choisie.
 - Pour l'essayer : recolore l'aura (bloc « Auras (ballon et joueurs) »), puis « Créer » et « Installer » : ça se voit en jeu (l'aperçu ne montre pas encore les couleurs d'aura).
@@ -190,6 +264,80 @@
 ---
 
 # Update log — Atelier Inazuma
+
+## 4.0
+
+### Shop ("Cosmetic" step)
+- **New "Cosmetic" step** in My creations for items, outfits and kits: after "Create", you set the shop price, the icon and the crest there, then "Save" → Finished. "Waiting for stats" is now only for techniques, Keshin… The creation forms no longer have the price.
+- **Screens made like the game's shops**, full screen: General Shop and Training Shop, with the game's tab bar (the game's icons and names, in the Atelier's language), all your creations of the category, the counters and the prices in tokens. Everything is clickable (tabs, rows, W / C, "⇄" to switch shop when you have creations there); at the bottom, only "✨ Automatic", "✎ Draw" and "Save"; close with the cross or Esc, and the screen stays open after "Save".
+- **Every article like in the game**: a kit with four players standing (home and away, an outfield player and the keeper); an outfit worn by the grey 3D mannequin, in your colours; the Emblems tab with its blue card; equipment with the green Training Shop card. A kit without its own icon shows the base kit's.
+- **The icon and the crest are made here** (no longer in the Kits tab): "✎ Draw" opens the Atelier's drawing mode (layers, Photoshop-like tools, image import), starting from the current image or the base kit's icon. Also for item icons.
+- **"✨ Automatic"**: the kit icon = the base kit's icon recoloured in your colours (outlines and shadows kept), the crest = a shield in your colours with your initials; for an outfit, the outfit laid flat like the game's icons. You can then retouch it in drawing mode.
+- **The crest is optional**: the Emblems tab only shows the kits that have one.
+- **"⚙ Settings"** (like "Set the stats"): equipment bonuses, synergy, title type and quantity are set in the shop, with a summary on the card. Creating only keeps the look, the name and the description.
+- **Every item type in the game** (16) goes in the right tab; titles, important items, animals and celebrations get their tab at the end of the bar, which tightens beyond 9 tabs.
+
+### Items
+- **Creation reworked for every item type.**
+- **Equipment** (boots, bracelets / gloves, pendants, misc.): the 7 bonuses can be set (starting from the game's values) and the FW / MF / DF / GK positions are worked out live, like in the game. They are sold at the Training Shop, with synergies and special tactics; other items stay at the General Shop.
+- **Synergies**: a copy is now a real new synergy: up to 3 effects picked from the game's list (value in %) and up to 8 required players, picked by name. Before, the copy couldn't change anything.
+- **For all**: max quantity can be set; "Title type" (Silver / Gold) for titles, "Normal background / Shiny background" for consumables, the original's rarity elsewhere; no description when the game shows none (titles, emblems, synergies…); "Edit" brings back the copy's settings and name.
+- **Boots and gloves in 3D** in the Items tab: their model is recoloured like an outfit, and the copy wears it in game.
+- **Nameplates**: they can be copied (recoloured image, sold at the General Shop).
+- **Boxes** (choice boxes for a character or a reward, victory boxes): the copy has the same contents as the original.
+- **Refused, with the reason** (a copy would do nothing): formations, internal items, Basara Seed, Technique Upgrade (HissatsuReforged), important items (tickets, photos, quest items). Outfits are made in the Outfits tab.
+
+### Outfits
+- **Simpler creation**: only the possible builds; the icon is made by itself (the mannequin wearing the outfit); default description translated ("Only players of the same build can wear it.").
+- **"More settings"** (optional): boots ("The game's own for this outfit", "Raimon boots" or "None"), rarity, "Max number in the bag", "Only these players".
+- **Without Inazuma Fantasy**, the Chronicle shop sells your outfits.
+- **Clear names**: outfits, boots, gloves and accessories with no known wearer are named by their colours ("Boots · white and grey") instead of a code.
+
+### Players
+- **Body type of the new player**: boy / girl, normal, small, tall, stocky… the game's 17 bodies, shown with players who have them. By default the original's; "Edit" keeps it.
+- **Arm and leg skin** of player copies (Characters tab, "Create a copy"): by default like the recoloured face skin, and adjustable. For a copy already made: techniques window → "Keep", then "Install". The preview finally shows the real body skin (before: white arms), even for players whose skin the game stores separately (Briar Bloomhurst…).
+
+### Techniques and Keshin
+- **Recast and evolution** on a technique's stats screen and on its sheet in a player's screen: "Recast" (e.g. 90 s, adjustable) and the game's evolution marks (+1…, L2…).
+- **Level on the banner**: the evolution mark goes at the end of the new name, whatever its length.
+- **Mod techniques made of a .glb model** (Inazuma Fantasy's Tiger fang): the real model (the tiger) shows and is recoloured, and "Create" makes a copy that keeps it.
+- **Keshin summon colours**: Keshin Stats → "Appearance" → "Summon colours". The summon is recoloured like a technique, only for this Keshin. Not yet for Totems and armours.
+- **Armour names**: "Armour · Pegasus", "Armour · Lancelot"… (the name of the Keshin wearing it) instead of a code.
+
+### Preview, textures and drawing
+- **Aura colours in the preview**: ticking an aura and picking its colour shows it straight away (game player and preview), outline glow included. Each player has their own aura (before: one player at a time, e.g. God Hand of Friendship).
+- **Selection wireframe** in the game player too (advanced mode).
+- **Export / import** in the Textures panel: "⬇ PNG", "⬆ Replace with an image" and "⬇ Model (.glb)", to paint in Blender or Substance Painter.
+- **"Coloured vertices" warning** in the Textures panel, with "Tint their vertices like the texture": some pieces mix the texture with their vertex colours (orange × cyan = green).
+- **"Draw in empty space"** (drawing mode): also paint the transparent parts (new shapes, drawing on an empty background) with the brush, the bucket, the gradient and the shapes. Ticked by itself to draw an icon in the shop.
+
+### Simpler
+- In simple mode, the right panel only keeps the essentials (the rest is in "Advanced"), with clear names instead of codes (Part 1, Colours, Outlines, Icon…, titles without codes).
+
+### Fixes
+- **Edit and copies**: two copies of the same original no longer share their textures (each creation has its own project); "Edit" + a new name no longer makes a duplicate (techniques, Keshin, Totems, players, outfits, items, armours); two creations with long, almost identical names no longer overwrite each other.
+- **"Edit"**: the Name field shows an item copy's name; a player created from an outfit or accessory reopens the right outfit; the previous copy's name no longer stays in the field; a synergy copy keeps its effects; renaming an outfit no longer changes its internal name.
+- Remaking a Keshin copy now keeps its bonuses, unique effect and summon colours. Before replacing the armour of a copy that already has one, the Atelier asks.
+- **My creations**: an installed creation goes to Finished, even without the Cosmetic step or if another one from the same mod is still waiting; the original's name shows in the Atelier's language.
+- **Shop**: the price saved in Cosmetic now reaches the mod; the hidden price no longer reappears under the outfit form; important items are in the Tickets tab, like in the game.
+- **"One only" items** (emblems, titles, tactics, synergies, important items, celebrations): they can only be bought once, like in the game (before, tactics and synergies bought twice never arrived).
+- **Created outfits**: they are also sold in the Inazuma Fantasy shop. Same for consumables copied from an item that is never sold.
+- **Outfits**: the builds that can wear them were wrong for more than half of the clothes; boots and gloves: now the ones of that garment in the game (before: Raimon boots for all). For an outfit already created, do "Create" again.
+- **Consumables**: only the ones the game's shop can show (orbs…) can be copied; match items (Guts Gear…), treasures and beans are refused with the reason (before, the copy didn't show up). Copies of Inazuma Fantasy's level orbs now give their levels (+1 / +5 / +10).
+- **Item icons**: copies' icons are stored like the game's own, so the game finds them; a copy without a new icon takes the original's; synergies, stickers and tactics have their icon. In Items and the shop, a single icon instead of the whole sheet (synergies, stickers), the 82 stickers have their icon (before: 1), and tactics have theirs (before: a name strip in German).
+- **Items tab**: every item added by mods is there (BetterQoL formations, 319 Inazuma Fantasy character outfits with their icon, IECross and MissingContent celebrations, currencies, modules like LaLiga). Some boots were called "Outfit" in the Outfits tab.
+- **Techniques**: the PT cost showed the recast (e.g. Fire Tornado: 50 PT, not 60); a banner saved from the Banners tab shows in the technique's preview; the banner of a technique that changes with the shooter shows in the stats screen.
+- **Game player**: changing the aura colour during playback also redoes the frames already worked out.
+- **Banners**: with the game letters (Game letters, Keshin, Totem, Armour styles), the shape, colour, outline and shadow settings did nothing. They are now greyed out, with a sentence saying why: only the text and the position can be set.
+- **Drawing mode**: brushing again over a drawing made in empty space turned it black.
+- **Small screens** (1366 px): the language, ⚙ and "Advanced" no longer go off-screen, the tabs scroll, and texture thumbnails stay inside the panel.
+- "Like the game" palette: light texts easier to read on the blue background. The fixed "Create" button at the bottom of the panel, a duplicate, is removed.
+- Error messages in simple mode: the missing file's name stays shown.
+- Boots, gloves, boxes and item creation: no more error for people without a "Chargeur" folder.
+- The "Armour" banner style's font was missing from the package; no more error on the Atelier's icon when opening.
+- English / Spanish: texts left in French (item creation, shop, My creations, changed-colour counters, selected parts, playback bar, card badges) are translated.
+
+Not yet checked in game: the recast, the Tiger fang copy, arm and leg skin, the body type of a new player, Keshin summon colours, the aura outline glow (3.0.4), the new item creation (bonuses, synergies…) and selling at the Training Shop, boxes, and for outfits: the boots choice, "Only these players" and selling through the Chronicle shop without Inazuma Fantasy.
 
 ## 3.0.4
 - **Player glows really change colour now** (God Hand of Friendship, Shark Shooter…): in the game an aura has two colours, the player's tint and the **glow of their outline**. The Atelier only changed the tint, so the glow stayed the original one in game. It now changes both, at the game's own strength. An aura whose tint was neutral (grey) keeps it: only the glow takes the chosen colour.

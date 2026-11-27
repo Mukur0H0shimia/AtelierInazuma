@@ -152,7 +152,7 @@ struct PieceA {      // pièce d'un personnage (acteurs.Acteur)
     // plusieurs joueurs du même modèle — les 3 joueurs de Big Bang — se retrouvaient tous à la place du dernier)
     std::vector<std::array<ID3D11Buffer*, 3>> inst;
 };
-struct ActeurImage { uint32_t modele; std::vector<uint32_t> pieces; std::vector<double> mats; uint32_t statut; float st[12]; float alpha = 1.0f; };
+struct ActeurImage { uint32_t modele; std::vector<uint32_t> pieces; std::vector<double> mats; uint32_t statut; float st[12]; float alpha = 1.0f; std::string acteur; };
 struct Ombres { uint32_t present = 0, T = 1024; double vp[3][16], tr[3][2], dir[3], biais[3]; };
 struct Image {
     double V[16], P[16]; uint32_t lum, decor; std::vector<LumPonct> lumieres; std::vector<DessinEffet> effets;
@@ -198,6 +198,7 @@ struct App {
     ID3D11ShaderResourceView* telSrv2 = nullptr; int telW2 = 0, telH2 = 0;  // (24/11) 2e bannière (mise en armure : ARMED)
     ID3D11InputLayout* dispNoir = nullptr;
     ID3D11VertexShader* vsNoirSt = nullptr; ID3D11PixelShader* psNoirSt = nullptr; ID3D11InputLayout* dispNoirSt = nullptr;   // mannequin + aura
+    ID3D11PixelShader* psFil = nullptr; ID3D11RasterizerState* rasFil = nullptr;   // (25/11) fil de fer de la sélection
     ID3D11Buffer *quadPos = nullptr, *quadUv = nullptr, *quadCol = nullptr, *quadIb = nullptr, *cubeVb = nullptr, *cubeIb = nullptr;
     Valeur val[V_NB];
     double mvp[16], V[16];
@@ -1543,6 +1544,7 @@ static void tiers_fin() {
     vider_srv(); sortie_principale();
 }
 
+static bool SANS_FIL = false;                  // (25/11) pendant le calcul d'un clic : pas de fil de fer
 static void dessiner_effet(const DessinEffet& D, const Lum* lum) {
     if (D.elem >= A.elems.size()) return;
     const Element& X = A.elems[D.elem];
@@ -1578,6 +1580,12 @@ static void dessiner_effet(const DessinEffet& D, const Lum* lum) {
         ras = it->second; }
     etats(A.mel[mi], etat_profondeur((D.flags & 1) && !ecran, (D.flags & 2) != 0), ras);
     A.ctx->DrawIndexed(G.n, 0, 0);
+    // (25/11) « Fil de fer sélection » de l'Atelier : la pièce sélectionnée redessinée en traits blancs (comme l'aperçu WebGL),
+    // par-dessus tout, sans écrire la profondeur
+    if (modeTech && !SANS_FIL && !X.part && D.src >= 0 && D.src < (int)T.pieces.size() && T.pieces[D.src].fil && A.psFil) {
+        A.ctx->PSSetShader(A.psFil, nullptr, 0);
+        etats(A.mel[0], etat_profondeur(false, false), A.rasFil);
+        A.ctx->DrawIndexed(G.n, 0, 0); }
     // (14/11/2026) l'ancien effacement DÉDUIT du masque des personnages sous les effets est retiré : LU, les effets sont
     // dessinés après le tone mapping (étape 40_Effect), dans l'attachement 0 + profondeur seulement (masque 0x8001).
 }
@@ -1608,6 +1616,9 @@ static const char* HLSL_ATELIER =
     "float4 vs_noir(float3 p : POSITION) : SV_Position { return mul(u_mvp, float4(p, 1)); }\n"
     "float4 ps_noir() : SV_Target { return float4(0, 0, 0, 1); }\n"
     "float4 ps_masque() : SV_Target { return float4(0, 0, 7.0 / 255.0, 1); }\n"
+    // (25/11, retour d'enhanc3 : « selection wireframe doesn't work in technique mode ») fil de fer de la pièce sélectionnée :
+    // la pièce redessinée avec SES shaders de sommets (même place, même peau) et ce pixel shader blanc, en traits
+    "float4 ps_fil(float4 p : SV_Position) : SV_Target { return float4(1, 1, 1, 1); }\n"
     // (14/11/2026) mannequin noir AVEC effet de statut (aura du personnage) : terme R de chr_toon_effstatus.pfxo (LU) sur un
     // corps noir : x = 1 - sat(N.V), p = x^Pow, Rim = RimColor.rgb x RimColor.w, s = 0,3 sat(Rim p),
     // R = min(5 N.V, 1) (Rim p - s) + s ; couleur = 0 x StatusColor + R
@@ -1703,6 +1714,8 @@ static void etats_init() {
     A.melDof = melange(true, SA, ISA, D3D11_BLEND_OP_ADD, ONE, ZERO, 7);            // profondeur de champ
     D3D11_RASTERIZER_DESC r = {}; r.FillMode = D3D11_FILL_SOLID; r.CullMode = D3D11_CULL_NONE; r.DepthClipEnable = TRUE;
     OK(A.dev->CreateRasterizerState(&r, &A.rasDouble), "raster");
+    { D3D11_RASTERIZER_DESC f = r; f.FillMode = D3D11_FILL_WIREFRAME; f.CullMode = D3D11_CULL_NONE; f.AntialiasedLineEnable = TRUE;
+      OK(A.dev->CreateRasterizerState(&f, &A.rasFil), "raster fil"); }
     r.CullMode = D3D11_CULL_BACK; r.FrontCounterClockwise = TRUE; OK(A.dev->CreateRasterizerState(&r, &A.rasArriere), "raster");
     uint8_t b1[4] = {255, 255, 255, 255}, b0[4] = {0, 0, 0, 0}; A.blanc = texture_rgba(1, 1, b1, false); A.noir = texture_rgba(1, 1, b0, false);
     D3D11_SAMPLER_DESC s = {}; s.Filter = (D3D11_FILTER)0x95; s.AddressU = s.AddressV = s.AddressW = D3D11_TEXTURE_ADDRESS_BORDER; s.MaxAnisotropy = 1;
@@ -1710,7 +1723,7 @@ static void etats_init() {
     OK(A.dev->CreateSamplerState(&s, &A.s15), "s15");
     ID3DBlob* bn = nullptr;
     A.vsSS = vs_de("vs_ss"); A.vs1 = vs_de("vs1"); A.vs2 = vs_de("vs2"); A.vsg = vs_de("vsg"); A.vsNoir = vs_de("vs_noir", &bn);
-    A.psCopie = ps_de("ecran"); A.psCopieBrut = ps_de("copie"); A.psCopieV2 = ps_de("copie_v2"); A.psLum = ps_de("lum"); A.psNoir = ps_de("ps_noir"); A.psMasque = ps_de("ps_masque");
+    A.psCopie = ps_de("ecran"); A.psCopieBrut = ps_de("copie"); A.psCopieV2 = ps_de("copie_v2"); A.psLum = ps_de("lum"); A.psNoir = ps_de("ps_noir"); A.psMasque = ps_de("ps_masque"); A.psFil = ps_de("ps_fil");
     // (psCopieBrut : copie SANS saturate, pour les copies internes en 16 bits flottants)
     A.vsBan = vs_de("vs_ban"); A.psBan = ps_de("ps_ban");
     D3D11_INPUT_ELEMENT_DESC el = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0};
@@ -1924,7 +1937,7 @@ static void choisir_sous_clic(int f) {
     const float noir[4] = {0, 0, 0, 0}; std::vector<std::pair<size_t, float>> res; float mx = 0;
     for (auto& o : ordre) { const DessinEffet& D = im.effets[o.second];
         vider_srv(); A.ctx->ClearRenderTargetView(pickC.rtv, noir); sortie1(pickC.rtv, A.dsv, A.W, A.H);
-        dessiner_effet(D, lum);
+        SANS_FIL = true; dessiner_effet(D, lum); SANS_FIL = false;      // (25/11) les traits du fil de fer ne comptent pas au clic
         D3D11_BOX bx = {(UINT)x, (UINT)y, 0, (UINT)x + 1, (UINT)y + 1, 1}; A.ctx->CopySubresourceRegion(pickSt, 0, 0, 0, 0, pickC.t, 0, &bx);
         D3D11_MAPPED_SUBRESOURCE m; if (FAILED(A.ctx->Map(pickSt, 0, D3D11_MAP_READ, 0, &m))) continue;
         uint16_t h[4]; memcpy(h, m.pData, 8); A.ctx->Unmap(pickSt, 0);
@@ -1940,13 +1953,23 @@ static void choisir_sous_clic(int f) {
 static bool pause = false; static double temps = 0; static int pasManuel = 0;
 #include "incruste.h"
 // (15/11/2026) commande « options » : pièces cachées et couleurs relues sans relancer le lecteur (dossier de modifs.bin)
+static std::string signatureAuras() {          // (25/11) courbes de couleur / lueur de toutes les auras (recolorées ou non)
+    std::string s; char t[48];
+    for (auto& x : T.auras) for (size_t k = 0; k < x.courbes.size() && k < 2; k++) for (auto& q : x.courbes[k]) for (double v : q) { sprintf_s(t, "%.4f,", v); s += t; }
+    return s;
+}
 static void options_rel() {
     if (F_MODIFS.empty()) return;
     const size_t k = F_MODIFS.find_last_of(L"\\/"); if (k == std::wstring::npos) return;
     std::string avant; for (auto& e : T.ems) { char t[64]; sprintf_s(t, "%d %.4f %.4f %.4f %.4f;", e.aTeinte ? 1 : 0, e.tH, e.tC, e.tS, e.tV); avant += t; }
+    const std::string auraAvant = signatureAuras();
     T.lire_options(F_MODIFS.substr(0, k)); teintes_sommets();
     std::string apres; for (auto& e : T.ems) { char t[64]; sprintf_s(t, "%d %.4f %.4f %.4f %.4f;", e.aTeinte ? 1 : 0, e.tH, e.tC, e.tS, e.tV); apres += t; }
     if (avant != apres) for (int i = 0; i < calcules && i < (int)A.images.size(); i++) particules_gpu(A.images[i]);   // (15/11/2026) aussi en pause
+    // (25/11, retour de muku : « l'aura ne change pas ») couleur d'aura changée : auras des images DÉJÀ calculées refaites
+    // (avant : seules les images pas encore calculées prenaient la nouvelle couleur)
+    if (auraAvant != signatureAuras()) for (int i = 0; i < calcules && i < (int)A.images.size(); i++) {
+        const auto S = T.statutsImage(i); for (auto& x : A.images[i].acteurs) if (!x.acteur.empty()) Technique::poserStatut(S, x); }
     FILE* x = fopen("lecteur_incruste.txt", "a"); if (x) { fprintf(x, "options relues\n"); fclose(x); }
 }
 static void charger_telop_rel() {

@@ -224,7 +224,8 @@ def binaire(maillages):
     for m in maillages:
         nv, ni = len(m['pos']) // 3, len(m['idx'])
         meta.append({'nom': m['nom'], 'texture': m['texture'], 'ombre': m.get('ombre'), 'contour': m.get('contour'), 'nv': nv, 'ni': ni,
-                     'noir': bool(m.get('noir')), 'cle': m.get('cle'), 'seau': m.get('seau')})
+                     'noir': bool(m.get('noir')), 'cle': m.get('cle'), 'seau': m.get('seau'),
+                     **({'masque': m['masque']} if m.get('masque') else {})})    # (26/11) masque msk (peau du corps, joueurs)
         nor = m.get('normales') or [0.0, 1.0, 0.0] * nv
         morceaux.append(struct.pack('<%df' % (3 * nv), *m['pos']) + struct.pack('<%df' % (3 * nv), *nor) + struct.pack('<%df' % (2 * nv), *m['uv'])
                         + struct.pack('<%dH' % (4 * nv), *m['os']) + struct.pack('<%df' % (4 * nv), *m['poids'])

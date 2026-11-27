@@ -13,7 +13,7 @@ Conversion (DÉDUIT, VRFW ne publie pas son code) :
   - chaque maillage du .glb remplace la pièce du gabarit de même nom (sinon celle dont le matériau est `from`) ; les pièces
     du gabarit sans maillage du .glb sont vidées ;
   - sommets écrits dans la disposition de la pièce du gabarit (types : 1 position, 2 normale, 13 normale de contour,
-    3 tangente, 5 poids, 6 os, 8 couleur, 10-15 UV) ; couleur de sommet = la plus fréquente du gabarit (masque de contour :
+    3 tangente, 5 poids, 6 os, 8 couleur, 10-15 UV) ; couleur de sommet = COLOR_0 du .glb s'il en a (MESURÉ 25/11 contre le cache de VRFW), sinon la plus fréquente du gabarit (masque de contour :
     voir « Shader des armures - code du jeu ») ;
   - os : noms des articulations du .glb = os du gabarit ; palette « tous les os » réécrite dans la table +0x82 quand elle a
     assez de cases, sinon la palette de la pièce (os absent -> son parent) ;
@@ -82,8 +82,8 @@ def _ecrire_attr(buf, off, fmt, v):
         struct.pack_into('<3f', buf, off, *v[:3])
     elif fmt == 2:
         struct.pack_into('<2f', buf, off, *v[:2])
-    elif fmt == 20:
-        struct.pack_into('<4h', buf, off, *[int(max(-1, min(1, x)) * 32767) for x in (list(v) + [0, 0, 0, 0])[:4]])
+    elif fmt == 20:     # (25/11) arrondi (MESURÉ : VRFW arrondit, l'ancienne écriture tronquait d'une unité)
+        struct.pack_into('<4h', buf, off, *[int(round(max(-1, min(1, x)) * 32767)) for x in (list(v) + [0, 0, 0, 0])[:4]])
     elif fmt == 14:
         struct.pack_into('<2H', buf, off, *[int(max(0, min(1, x)) * 65535 + 0.5) for x in v[:2]])
     elif fmt == 18:
@@ -113,6 +113,23 @@ def _tangentes(P, N, U, I):
     return np.where(l > 1e-9, T / np.maximum(l, 1e-9), np.array([1.0, 0, 0]))
 
 
+def _sens_bitangente(P, N, U, I, T):
+    """(25/11) 4e composante de la tangente = sens de la bitangente (+1 / −1) ; MESURÉ dans le cache de VRFW (tiger_fang) :
+    mêmes x y z que _tangentes, w = ±1 (avant : toujours 1)"""
+    B = np.zeros_like(P)
+    tri = I.reshape(-1, 3)
+    p0, p1, p2 = P[tri[:, 0]], P[tri[:, 1]], P[tri[:, 2]]
+    u0, u1, u2 = U[tri[:, 0]], U[tri[:, 1]], U[tri[:, 2]]
+    e1, e2 = p1 - p0, p2 - p0
+    d1, d2 = u1 - u0, u2 - u0
+    r = d1[:, 0] * d2[:, 1] - d2[:, 0] * d1[:, 1]
+    r = np.where(np.abs(r) < 1e-12, 1e-12, r)
+    b = (e2 * d1[:, 0:1] - e1 * d2[:, 0:1]) / r[:, None]
+    for c in range(3):
+        np.add.at(B, tri[:, c], b)
+    return np.where((np.cross(N, T) * B).sum(1) < 0, 1.0, -1.0)
+
+
 def convertir(cfg, cache_dir, m):
     """convertit un modèle .glb -> {(« common » | « dx11 », chemin relatif du jeu) : fichier converti} (gardé en cache)"""
     from . import g4, anim
@@ -121,7 +138,7 @@ def convertir(cfg, cache_dir, m):
     t = m['def']
     sig = hashlib.md5(json.dumps([os.path.getmtime(m['glb']), os.path.getmtime(m['toml'])] +
                                  sorted((f, os.path.getmtime(f)) for f in glob.glob(os.path.join(m['textures'], '*.png'))),
-                                 default=str).encode() + b'v2').hexdigest()[:10]
+                                 default=str).encode() + b'v7').hexdigest()[:10]   # v7 (25/11) : couleurs de sommet, normales, tangentes
     cible = t['target'].replace('\\', '/').lstrip('/')
     cible = cible[len('common/'):] if cible.startswith('common/') else cible
     tpl = t['template'].replace('\\', '/').lstrip('/')
@@ -219,13 +236,22 @@ def convertir(cfg, cache_dir, m):
         # sommets du gabarit pour les valeurs par défaut (couleur la plus fréquente, octets inconnus)
         v0 = bytes(mg_tpl[e['vb']:e['vb'] + pas]) if e['nv'] else bytes(pas)
         col = None
-        if 8 in disp and e['nv']:
-            o8 = disp[8][0]
-            col = collections.Counter(mg_tpl[e['vb'] + k * pas + o8:e['vb'] + k * pas + o8 + 4] for k in range(e['nv'])).most_common(1)[0][0]
-        P_, N_, U_, I_, J_, W_ = [], [], [], [], [], []
+        if 8 in disp:
+            # (25/11) MESURÉ dans le cache de VRFW (Michael astral k002093, dôme ev61873190 : .glb sans COLOR_0) : VRFW écrit
+            # [255, 153, 191, 127] sur tous les sommets, pas la couleur la plus fréquente du gabarit (k002010 : 255, 102, 191, 127)
+            col = bytes([255, 153, 191, 127])
+        P_, N_, U_, I_, J_, W_, C_ = [], [], [], [], [], [], []
         for nom, mat, p, skj in pris[i]:
             at = p['attributes']
             P = _acces(j, binaire, at['POSITION'])[:, :3]
+            # (25/11) COULEUR DE SOMMET du .glb (COLOR_0 : masque de contour, ex. tiger_fang [0, 0,30, 0, 0,5]) : MESURÉ dans
+            # le cache de VRFW (ev63_86020), VRFW l'écrit telle quelle (0..1 -> 0..255) ; sans COLOR_0 : 255, 153, 191, 127 (plus bas)
+            if 'COLOR_0' in at:
+                c_ = _acces(j, binaire, at['COLOR_0'])
+                c_ = np.concatenate([c_[:, :4], np.ones((len(c_), max(0, 4 - c_.shape[1])))], 1) if c_.shape[1] < 4 else c_[:, :4]
+                C_.append(np.clip(np.round(c_ * 255), 0, 255).astype(int))
+            else:
+                C_.append(None)
             N = _acces(j, binaire, at['NORMAL'])[:, :3] if 'NORMAL' in at else np.tile([0, 1, 0], (len(P), 1)).astype(float)
             U = _acces(j, binaire, at['TEXCOORD_0'])[:, :2] if 'TEXCOORD_0' in at else np.zeros((len(P), 2))
             I = _acces(j, binaire, p['indices'])[:, 0].astype(np.int64) if 'indices' in p else np.arange(len(P))
@@ -240,11 +266,19 @@ def convertir(cfg, cache_dir, m):
             P_.append(P); N_.append(N); U_.append(U)
         P, N, U = np.concatenate(P_), np.concatenate(N_), np.concatenate(U_)
         I, J, W = np.concatenate(I_), np.concatenate(J_), np.concatenate(W_)
+        C = None
+        if any(c_ is not None for c_ in C_):
+            defaut = np.array(list(col) if col is not None else [255, 255, 255, 255], int)
+            C = np.concatenate([c_ if c_ is not None else np.tile(defaut, (len(p_), 1)) for c_, p_ in zip(C_, P_)])
         if len(P) >= 65535:
             raise ValueError('trop de sommets (%d)' % len(P))
         N = N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
         T = _tangentes(P, N, U, I)
-        cles = [tuple(np.round(p, 4)) for p in P]
+        TW = _sens_bitangente(P, N, U, I, T)
+        # (25/11) normale de contour = moyenne des normales des sommets à la MÊME position exacte (MESURÉ dans le cache de
+        # VRFW : 23692 / 23692 pour Michael astral, 2034 / 2034 pour tiger_fang ; avant : positions arrondies à 4 décimales,
+        # deux points voisins fusionnés)
+        cles = [tuple(np.round(p, 6)) for p in P]
         somme = {}
         for c, n in zip(cles, N):
             somme[c] = somme.get(c, 0) + n
@@ -258,16 +292,18 @@ def convertir(cfg, cache_dir, m):
             for typ, (off, fmt) in disp.items():
                 if typ == 1:
                     _ecrire_attr(vb, o + off, fmt, P[k])
-                elif typ == 2:
-                    _ecrire_attr(vb, o + off, fmt, list(N[k]) + [0])
+                elif typ == 2:          # (25/11) 4e composante 1 (MESURÉ dans le cache de VRFW ; avant : 0)
+                    _ecrire_attr(vb, o + off, fmt, list(N[k]) + [1])
                 elif typ == 13:
-                    _ecrire_attr(vb, o + off, fmt, list(NC[k]) + [0])
+                    _ecrire_attr(vb, o + off, fmt, list(NC[k]) + [1])
                 elif typ == 3:
-                    _ecrire_attr(vb, o + off, fmt, list(T[k]) + [1])
+                    _ecrire_attr(vb, o + off, fmt, list(T[k]) + [TW[k]])
                 elif typ == 5:
                     _ecrire_attr(vb, o + off, fmt, wq + [0, 0, 0, 0])
                 elif typ == 6:
                     _ecrire_attr(vb, o + off, fmt, [int(x) for x in J[k]] + [0, 0, 0, 0])
+                elif typ == 8 and C is not None:
+                    _ecrire_attr(vb, o + off, fmt, [int(x) for x in C[k]])
                 elif typ == 8 and col is not None:
                     _ecrire_attr(vb, o + off, fmt, list(col))
                 elif 10 <= typ <= 15:

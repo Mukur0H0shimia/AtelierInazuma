@@ -716,3 +716,20 @@ html[data-theme] #menu-stats .msp-st.sel { border-color: #2fe6dc; box-shadow: 0 
    overflow: hidden sur la fenêtre ⚙ Paramètres (coins arrondis) : plus grande que l'écran = coupée, sans barre de défilement.
    Elle défile maintenant en hauteur (coins toujours arrondis). Pareil pour la Corbeille. */
 html[data-theme="jeu"] #parametres .p-boite, html[data-theme="jeu"] #corbeille .cb-boite { overflow-x: hidden; overflow-y: auto; }
+
+/* (25/11, demande de danifdez) recharge et marques d'évolution (images du jeu gaiji_wlv) */
+.evol-marque { vertical-align: middle; margin: 0 1px; object-fit: contain; }
+.tc-recharge { display: flex; align-items: center; gap: 12px; flex-basis: 100%; font-weight: 700; }
+.tc-recharge .tc-evol { display: inline-flex; align-items: center; gap: 2px; }
+.msjt-evol { display: inline-flex; align-items: center; gap: 4px; }
+.msjt-evols { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.msjt-evols button { display: flex; align-items: center; gap: 6px; justify-content: flex-start; }
+.msjt-evols button > span { min-width: 64px; text-align: left; }
+
+/* (28/11, grand test : muku « prends des initiatives si des boutons ne sont pas lisibles ») textes CLAIRS posés sur le fond bleu clair
+   (aides, libellés, noms des textures, « Modèle : … » des bannières) : léger contour bleu nuit comme les textes des menus du jeu.
+   Pas dans les cases blanches (textes sombres), ni les fenêtres, ni le mode dessin. */
+html[data-theme="jeu"] :is(.panneau, #centre, #page-bannieres, .barre-outils) :is(.aide, label, h2, .compte-pieces, .tex .nom, .valeur, span[id^="v-"]):not(.avertissement):not(details.bloc *):not(dialog *):not(.ad-carte *):not(.etape-avant *) {
+  text-shadow: 0 0 3px rgba(6, 32, 78, .95), 0 1px 1px rgba(6, 32, 78, .95);
+}
+html[data-theme="jeu"] .tex .nom { color: #fff; font-weight: 600; }

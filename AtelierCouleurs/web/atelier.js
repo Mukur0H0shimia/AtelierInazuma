@@ -47,6 +47,7 @@ function atDessinOuvrir(cle) {
 }
 function atDessinFermer() {
   document.body.classList.remove('dessin'); if (A.reglage) atReglageFermer(false);
+  if (window.__bqDessin) return window.__bqDessin.fini();   // (27/11) dessin de l'icône / de l'emblème ouvert depuis la boutique
   if (E.vue) { E.vue.outil = null; E.vue.clicOutil = null; E.vue.cv.style.cursor = ''; }
   if (window.mmDessinFini) mmDessinFini();             // (24/11) icône / emblème d'un maillot : le dessin va dans le formulaire
   setTimeout(() => { dispatchEvent(new Event('resize')); atCadrer3D(); }, 60);
@@ -101,7 +102,7 @@ function atComposer(d, r) {
 let atAttenteGPU = false;
 function atEnvoyerGPU(d) {     // pendant un geste : seulement la texture de la vue 3D (rapide)
   if (atAttenteGPU) return; atAttenteGPU = true;
-  requestAnimationFrame(() => { atAttenteGPU = false; const c = texAffichee(d.x); E.vue.texture(d.cle, c); if (E.vue.textures['peau:' + d.cle]) E.vue.texture('peau:' + d.cle, c); atPlat(); });
+  requestAnimationFrame(() => { atAttenteGPU = false; if (window.__bqDessin || !E.vue) return atPlat(); const c = texAffichee(d.x); E.vue.texture(d.cle, c); if (E.vue.textures['peau:' + d.cle]) E.vue.texture('peau:' + d.cle, c); atPlat(); });
 }
 function atFini(d) {           // fin d'une action : texture de l'Atelier à jour partout (aperçu, lecteur natif, projet, mod)
   const x = d.x; x.base = x.cur.getContext('2d').getImageData(0, 0, d.W, d.H); x.modif = true; x.moyenne = moyenne(x.base); x.donneesCur = null; d.sig = x.moyenne;
@@ -196,6 +197,8 @@ function atRetenir(hex) {
   atRecentes();
 }
 const PINCEAUX = ['pinceau', 'gomme', 'eclaircir', 'assombrir', 'tampon', 'doigt'];
+// (27/11, muku) « Dessiner dans le vide » : les parties transparentes se peignent (la couleur y devient visible)
+function atVide() { return !!($('at-vide') && $('at-vide').checked); }
 function atTraitDebut(d, px, py, zone, ev) {
   const o = A.outil;
   if (o === 'tampon' && ev && ev.altKey) { A.tampon = { src: [px, py], decal: null }; majRapport('Source du tampon posée : peins ailleurs pour copier.'); return false; }
@@ -203,7 +206,7 @@ function atTraitDebut(d, px, py, zone, ev) {
   const av = atAvantPixels(d), C = atCouleur();
   A.trait = { d, av, src: av.avant, comp0: d.comp ? new Uint8ClampedArray(d.comp.data) : null, cov: new Float32Array(d.W * d.H), dernier: null, dernierM: null,
     zone: $('at-limiter') && $('at-limiter').checked && zone !== undefined ? zone : -1, C, r: [1e9, 1e9, -1e9, -1e9], doigt: null, calque: !!atCalque(d),
-    libre: !!($('at-verrou') && !$('at-verrou').checked && !(E.tech && E.tech.perso)), ombre: atOmbreJeu(d) };
+    libre: atVide(), ombre: atOmbreJeu(d) };
   if (o === 'tampon') { if (!A.tampon.decal) A.tampon.decal = [A.tampon.src[0] - px, A.tampon.src[1] - py]; }
   return true;
 }
@@ -238,7 +241,9 @@ function atTraitPoint(px, py, miroir) {
         else if (t.calque) {          // calque : peinture « normale » (le mode du calque fait le reste)
           const a0 = src[i + 3] / 255, a1 = a0 + w * (1 - a0);
           for (let j = 0; j < 3; j++) px0[i + j] = a1 > 0 ? (src[i + j] * a0 * (1 - w) + C.rgb[j] * 255 * w) / a1 : 0; px0[i + 3] = a1 * 255; }
-        else if (A.mode === 'couvrir' || (t.libre && src[i + 3] < 250)) { for (let j = 0; j < 3; j++) px0[i + j] = src[i + j] * (1 - w) + C.rgb[j] * 255 * w; if (t.libre) px0[i + 3] = src[i + 3] + w * (255 - src[i + 3]); }
+        // (27/11, muku : « quand je repasse sur ce que j'ai dessiné ça fait du noir ») là où la texture du JEU est transparente, il
+        // n'y a pas d'ombrage à garder (ses pixels cachés sont noirs) : la couleur se pose telle quelle
+        else if (A.mode === 'couvrir' || (t.libre && src[i + 3] < 250) || (t.ombre && t.ombre[i + 3] < 250)) { for (let j = 0; j < 3; j++) px0[i + j] = src[i + j] * (1 - w) + C.rgb[j] * 255 * w; if (t.libre) px0[i + 3] = src[i + 3] + w * (255 - src[i + 3]); }
         else { const og = t.ombre, z0 = T && Z.zones[T.label[p]], z = z0 ? (og && z0.o ? z0.o : z0) : zoneVoisinage(og || src, i); zonesTeindre(px0, i, C.H, C.S, C.V, z, 1, w, src, og); } } }
   atComposer(d, t.r); atEnvoyerGPU(d);
 }
@@ -254,14 +259,14 @@ function atTraitFin() {
 }
 // remplir : une pièce du modèle (esprits / totems) ou la zone de couleur proche (pot de peinture), ou la sélection
 function atRemplirMasque(d, m, nom) {
-  const av = atAvantPixels(d), px = atPixels(d), C = atCouleur(), cal = !!atCalque(d), T = Z.tex[d.cle], lum = +$('zn-lum').value / 100;
+  const av = atAvantPixels(d), px = atPixels(d), C = atCouleur(), cal = !!atCalque(d), T = Z.tex[d.cle], lum = +$('zn-lum').value / 100, vide = atVide(), og0 = atOmbreJeu(d);
   const spmM = $('zn-metal') && $('zn-metal').checked && T ? zonesCarte(d.cle, 'spm') : null;     // seulement le métal
   let r = [1e9, 1e9, -1e9, -1e9], n = 0;
   for (let p = 0; p < m.length; p++) { const w = m[p] / 255; if (!w) continue; if (spmM && zonesValeurCarte(spmM, p, T) < 0.2) continue;
     const i = p * 4, x = p % d.W, y = (p - x) / d.W; n++;
     r[0] = Math.min(r[0], x); r[1] = Math.min(r[1], y); r[2] = Math.max(r[2], x + 1); r[3] = Math.max(r[3], y + 1);
     if (cal) { const a0 = px[i + 3] / 255, a1 = a0 + w * (1 - a0); for (let j = 0; j < 3; j++) px[i + j] = a1 > 0 ? (px[i + j] * a0 * (1 - w) + C.rgb[j] * 255 * w) / a1 : 0; px[i + 3] = a1 * 255; }
-    else if (A.mode === 'couvrir') { for (let j = 0; j < 3; j++) px[i + j] = px[i + j] * (1 - w) + Math.min(255, C.rgb[j] * 255 * lum) * w; }
+    else if (A.mode === 'couvrir' || (vide && px[i + 3] < 250) || (og0 && og0[i + 3] < 250)) { for (let j = 0; j < 3; j++) px[i + j] = px[i + j] * (1 - w) + Math.min(255, C.rgb[j] * 255 * lum) * w; if (vide) px[i + 3] = px[i + 3] + w * (255 - px[i + 3]); }
     else { const og = atOmbreJeu(d), z0 = T && Z.zones[T.label[p]], z = z0 ? (og && z0.o ? z0.o : z0) : zoneVoisinage(og || av.avant, i); zonesTeindre(px, i, C.H, C.S, C.V, z, lum, w, av.avant, og); } }
   if (!n) return majRapport('Rien à remplir ici.');
   atRetenir(C.hex); atApresPixels(d, nom || 'Remplir', av, r);
@@ -286,11 +291,11 @@ function atRemplirClic(d, px, py, zone, ev) {
 }
 function atDegrade(d, a, b) {          // dégradé linéaire couleur 1 -> couleur 2, dans la sélection (sinon tout le calque)
   const av = atAvantPixels(d), px = atPixels(d), m = atMasque(d), c1 = atCouleur('at-c1').rgb, c2 = atCouleur('at-c2').rgb, cal = !!atCalque(d);
-  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy || 1, opa = +$('at-opacite').value / 100;
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy || 1, opa = +$('at-opacite').value / 100, vide = atVide();
   for (let p = 0; p < d.W * d.H; p++) { const w = (m ? m[p] / 255 : 1) * opa; if (!w) continue; const x = p % d.W, y = (p - x) / d.W, i = p * 4;
     const t = Math.max(0, Math.min(1, ((x + 0.5 - a[0]) * dx + (y + 0.5 - a[1]) * dy) / L)), c = [0, 1, 2].map(k => (c1[k] * (1 - t) + c2[k] * t) * 255);
     if (cal) { const a0 = px[i + 3] / 255, a1 = a0 + w * (1 - a0); for (let j = 0; j < 3; j++) px[i + j] = a1 > 0 ? (px[i + j] * a0 * (1 - w) + c[j] * w) / a1 : 0; px[i + 3] = a1 * 255; }
-    else for (let j = 0; j < 3; j++) px[i + j] = px[i + j] * (1 - w) + c[j] * w; }
+    else { for (let j = 0; j < 3; j++) px[i + j] = px[i + j] * (1 - w) + c[j] * w; if (vide) px[i + 3] = px[i + 3] + w * (255 - px[i + 3]); } }
   atApresPixels(d, 'Dégradé', av, [0, 0, d.W, d.H]);
 }
 function atPipette(d, px, py) {
@@ -638,7 +643,7 @@ function atBrancher() {
   atRecentes(); atMajCouleurs(); atBrancherPlat();
   document.addEventListener('keydown', ev => {
     if (ev.code === 'Space' && document.activeElement === document.body && document.body.classList.contains('onglet-esprits') + document.body.classList.contains('onglet-totems')) A.espace = true;
-    if (!E.tech || !atOuvert() || document.body.classList.contains('edition')) return;
+    if (!(E.tech || window.__bqDessin) || !atOuvert() || document.body.classList.contains('edition')) return;   // (27/11) aussi le dessin de la boutique
     if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !['range', 'checkbox', 'color'].includes(document.activeElement.type)) return;
     const k = ev.key.toLowerCase(), ctrl = ev.ctrlKey || ev.metaKey; let fait = true;
     if (ctrl && k === 'z' && !ev.shiftKey) atAnnuler(); else if (ctrl && (k === 'y' || (k === 'z' && ev.shiftKey))) atRetablir();

@@ -482,8 +482,11 @@
     uniform float aTex; uniform float aOmbre; uniform vec3 lum; uniform vec3 couleurContour; uniform float contour; uniform float noir; uniform float profPack;
     varying vec3 vw; uniform float nPL; uniform vec4 plPos[4]; uniform vec4 plCol[4]; uniform vec4 plToon; uniform vec4 plBlend; uniform vec2 plRim; uniform vec4 plRate; uniform vec3 oeil;
     varying vec4 vF; uniform float fOcc; uniform float fChara; uniform float stOn; uniform vec3 stCol; uniform vec4 stRim; uniform float stPow;
+    uniform sampler2D masque; uniform float aMasque; uniform vec3 peauCol;
     void main(){ if (profPack > 0.5) { vec3 e = fract(gl_FragCoord.z * vec3(1.0, 255.0, 65025.0)); e -= e.yzz * vec3(1.0 / 255.0, 1.0 / 255.0, 0.0); gl_FragColor = vec4(e, 0.5); return; }   /* passe de profondeur (Direct3D) ; alpha 0.5 = joueur */
       vec4 a = aTex > 0.5 ? texture2D(tex, vt) : vec4(0.85, 0.85, 0.85, 1.0);
+      /* (26/11) peau du corps, comme chr_toon_edit.pfxo (LU) : c = c x lerp(1, u_skinColor, msk.r) */
+      if (aMasque > 0.5) a.rgb = mix(a.rgb, a.rgb * peauCol, texture2D(masque, vt).r);
       if (noir > 0.5) a = vec4(0.07, 0.07, 0.08, 1.0);                  // silhouette noire (joueur mannequin)
       if (contour > 0.5) { gl_FragColor = vec4(a.rgb * 0.28 + couleurContour * 0.02, 1.0); return; }   // contour = couleur de l'objet assombrie
       if (a.a < 0.35) discard;
@@ -778,7 +781,7 @@
       this.lt = {}; for (const a of ['p', 'n', 't']) this.lt[a] = gl.getAttribLocation(toon, a);
       for (const u of ['mvp', 'contour', 'largeur', 'ecran', 'tex', 'ombre', 'aTex', 'aOmbre', 'lum', 'couleurContour', 'noir', 'profPack',
         'nPL', 'plPos', 'plCol', 'plToon', 'plBlend', 'plRim', 'plRate', 'oeil',
-        'lDir', 'aFog', 'fR', 'fHC', 'fM', 'fW0', 'fW1', 'fH0', 'fH1', 'fB', 'fOcc', 'fChara', 'stOn', 'stCol', 'stRim', 'stPow']) this.lt[u] = gl.getUniformLocation(toon, u);
+        'lDir', 'aFog', 'fR', 'fHC', 'fM', 'fW0', 'fW1', 'fH0', 'fH1', 'fB', 'fOcc', 'fChara', 'stOn', 'stCol', 'stRim', 'stPow', 'masque', 'aMasque', 'peauCol']) this.lt[u] = gl.getUniformLocation(toon, u);
       // programme « vrai shader du stade »
       this.extLod = gl.getExtension('EXT_shader_texture_lod'); gl.getExtension('OES_standard_derivatives');
       try { const pm = gl.createProgram();
@@ -1251,7 +1254,8 @@
           if (!this._vis(p) || !p.ni || (this.lecteur && p.animCachee)) continue;
           if (p.ptl && (!this.lecteur || !p.jeu)) continue;          // particules : seulement pendant l'animation
           if (passe && !p.contour) continue;
-          { const S = this._statut, on = !passe && S && p.peau && (p.peau.acteur === S.acteur || (p.peau.acteur.startsWith('b000001') && String(S.acteur).startsWith('b000001')));
+          { const SS = this._statuts || [], S = !passe && p.peau ? (SS.find(x => x.acteur === p.peau.acteur)
+              || SS.find(x => p.peau.acteur.startsWith('b000001') && String(x.acteur).startsWith('b000001'))) : null, on = !!S;   // (25/11) une par personnage
             gl.uniform1f(L.stOn, on ? 1 : 0); if (on) { gl.uniform3fv(L.stCol, S.col); gl.uniform4f(L.stRim, S.rim[0], S.rim[1], S.rim[2], S.rim_w === undefined ? 1 : S.rim_w); gl.uniform1f(L.stPow, S.pow || 1); } }
           gl.bindBuffer(gl.ARRAY_BUFFER, p.bp); gl.vertexAttribPointer(L.p, 3, gl.FLOAT, false, 0, 0);
           gl.bindBuffer(gl.ARRAY_BUFFER, p.bn); gl.vertexAttribPointer(L.n, 3, gl.FLOAT, false, 0, 0);
@@ -1261,6 +1265,9 @@
           const tx = p.texCle && this.textures[p.texCle], oc = p.ombreCle && this.textures[p.ombreCle];
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tx || null); gl.uniform1i(L.tex, 0); gl.uniform1f(L.aTex, tx ? 1 : 0);
           gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, oc || null); gl.uniform1i(L.ombre, 1); gl.uniform1f(L.aOmbre, oc ? 1 : 0);
+          { const mk = p.masqueCle && this.textures[p.masqueCle], pc = mk && this.peaux && this.peaux[p.peau && p.peau.acteur];   // (26/11) peau du corps
+            gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, pc ? mk : null); gl.uniform1i(L.masque, 2); gl.uniform1f(L.aMasque, pc ? 1 : 0);
+            if (pc) gl.uniform3fv(L.peauCol, pc); }
           gl.activeTexture(gl.TEXTURE0);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, p.bi); gl.drawElements(gl.TRIANGLES, p.ni, gl.UNSIGNED_SHORT, 0);
         }
@@ -1516,6 +1523,8 @@
       for (let t = 0; t + 2 < geo.ni; t += 3) { const a = geo.idx[t], b = geo.idx[t + 1], c = geo.idx[t + 2]; l.set([a, b, b, c, c, a], t * 2); }
       p.bl = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, p.bl); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, l, gl.STATIC_DRAW); p.nl = l.length;
       p.boite = this._boite(geo.pos);
+      // (25/11/2026) « ⬇ Modèle (.glb) » (export_modele.js) : sommets au repos gardés (sauf stade / terrain, trop gros)
+      if (!/^(stade|terrain)\//.test(cle)) p.cpu = { pos: geo.pos, uv: geo.uv, idx: geo.idx, nor: geo.nor || geo.normales || null };
       this.pieces.push(p); return p;
     }
     // PEAU DES MAILLAGES D'EFFETS (14/11/2026) : comme le shader « _vb » du jeu (4 os par sommet, u_mtxBone = cb8) ;
@@ -1679,9 +1688,16 @@
       // 0x1402a44d0 courbes) : temps des courbes = temps / durée (en boucle si mode 0) ; poids w = fondu d'entrée puis 1,
       // fondu de sortie après la fin ; couleur = (c - 1) w + 1, contour = (c - (1,1,1,0)) w + (1,1,1,0), puissance = (c - 10) w + 10.
       // DÉDUIT : temps = (image - début) / 60, poids 1 si le fondu d'entrée vaut 0.
-      this._statut = null;
-      const ivS = iv || IV.find(x => x.sortie > 0 && x.fin < 1e6 && f >= x.fin && f < x.fin + x.sortie * 60);
-      if (ivS && ivS.courbes) {
+      // (25/11, muku : « montre les auras dans l'aperçu ») UNE AURA PAR PERSONNAGE (comme le lecteur du jeu : Main céleste de
+      // l'amitié = deux joueurs en même temps) et couleur choisie dans l'Atelier (this.aurasCouleurs {nom : [r, v, b]}), recolorée
+      // comme l'export (_cles_aura) : courbe 1 (couleur, clé grise gardée) et courbe 2 (lueur), force et 5e valeur gardées
+      this._statut = null; this._statuts = [];
+      const AC = this.aurasCouleurs || {};
+      for (const ac of [...new Set(IV.map(x => x.acteur))]) {
+        const ivS = IV.find(x => x.acteur === ac && f >= x.debut && f < x.fin && x.courbes && x.courbes.length)
+          || IV.find(x => x.acteur === ac && x.courbes && x.courbes.length && x.sortie > 0 && x.fin < 1e6 && f >= x.fin && f < x.fin + x.sortie * 60);
+        if (!ivS) continue;
+        const courbes = Vue3D.recolorerAura(ivS.courbes, AC[ivS.nom]);
         const T = (f - ivS.debut) / 60, D = ivS.duree > 0 ? ivS.duree : 1, Ee = ivS.entree || 0, Ss = ivS.sortie || 0, boucle = ivS.boucle !== false;
         let w = 1;
         if (f >= ivS.fin) w = Ss > 0 ? 1 - ((f - ivS.fin) / 60) / Ss : 0;
@@ -1695,15 +1711,25 @@
             if (i >= ks.length) { const k = ks.length - 1; return [g(k, 1), g(k, 2), g(k, 3), g(k, 4)]; }
             const dt = ks[i][0] - ks[i - 1][0], u = dt > 0 ? (tn - ks[i - 1][0]) / dt : 0;
             return [1, 2, 3, 4].map(j => (g(i, j) - g(i - 1, j)) * u + g(i - 1, j)); };
-          const c0 = val(ivS.courbes[0]), c1 = val(ivS.courbes[1]), c2 = val(ivS.courbes[2]);
-          this._statut = { acteur: ivS.acteur, col: c0 ? [0, 1, 2].map(j => (c0[j] - 1) * w + 1) : [1, 1, 1],
+          const c0 = val(courbes[0]), c1 = val(courbes[1]), c2 = val(courbes[2]);
+          this._statuts.push({ acteur: ivS.acteur, col: c0 ? [0, 1, 2].map(j => (c0[j] - 1) * w + 1) : [1, 1, 1],
             rim: c1 ? [0, 1, 2].map(j => (c1[j] - 1) * w + 1) : [0, 0, 0], rim_w: c1 ? c1[3] * w : 0,
-            pow: c2 ? (c2[0] - 10) * w + 10 : 1 }; } }
+            pow: c2 ? (c2[0] - 10) * w + 10 : 1 }); } }
+      this._statut = this._statuts[0] || null;
       if (this.surImage) this.surImage(f, res);
       if (this.isole) for (const p of this.isole) { p.animCachee = false; if (this.repos && !p.peau) { p.modele = null; p.opacite = 1; } }   // (24/11) objet seul
       return res;
     }
-    _boucle() {
+    // (25/11) courbes d'une aura recolorées comme l'export (AtelierCouleurs/moteur/export.py _cles_aura) ; rvb 0..1 ou rien
+  static recolorerAura(courbes, rvb) {
+    if (!rvb || !courbes) return courbes || [];
+    const m0 = Math.max(rvb[0], rvb[1], rvb[2]) || 1;
+    return courbes.map((ks, k) => k > 1 || !ks ? ks : ks.map(c => { if (c.length < 4) return c;
+      const f = Math.max(c[1], c[2], c[3]) || 1;
+      if (k === 0 && f - Math.min(c[1], c[2], c[3]) < 0.05 * f) return c;
+      return [c[0], rvb[0] / m0 * f, rvb[1] / m0 * f, rvb[2] / m0 * f, c.length > 4 ? c[4] : (k === 0 ? 0 : 1)]; }));
+  }
+  _boucle() {
       const gl = this.gl, cv = this.cv;
       const dessiner = (ms) => {
         // au repos (aucune action depuis 1,5 s, rien qui joue) : 4 images par seconde au lieu de 60, l'image affichée reste

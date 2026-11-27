@@ -612,7 +612,14 @@ def points_et_acteurs(c, ev, dos, cmds, plans, assign_anim=None):
             code, modele = src, 'chr'
         else:
             continue
-        if not code or (code not in codes and not any(x.startswith('%s_%s_' % (ev, code)) for x in os.listdir(dos))):
+        # (25/11) animations rangées sous le nom de l'ACTEUR quand le modèle chargé est un autre (LU dans le cache de VRFW :
+        # copie Tiger fang ev63_86020, modèle ev63_86020, paquets « ev63_86020_ev63_00300_s00_p00_c0020.g4pk ») ; avant,
+        # l'acteur était écarté (tigre absent de la copie de Tiger fang faite par l'Atelier, scène livrée en fichiers)
+        code_clips = code
+        a_m = re.match(r'(.+?)_s\d\d_p', nom)
+        if code and code not in codes and a_m and a_m.group(1) != code and any(x.startswith('%s_%s_' % (ev, a_m.group(1))) for x in os.listdir(dos)):
+            code_clips = a_m.group(1)
+        if not code or (code_clips not in codes and not any(x.startswith('%s_%s_' % (ev, code_clips)) for x in os.listdir(dos))):
             continue
         # emplacement de l'acteur dans la scène : « …_s01_p<VARIATION> » -> s01 (2e joueur de Feu glacé…) ; s00 par défaut
         m_s = re.search(r'_(s\d\d)_p', nom)
@@ -625,7 +632,7 @@ def points_et_acteurs(c, ev, dos, cmds, plans, assign_anim=None):
             sk = os.path.join(d, code + '.g4pkm')
         clips = {}
         for pl in plans:
-            fp = os.path.join(dos, '%s_%s_%s_p00_%s.g4pk' % (ev, code, emp, pl['nom']))
+            fp = os.path.join(dos, '%s_%s_%s_p00_%s.g4pk' % (ev, code_clips, emp, pl['nom']))
             if os.path.exists(fp):
                 cl = _clips(lire_paquet(fp)).get(pl['nom'])
                 if cl:

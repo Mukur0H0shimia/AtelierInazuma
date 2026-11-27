@@ -15,7 +15,7 @@ import os, re, json, glob, zlib, datetime, struct, shutil, tempfile, multiproces
 from . import cfgbin, retouches
 from .g4 import images
 from .personnages import _japonais, _dernier
-from .esprits import remplacer_crc, noms_contenant, slug, _png
+from .esprits import remplacer_crc, noms_contenant, slug, _png, cle_libre
 from .export import _ecrire, _q
 from lib import bustes                       # noqa: E402 (Atelier Maillots : renommage des noms d'images)
 
@@ -64,6 +64,159 @@ def personnage_de_tete(data_dir, chemin_tete):
     return None
 
 
+def peau_origine(data_dir, code):
+    """(26/11/2026, retour de jayden / WhiteRabbit : « la peau des bras et des jambes ne va pas avec la tête »)
+    couleur de peau du CORPS d'un personnage du jeu : '#RRGGBB' ou None.
+    LU : chara_model (CHARA_MODEL_INFO) colonne 16 = « skin_color » (nom du schéma de VRFW, winmm.dll), u32 RRGGBBAA, rangée à +4
+    de l'enregistrement de 0xA8 octets (lecteur 0x140221ea0) ; chara_base v[6] = n° du modèle. La peau des bras (_uniform/sk…,
+    texture blanche) et des jambes / du cou (c000N01_10, blanche) est peinte par le shader Chr_EditToon (chr_toon_edit.pfxo) :
+    couleur = texture × lerp(1, u_skinColor, masque msk.r) ; la tête (Chr_ToonMetal, pas de masque) a sa peau peinte dans sa
+    texture. MESURÉ : colonne 16 = la couleur dominante de l'atlas du visage (_10), ex. c11260010 (253, 192, 161), c01000010
+    (241, 183, 135)."""
+    return couleurs_corps(data_dir, code)['peau']
+
+
+def couleurs_corps(data_dir, code):
+    """(26/11/2026) {'peau': '#RRGGBB' ou None, 'parts_color': n° CHARA_PARTS_COLOR ou 0} du modèle de ce personnage.
+    LU (tables + lecteur 0x140221ea0) : colonne 8 « parts_color » (u32 rangé à +0) = n° d'une ligne CHARA_PARTS_COLOR de
+    chara_parts_*.cfg.bin = [n°, couleur RRGGBBAA, 2e couleur, 0]. MESURÉ sur les 6 527 modèles de personnages : colonne 16 et
+    colonne 8 ne sont JAMAIS remplies ensemble ; 6 379 ont la colonne 16, 148 la colonne 8 (ex. Briar Bloomhurst c11010020 :
+    0x8977FBE5 -> (179, 112, 93) = la couleur dominante de son visage ; 2e couleur toujours 0 pour eux), 689 aucune (animaux,
+    objets, joueurs « Edit » c20…). DÉDUIT : colonne 16 vide -> la couleur de la ligne parts_color."""
+    c = os.path.join(data_dir, 'common', 'gamedata', 'character')
+    cle = (data_dir, code)
+    if cle in _MEMO_CORPS:
+        return _MEMO_CORPS[cle]
+    out = {'peau': None, 'parts_color': 0}
+    modele = None
+    for k, v in cfgbin.lire(open(_dernier(os.path.join(c, 'chara_base_*.cfg.bin')), 'rb').read()):
+        if len(v) > 6 and v[1] == code and isinstance(v[6], int):
+            modele = v[6] & 0xFFFFFFFF
+            break
+    r = None
+    if modele is not None:
+        for f in sorted(glob.glob(os.path.join(c, 'chara_model_1*.cfg.bin'))):
+            for k, v in cfgbin.lire(open(f, 'rb').read()):
+                if len(v) > 16 and isinstance(v[0], int) and (v[0] & 0xFFFFFFFF) == modele:
+                    r = v
+                    break
+            if r:
+                break
+    if r:
+        x = r[16] & 0xFFFFFFFF if isinstance(r[16], int) else 0
+        pc = r[8] & 0xFFFFFFFF if isinstance(r[8], int) else 0
+        out['parts_color'] = pc
+        if x:
+            out['peau'] = '#%06X' % (x >> 8)
+        elif pc:
+            f = sorted(glob.glob(os.path.join(c, 'chara_parts_*.cfg.bin')))
+            CRC = zlib.crc32(b'CHARA_PARTS_COLOR')
+            for k, v in (cfgbin.lire(open(f[-1], 'rb').read()) if f else []):
+                if k == CRC and len(v) > 1 and isinstance(v[0], int) and (v[0] & 0xFFFFFFFF) == pc and isinstance(v[1], int) and v[1]:
+                    out['peau'] = '#%06X' % ((v[1] & 0xFFFFFFFF) >> 8)
+                    break
+    _MEMO_CORPS[cle] = out
+    return out
+
+
+_MEMO_CORPS = {}
+
+
+# (27/11, muku : « ajouter une option pour choisir la morphologie quand on fait un joueur ») MORPHOLOGIE = le corps du modèle.
+# LU : chara_model CHARA_MODEL_INFO [4] = n° d'une ligne CHARA_BODY_INFO (même table) = [n°, squelette '_common/c000<t>01/…objbin',
+# chaussures, ?, rang (0-17), SORTE (0-7), ligne des vêtements (0-7)] ; les mods écrivent la cellule « body » du nouveau modèle
+# (InazumaFantasy enma.toml : body = crc32("c90670000_body") ; ChronicleDeluxe galaxy_shadows : body = 0x00095CCB = corps de
+# Mark Evans). SORTE, d'après les joueurs qui la portent (2 317 / 1 161 / 513… modèles) : 0 garçon normal (Mark Evans), 1 garçon
+# petit (Tod Ironside), 2 garçon grand (Kevin Dragonfly), 3 garçon costaud (Jack Wallside), 4 fille normale (Samantha Moonlight),
+# 5 fille petite (Maddie Moonlight), 6 fille grande (Yurina Kumai), 7 fille costaude (Daisy Fields). Le maillot de l'équipe suit
+# tout seul (ligne des vêtements du corps), comme pour n'importe quel joueur de ce corps.
+SORTES_CORPS = ['Garçon · normal', 'Garçon · petit', 'Garçon · grand', 'Garçon · costaud',
+                'Fille · normale', 'Fille · petite', 'Fille · grande', 'Fille · costaude']
+
+
+def morphologies(data_dir):
+    """[{cle (n° CHARA_BODY_INFO), sorte (0-7), libelle, exemples [noms], nb}] : les corps COMMUNS du jeu (squelettes
+    _common/c000N01), rangés par sorte puis du plus porté au moins porté (corps propres à un personnage, animaux : exclus)"""
+    if _MEMO_MORPHO.get('d') == data_dir:
+        return _MEMO_MORPHO['l']
+    from .maillots.cfgbin import parse
+    c = os.path.join(data_dir, 'common')
+    f = _dernier(os.path.join(c, 'gamedata', 'character', 'chara_model_1*.cfg.bin'))
+    corps, modele_corps = {}, {}
+    for k, v in parse(f):
+        if k == 'CHARA_BODY_INFO' and len(v) > 5 and isinstance(v[0], int) and '_common/c000' in str(v[1]) and isinstance(v[5], int) and 0 <= v[5] < 8:
+            corps[v[0] & 0xFFFFFFFF] = {'cle': v[0] & 0xFFFFFFFF, 'sorte': v[5], 'libelle': SORTES_CORPS[v[5]], 'exemples': [], 'nb': 0}
+        elif k == 'CHARA_MODEL_INFO' and len(v) > 4 and isinstance(v[0], int) and isinstance(v[4], int):
+            modele_corps[v[0] & 0xFFFFFFFF] = v[4] & 0xFFFFFFFF
+    noms = {}
+    for k, v in cfgbin.lire(open(os.path.join(c, 'text', _langue.code(), 'chara_text.cfg.bin'), 'rb').read()):
+        if len(v) > 5 and isinstance(v[0], int) and v[1] == 0 and isinstance(v[5], str):
+            noms.setdefault(v[0] & 0xFFFFFFFF, v[5])
+    for k, v in cfgbin.lire(open(_dernier(os.path.join(c, 'gamedata', 'character', 'chara_base_*.cfg.bin')), 'rb').read()):
+        if len(v) > 6 and isinstance(v[6], int) and isinstance(v[1], str) and v[1].startswith('c'):
+            b = corps.get(modele_corps.get(v[6] & 0xFFFFFFFF))
+            if not b:
+                continue
+            b['nb'] += 1
+            n = noms.get(v[3] & 0xFFFFFFFF) if isinstance(v[3], int) else None
+            if n and not _japonais(n) and n not in b['exemples'] and len(b['exemples']) < 3:
+                b['exemples'].append(n)
+    # un seul porteur (0xC24D5909 : Destin Billows, colonne 3 à part) = corps spécial : pas proposé
+    l = sorted((b for b in corps.values() if b['nb'] >= 2), key=lambda b: (b['sorte'], -b['nb']))
+    _MEMO_MORPHO.update(d=data_dir, l=l)
+    return l
+
+
+_MEMO_MORPHO = {}
+
+
+def corps_origine(data_dir, code):
+    """n° CHARA_BODY_INFO du modèle du personnage « code » (chara_base v[6] -> chara_model [4]) ou None"""
+    c = os.path.join(data_dir, 'common', 'gamedata', 'character')
+    modele = None
+    for k, v in cfgbin.lire(open(_dernier(os.path.join(c, 'chara_base_*.cfg.bin')), 'rb').read()):
+        if len(v) > 6 and v[1] == code and isinstance(v[6], int):
+            modele = v[6] & 0xFFFFFFFF
+            break
+    if modele is None:
+        return None
+    for f in sorted(glob.glob(os.path.join(c, 'chara_model_1*.cfg.bin'))):
+        for k, v in cfgbin.lire(open(f, 'rb').read()):
+            if len(v) > 4 and isinstance(v[0], int) and (v[0] & 0xFFFFFFFF) == modele and isinstance(v[4], int):
+                return v[4] & 0xFFFFFFFF
+    return None
+
+
+def _libelle_corps(data_dir, cle):
+    b = next((b for b in morphologies(data_dir) if b['cle'] == cle), None)
+    # « Fille · costaude · Daisy Fields, Janine Brook » : morceaux séparés par « · », traduits un par un (web/i18n.js)
+    return ('%s · %s' % (b['libelle'], ', '.join(b['exemples'][:2]))) if b and b['exemples'] else (b['libelle'] if b else '0x%08X' % cle)
+
+
+def _peau_hex(v):
+    """'#rrggbb' / 'rrggbb' -> 'RRGGBB' ; vide / invalide -> None"""
+    v = str(v or '').strip().lstrip('#')
+    return v.upper() if re.fullmatch(r'[0-9A-Fa-f]{6}', v) else None
+
+
+def regler_peau(cfg, cle, peau):
+    """(26/11/2026) couleur de peau des bras / jambes d'une copie déjà créée ('' = celle de l'original)"""
+    reg = registre(cfg)
+    if cle not in reg:
+        return {'ok': False, 'erreur': 'copie de personnage inconnue'}
+    p = _peau_hex(peau)
+    if p:
+        reg[cle]['peau'] = p
+        reg[cle]['peau_main'] = True                     # gardée à la main : « Créer » en automatique ne la remplace pas
+    else:
+        reg[cle].pop('peau', None); reg[cle].pop('peau_main', None)
+    _sauver(cfg, reg); _ecrire_contenu(cfg, reg)
+    e = reg[cle]
+    return {'ok': True, 'dossier': _sortie(cfg), 'peau': ('#' + p) if p else None,
+            'rapport': ['%s : peau des bras et des jambes #%s' % (e['nom'], p) if p else
+                        "%s : peau des bras et des jambes de l'original (%s)" % (e['nom'], e.get('nom_origine', ''))]}
+
+
 def _ids_pris(cfg):
     """ids 32 bits déjà utilisés : textes et personnages du jeu, et tous les 0x… des mods installés"""
     c = os.path.join(cfg['data_dir'], 'common')
@@ -110,6 +263,17 @@ def _code_libre(cfg, anc, reg):
     raise ValueError('plus de code libre')
 
 
+def cle_creation(reg, demande, cle, nom=None, meme=None):
+    """(28/11, muku : « Modifier refait des doubles ») « Modifier » : demande['cle'] = code de LA création (c0198…) -> sa clé
+    dans le registre (même si le nom a changé) ; sinon la clé du nom, rendue unique si elle est prise par une création d'un autre
+    nom / d'une autre base (slug coupé à 24 : la 2e écrasait la 1re)"""
+    if demande.get('cle'):
+        k = next((k for k, v in reg.items() if str(v.get('code')) == str(demande['cle'])), None)
+        if k:
+            return k
+    return cle_libre(reg, cle, nom, meme) if nom is not None else cle
+
+
 def exporter(cfg, demande, entree):
     """demande = {code (tête), nom, description, textures {nom: data URL}} ; entree = élément « personnages » du catalogue"""
     nom = str(demande.get('nom') or '').strip()
@@ -124,7 +288,7 @@ def exporter(cfg, demande, entree):
     orig = personnage_de_tete(D, md_rel)
     if not orig:
         return {'ok': False, 'erreur': 'Aucun personnage jouable ne porte cette tête (pas de carte à copier).'}
-    reg = registre(cfg); cle = slug(nom)
+    reg = registre(cfg); cle = cle_creation(reg, demande, slug(nom), nom, lambda x: x.get('tete_origine') == anc and not x.get('genre'))
     e = reg.get(cle) or {}
     if e and e.get('tete_origine') != anc:
         return {'ok': False, 'erreur': 'Le nom « %s » est déjà pris par une autre copie : choisis-en un autre.' % nom}
@@ -140,6 +304,28 @@ def exporter(cfg, demande, entree):
     neuf = e['code']
     e.update(nom=nom, description=str(demande.get('description') or ''), serie=serie, nom_origine=orig['nom'],
              date=datetime.datetime.now().isoformat(timespec='seconds'))
+    if 'peau' in demande:                                  # (26/11) peau des bras / jambes (chara_model skin_color) ; vide = l'original
+        p = _peau_hex(demande.get('peau'))
+        if demande.get('peau_auto') and e.get('peau_main'):
+            pass                                           # couleur gardée à la main avant (« Garder ») : l'automatique ne la remplace pas
+        elif p and p != (_peau_hex(peau_origine(D, orig['code'])) or ''):
+            e['peau'] = p
+            e['peau_main'] = not demande.get('peau_auto')
+            if not e['peau_main']:
+                e.pop('peau_main')
+        else:
+            e.pop('peau', None); e.pop('peau_main', None)
+    if 'corps' in demande:                                 # (27/11) morphologie : '' = celle de l'original
+        try:
+            k = int(str(demande.get('corps') or '0'), 0) & 0xFFFFFFFF
+        except ValueError:
+            return {'ok': False, 'erreur': 'Morphologie inconnue.'}
+        if k and k != corps_origine(D, orig['code']):
+            if not any(b['cle'] == k for b in morphologies(D)):
+                return {'ok': False, 'erreur': 'Morphologie inconnue (0x%08X).' % k}
+            e['corps'] = k
+        else:
+            e.pop('corps', None)
     sortie = _sortie(cfg)
     out = os.path.join(sortie, 'assets', 'chr', '_face', serie, neuf)
     os.makedirs(out, exist_ok=True)
@@ -192,6 +378,9 @@ def exporter(cfg, demande, entree):
     _sauver(cfg, reg)
     _ecrire_contenu(cfg, reg)
     rapport.insert(0, '%s : copie de %s (%s), code %s, carte 0x%08X copiée de 0x%08X' % (nom, orig['nom'], orig['code'], neuf, e['carte'], orig['carte']))
+    if e.get('peau'):
+        rapport.append('peau des bras et des jambes : #%s' % e['peau'])
+    rapport.append('morphologie : %s' % (_libelle_corps(D, e['corps']) if e.get('corps') else "celle de l'original (%s)" % orig['nom']))
     return {'ok': True, 'dossier': sortie, 'code': neuf, 'rapport': rapport}
 
 
@@ -217,6 +406,13 @@ def _ecrire_contenu(cfg, reg):
                          'from = %s' % _q(v['source']), 'rows = [%s]' % r, '']
         else:
             cellules = ['  head_mesh_path = "_face/%s/%s/%s.g4md"' % (e['serie'], e['code'], e['code'])]
+            if e.get('corps'):       # (27/11) morphologie choisie : ligne CHARA_BODY_INFO du jeu (comme ChronicleDeluxe galaxy_shadows)
+                cellules.insert(0, '  body = 0x%08X                                       # morphologie : %s' % (e['corps'], _libelle_corps(cfg['data_dir'], e['corps'])))
+        if e.get('peau'):        # (26/11) chara_model col. 16 (comme InazumaFantasy, Enma) : bras, jambes, cou = texture blanche × cette couleur
+            cellules.append('  skin_color = 0x%sFF                                # peau des bras et des jambes (comme la tête)' % e['peau'])
+            if e.get('base') and couleurs_corps(cfg['data_dir'], e['base'])['parts_color']:
+                # l'original prend sa peau dans CHARA_PARTS_COLOR (col. 8) : vidée, la copie n'a que skin_color (comme les 6 379 autres)
+                cellules.append('  parts_color = 0                                      # (original : couleur CHARA_PARTS_COLOR)')
         for lang in ('en', 'fr'):
             txt += ['  [character.text.%s]' % lang, '  name = %s' % _q(e['nom']), '  short = %s' % _q(e['nom']),
                     '  description = %s' % _q(e.get('description') or ''), '']

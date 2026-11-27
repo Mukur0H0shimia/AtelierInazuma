@@ -52,6 +52,7 @@ def liste(cfg):
     for m in A.charger_projet()['maillots']:
         b = cat.get(m.get('base'))
         out.append({'id': m['id'], 'nom': m['nom'], 'prix': m.get('prix'), 'base': m.get('base'), 'code': b['code'] if b else None,
+                    'cosmetique_ok': bool(m.get('cosmetique_ok')),     # (26/11) étape « Cosmétique » faite
                     'nom_base': b['nom'] if b else m.get('base'), 'numero': m.get('numero') or {}, 'plis': m.get('plis', 'simples'),
                     'icone': _png(m.get('icone')), 'embleme': _png(m.get('embleme')),
                     'images': {k: '/maillot_img/%s/%s' % (m['id'], os.path.basename(m[k])) for k in ('haut_dom', 'short_dom', 'haut_ext', 'short_ext')
@@ -91,7 +92,8 @@ def enregistrer(cfg, d):
     if m is None:
         m = {'id': A.identifiant(nom, ids), 'haut_dom': None, 'short_dom': None, 'haut_ext': None, 'short_ext': None, 'icone': None, 'embleme': None}
         p['maillots'].append(m)
-    m.update({'nom': nom, 'prix': int(d.get('prix') or 1), 'base': d['base'], 'plis': d.get('plis') or 'simples'})
+    # (26/11) prix réglé dans l'étape « Cosmétique » : l'éditeur ne l'envoie plus -> celui déjà réglé est gardé
+    m.update({'nom': nom, 'prix': int(d.get('prix') or m.get('prix') or 1), 'base': d['base'], 'plis': d.get('plis') or 'simples'})
     if isinstance(d.get('numero'), dict):
         m['numero'] = d['numero']
     for k, v in (d.get('images') or {}).items():

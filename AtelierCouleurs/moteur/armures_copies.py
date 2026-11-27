@@ -94,6 +94,9 @@ def exporter(cfg, demande, entree):
     armure = entree['code']                                    # ka……, clothes model du jeu
     D = cfg['data_dir']; sortie = _sortie(cfg); reg = registre(cfg)
     e = reg.get(cible['code']) or {}
+    # (28/11) une copie d'esprit n'a qu'UNE armure : une 2e la remplaçait sans prévenir ; « Modifier » de CELLE-LÀ (cle = son modèle) passe
+    if e and demande.get('cle') != e.get('modele') and not demande.get('remplacer'):
+        return {'ok': False, 'deja': e.get('nom') or e.get('modele'), 'erreur': 'Cette copie d’esprit a déjà une armure (« %s »).' % (e.get('nom') or e.get('modele'))}
     if not e:
         pris = esprits_ids_pris(cfg)
         modele = _modele_libre(cfg, reg)
@@ -137,7 +140,7 @@ def exporter(cfg, demande, entree):
     ecrire_vrfw(cfg, reg)
     rapport.insert(0, 'armure %s recolorée → forme en armure de « %s » (%s), modèle %s, technique %s (copiée de %s)'
                    % (armure, cible['nom'], cible['code'], e['modele'], e['key'], was))
-    return {'ok': True, 'dossier': sortie, 'rapport': rapport}
+    return {'ok': True, 'dossier': sortie, 'rapport': rapport, 'code': e['modele']}   # (28/11) code de la carte : projet relié à cette armure
 
 
 def esprits_ids_pris(cfg):

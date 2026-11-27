@@ -44,6 +44,17 @@ def _tomls(mods_dir):
                 out.append((mod, f, _TOML[f][1]))
             except Exception:
                 continue
+        # (27/11) MODULES d'un mod (CharacterReforged/modules/AuraOverhaul, ProfessionalKits/modules/LaLiga…) : mods à part
+        for mdir in sorted(glob.glob(os.path.join(r, 'modules', '*'))):
+            sous = os.path.basename(mdir)
+            for f in glob.glob(os.path.join(mdir, 'content', '**', '*.toml'), recursive=True) +                      glob.glob(os.path.join(mdir, 'addons', '*', 'content', '**', '*.toml'), recursive=True):
+                try:
+                    m = os.path.getmtime(f)
+                    if _TOML.get(f, (None,))[0] != m:
+                        _TOML[f] = (m, tomllib.load(open(f, 'rb')))
+                    out.append((sous, f, _TOML[f][1]))
+                except Exception:
+                    continue
     return out
 
 
@@ -97,7 +108,28 @@ def construire(cfg, cache_dir, actifs, objets_jeu_liste, persos_jeu, techniques_
     from .mods_jeu import noms_g4tx
     im = _images_menu(D, cache_dir)
     obj_jeu = {o['code']: o for o in objets_jeu_liste}
+    obj_crc = {zlib.crc32(str(o['code']).encode()): o for o in objets_jeu_liste}      # (27/11) formations : based_on = crc32 de la clé
     icones_mod = {}
+
+    pngs = {}                                               # (27/11) [[texture]] name / png des .toml d'images de chaque mod
+    for mod_, f_, t_ in T:
+        for tx in _liste(t_, 'texture'):
+            if isinstance(tx, dict) and tx.get('name') and isinstance(tx.get('png'), str):
+                p = os.path.normpath(os.path.join(os.path.dirname(f_), tx['png']))
+                if os.path.isfile(p):
+                    pngs.setdefault(mod_, {}).setdefault(tx['name'], p)
+        # (27/11) cases de planches : [[recipe]] name / png + [[VRFW.Family]] members = [{ name, sheet, box }] (tenues d'IF)
+        rec = [x for x in _liste(t_, 'recipe') if isinstance(x, dict) and isinstance(x.get('png'), str)]
+        for fam in _liste(t_, 'VRFW.Family'):
+            for mb in (fam.get('members') or []) if isinstance(fam, dict) else []:
+                if not isinstance(mb, dict) or not mb.get('name') or not isinstance(mb.get('box'), list):
+                    continue
+                k = mb.get('sheet', 1)
+                r = next((x for x in rec if str(x.get('name', '')).endswith('_%s' % k)), rec[k - 1] if isinstance(k, int) and 0 < k <= len(rec) else None)
+                if r:
+                    p = os.path.normpath(os.path.join(os.path.dirname(f_), r['png']))
+                    if os.path.isfile(p):
+                        pngs.setdefault(mod_, {}).setdefault(mb['name'], (p, mb['box']))
 
     def icone(mod, cle):
         if not cle:
@@ -118,7 +150,12 @@ def construire(cfg, cache_dir, actifs, objets_jeu_liste, persos_jeu, techniques_
                 d.setdefault(os.path.basename(g)[:-5], (g, 0, len(l)))
             icones_mod[mod] = d
         x = icones_mod[mod].get(cle)
-        return {'nom': cle, 'abs': x[0], 'image': x[1], 'nb': x[2]} if x else None
+        if x:
+            return {'nom': cle, 'abs': x[0], 'image': x[1], 'nb': x[2]}
+        p = pngs.get(mod, {}).get(cle)                      # (27/11) icône en PNG ([[texture]] de VRFW.image/1 : tenues d'IF…)
+        if isinstance(p, tuple):
+            return {'nom': cle, 'png': p[0], 'box': p[1], 'image': 0, 'nb': 1, 'fichier': ''}
+        return {'nom': cle, 'png': p, 'image': 0, 'nb': 1, 'fichier': ''} if p else None
 
     # ---------------------------------------------------------------- tables des maillots (tous les mods)
     kits, habits = {}, {}
@@ -229,6 +266,49 @@ def construire(cfg, cache_dir, actifs, objets_jeu_liste, persos_jeu, techniques_
             ajouter('objets', {'code': _code(mod, o['Name']), 'nom': '%s · %s' % (nom, mod), 'genre': 'Tenues (costumes)',
                                'sorte': 'Tenues (costumes)', 'description': _texte(o, 'description', ('Text', 'text')) or '',
                                'categorie': 'costume', 'type': 'objet', 'icone': icone(mod, o.get('IconKey'))}, mod)
+        # (27/11, muku : « tu ne détectes pas bien les items des mods ») FAMILLES DE TENUES [[VRFW.OutfitFamily]] (Inazuma Fantasy :
+        # 311 tenues de personnages) : Members = [{ Name, Character, CharacterText = { fr… }, NameSuffix, IconKey }], nom et icône de la
+        # famille avec {character} / {name} (« Tenue de {character} », « cos_if_{name} »)
+        for fam in _liste(t, 'VRFW.OutfitFamily'):
+            if not isinstance(fam, dict):
+                continue
+            tx = fam.get('Text') or fam.get('text') or {}
+            tl = tx.get('fr') or tx.get('en') or {}
+            gabarit, gdesc = tl.get('Name') or '{character}', tl.get('Description') or ''
+            for mb in fam.get('Members') or []:
+                if not isinstance(mb, dict) or not mb.get('Name'):
+                    continue
+                perso = (mb.get('CharacterText') or {}).get('fr') or mb.get('Character') or mb['Name']
+                nom = gabarit.replace('{character}', perso) + (mb.get('NameSuffix') or '')
+                ik = str(mb.get('IconKey') or fam.get('IconKey') or '').replace('{name}', mb['Name'])
+                ajouter('objets', {'code': _code(mod, mb['Name']), 'nom': '%s · %s' % (nom, mod), 'genre': 'Tenues (costumes)',
+                                   'sorte': 'Tenues (costumes)', 'description': gdesc.replace('{character}', perso),
+                                   'categorie': 'costume', 'type': 'objet', 'icone': icone(mod, ik) if ik else None}, mod)
+        # (27/11) FORMATIONS [[formation]] (BetterQoL : 47, FootballReforged) : title / description = { fr, en… }, based_on = la
+        # formation du jeu dont elle part (son icône)
+        for fo in _liste(t, 'formation'):
+            if not isinstance(fo, dict) or not fo.get('name'):
+                continue
+            ti, de = fo.get('title') or {}, fo.get('description') or {}
+            nom = (ti.get('fr') or ti.get('en')) if isinstance(ti, dict) else str(ti or '')
+            b = obj_crc.get(fo.get('based_on') & 0xFFFFFFFF) if isinstance(fo.get('based_on'), int) else obj_jeu.get(str(fo.get('based_on') or ''))
+            ajouter('objets', {'code': _code(mod, fo['name']), 'nom': '%s · %s' % (nom or fo['name'], mod), 'genre': 'Formations', 'sorte': 'Formations',
+                               'description': (de.get('fr') or de.get('en') or '') if isinstance(de, dict) else str(de or ''),
+                               'categorie': None, 'type': 'objet', 'base': b['code'] if b else None, 'icone': b.get('icone') if b else None}, mod)
+        # (27/11) CÉLÉBRATIONS [[celebration]] (MissingContent, IECross) : name, text.<langue>.name
+        for ce in _liste(t, 'celebration'):
+            if not isinstance(ce, dict) or not ce.get('name'):
+                continue
+            ajouter('objets', {'code': _code(mod, ce['name']), 'nom': '%s · %s' % (_texte(ce) or ce['name'], mod), 'genre': 'Célébrations',
+                               'sorte': 'Célébrations', 'description': _texte(ce, 'description') or '', 'categorie': None, 'type': 'objet',
+                               'icone': None}, mod)
+        # (27/11) MONNAIES [[currency]] (CharacterReforged : cartes étoiles des esprits) : name seulement
+        for cu in _liste(t, 'currency'):
+            if not isinstance(cu, dict) or not cu.get('name'):
+                continue
+            ajouter('objets', {'code': _code(mod, cu['name']), 'nom': '%s · %s' % (_texte(cu) or cu['name'].replace('_', ' ').capitalize(), mod),
+                               'genre': 'Monnaies', 'sorte': 'Monnaies', 'description': _texte(cu, 'description') or '', 'categorie': 'currency',
+                               'type': 'objet', 'icone': icone(mod, cu.get('icon_key')) if cu.get('icon_key') else None}, mod)
     # ---------------------------------------------------------------- techniques
     # (17/11/2026) cinématique d'une technique de mod, dans cet ordre :
     # 1. « evNN_… » dans le jeu -> celle du jeu ;

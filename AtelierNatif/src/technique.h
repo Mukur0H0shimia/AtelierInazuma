@@ -7,6 +7,7 @@ static std::vector<std::vector<double>> lire_vv(const JV& j) { std::vector<std::
 
 struct PieceT {
     std::string cle, acteur; uint32_t elem = 0; bool opaque = false, ztest = true, zecrit = false, surEcran = false, cachee = false;
+    bool fil = false;                                  // (25/11) pièce sélectionnée dans l'Atelier, « Fil de fer sélection » (options.json « fil »)
     int panneau = 0;     // (14/11/2026) octet +0x0D de la fiche de matériau G4MD : pièce tournée vers la caméra au dessin (LU)
     std::vector<std::vector<double>> params, texproj; std::vector<uint32_t> uvCrcs; double diffuse[4] = {1, 1, 1, 1}, ambient[4] = {0, 0, 0, 1}, alphaRepos = 1;
     bool aColonne = false; double colonne = 0;
@@ -73,7 +74,17 @@ static std::vector<int> ordre_pieces(const std::vector<uint32_t>& cle, const std
     }
     return out;
 }
-struct AuraT { std::string acteur; double debut, fin, duree = 1, entree = 0, sortie = 0; bool boucle = true, aCourbes = false; int prio = 3, genre = 0; std::vector<std::vector<std::vector<double>>> courbes; };
+struct AuraT { std::string acteur, nom; double debut, fin, duree = 1, entree = 0, sortie = 0; bool boucle = true, aCourbes = false; int prio = 3, genre = 0; std::vector<std::vector<std::vector<double>>> courbes, courbesJeu; };
+// (25/11, muku : « montre les auras dans l'aperçu ») couleur d'aura choisie dans l'Atelier (options.json « auras » : {nom : [r, v, b]})
+// = MÊME recoloration que l'export (AtelierCouleurs/moteur/export.py _cles_aura) : courbe 1 (couleur du modèle) et courbe 2 (lueur
+// du contour) ; chaque clé garde son temps, sa force (plus grande composante) et sa 5e valeur ; clé grise de la courbe 1 gardée
+static void recolorerAura(AuraT& a, double r, double g, double b) {
+    const double m0 = std::max(r, std::max(g, b)) != 0 ? std::max(r, std::max(g, b)) : 1.0;
+    for (size_t k = 0; k < a.courbes.size() && k < 2; k++) for (auto& c : a.courbes[k]) { if (c.size() < 4) continue;
+        const double mx = std::max(c[1], std::max(c[2], c[3])), f = mx != 0 ? mx : 1.0, mn = std::min(c[1], std::min(c[2], c[3]));
+        if (k == 0 && f - mn < 0.05 * f) continue;
+        if (c.size() < 5) c.push_back(k == 0 ? 0.0 : 1.0);           // (valeur écrite par l'export quand la clé n'en a pas)
+        c[1] = r / m0 * f; c[2] = g / m0 * f; c[3] = b / m0 * f; } }
 
 struct Technique {
     JV J; LecteurAnim L; std::vector<PieceT> pieces; std::vector<EmetT> ems; std::vector<LumDefT> lums; std::vector<ActT> acteurs; std::vector<AuraT> auras;
@@ -128,11 +139,11 @@ struct Technique {
             t.ordre = ordre_pieces(t.cles, t.seaux, t.npieces);
             acteurs.push_back(t); }
         for (auto& p : J["plan_lum"].o) { planLum[p.first] = (int)p.second.num(); if (p.first == "_base") lumBase = (int)p.second.num(); }
-        for (auto& x : J["anim"]["aura_balle"].a) { AuraT a; a.acteur = x["acteur"].s; a.debut = x["debut"].num(); a.fin = x["fin"].num(); a.aCourbes = x["courbes"].vrai();
+        for (auto& x : J["anim"]["aura_balle"].a) { AuraT a; a.acteur = x["acteur"].s; a.nom = x["nom"].s; a.debut = x["debut"].num(); a.fin = x["fin"].num(); a.aCourbes = x["courbes"].vrai();
             if (x["duree"].existe()) a.duree = x["duree"].num(); if (x["entree"].existe()) a.entree = x["entree"].num();
             if (x["sortie"].existe()) a.sortie = x["sortie"].num(); if (x["boucle"].existe()) a.boucle = x["boucle"].vrai();
             if (x["priorite"].existe()) a.prio = (int)x["priorite"].num(); if (x["genre"].existe()) a.genre = (int)x["genre"].num();
-            for (auto& c : x["courbes"].a) a.courbes.push_back(lire_vv(c)); auras.push_back(std::move(a)); }
+            for (auto& c : x["courbes"].a) a.courbes.push_back(lire_vv(c)); a.courbesJeu = a.courbes; auras.push_back(std::move(a)); }
         // pièces cachées dans l'Atelier (cases décochées) : options.json
         for (int it = 0; it < 2; it++) { const JV& t = J[it ? "telop2" : "telop"]; TelopT& tl = it ? telop2 : telop; tl = TelopT();
           if (t.t == JV::OBJ && t["courbes"].t == JV::OBJ) { tl.ok = true; tl.debut = t["debut"].num();
@@ -147,13 +158,14 @@ struct Technique {
     // (15/11/2026) options.json (pièces cachées, couleurs de matériau, teintes des sommets / particules) : lu au chargement
     // ET relu pendant la lecture (commande « options » de l'Atelier) : plus besoin de relancer le lecteur
     void lire_options(const std::wstring& dos) {
-        for (auto& p : pieces) { p.cachee = false; p.aCoul = false; p.aTeinteS = false; }
+        for (auto& p : pieces) { p.cachee = false; p.aCoul = false; p.aTeinteS = false; p.fil = false; }
         for (auto& e : ems) { e.cachee = false; e.aTeinte = false; }
         lumK.clear();
         JV opt; if (lire_json(dos + L"\\options.json", opt)) sansActeurs = opt["sans_acteurs"].vrai();
         if (opt.existe()) for (auto& c : opt["caches"].a) {
             for (auto& p : pieces) if (p.cle == c.s) p.cachee = true;
             for (auto& e : ems) if (e.cle == c.s) e.cachee = true; }
+        if (opt.existe()) for (auto& c : opt["fil"].a) for (auto& p : pieces) if (p.cle == c.s) p.fil = true;   // (25/11) fil de fer
         if (opt.existe()) for (auto& kv : opt["couleurs"].o) for (auto& p : pieces)     // (14/11/2026) couleurs de matériau
             if (p.cle == kv.first && kv.second.taille() >= 3) { p.aCoul = true; for (int k = 0; k < 3; k++) p.coul[k] = kv.second[k].num(); }
         if (opt.existe()) for (auto& kv : opt["sommets"].o) for (auto& p : pieces)     // (14/11/2026) teinte des sommets [H, C]
@@ -161,6 +173,9 @@ struct Technique {
         if (opt.existe()) for (auto& kv : opt["lumieres"].o) if (kv.second.t == JV::NUM) lumK[kv.first] = kv.second.num();
         if (opt.existe()) for (auto& kv : opt["particules"].o) for (auto& e : ems)     // (14/11/2026) teinte des particules d'un objet
             if (e.cle.rfind(kv.first + "/", 0) == 0 && kv.second.taille() >= 2) { e.aTeinte = true; e.tH = kv.second[0].num(); e.tC = kv.second[1].num(); e.tS = kv.second.taille() >= 3 ? kv.second[2].num() : 1.0; e.tV = kv.second.taille() >= 4 ? kv.second[3].num() : 1.0; }
+        for (auto& a : auras) { a.courbes = a.courbesJeu;                 // (25/11) couleurs d'aura choisies dans l'Atelier
+            const JV& c = opt.existe() ? opt["auras"][a.nom] : opt;
+            if (c.taille() >= 3) recolorerAura(a, c[0].num(), c[1].num(), c[2].num()); }
     }
 
     // ---------------------------------------------------------------- vue3d._calculerLumieres
@@ -231,6 +246,73 @@ struct Technique {
     }
 
     // ---------------------------------------------------------------- une image
+    // (25/11) AURAS D'UNE IMAGE, à part de image() : le lecteur garde les images déjà calculées ; quand la couleur d'une aura
+    // change (options.json « auras », retour de muku : « l'aura ne change pas »), options_rel les refait pour ces images
+    struct StatutA { std::string acteur; double col[3], rim[3], rimw, pow; };
+    std::vector<StatutA> statutsImage(int f) const {
+        std::vector<StatutA> statuts;
+        // (14/11/2026) DEUX AURAS PRÉSENTES (LU 0x140f07d50 / 0x140f0a7e9) : chaque aura reçoit la fonction table[genre]
+        // (0x141918a50 ; genre = octet +0x5A de la définition) qui combine (ancienne, nouvelle) :
+        //  0 (0x140f0b870) : la nouvelle seule, poids 1 ; 1 (0x140f0b5e0) : mélange linéaire des deux (poids 1 chacune) au taux f ;
+        //  2 (0x140f0b530) : f <= 0,5 -> ancienne au poids 1 - 2f, sinon nouvelle au poids 2f - 1.
+        //  f = poids de la nouvelle, ou 1 - poids de l'ancienne si celle-ci a une priorité plus haute (octet +0x58) et sort.
+        //  Une seule aura : son propre poids (0x140f0aa40).
+        { struct Etat { const AuraT* a; double w, T; bool sort; };
+          auto etat = [&](const AuraT& x, Etat& e) -> bool {
+              if (!x.aCourbes) return false;
+              const bool dedans = f >= x.debut && f < x.fin, sortie = !dedans && x.sortie > 0 && x.fin < 1e6 && f >= x.fin && f < x.fin + x.sortie * 60;
+              if (!dedans && !sortie) return false;
+              const double T = (f - x.debut) / 60, D = x.duree > 0 ? x.duree : 1, Ee = x.entree, Ss = x.sortie; double w = 1;
+              if (f >= x.fin) w = Ss > 0 ? 1 - ((f - x.fin) / 60) / Ss : 0;
+              else if (Ee > 0 && T <= Ee) w = T / Ee;
+              else if (!x.boucle) { const double T2 = T - Ee, lim = D - Ee - Ss; if (T2 > lim) w = Ss > 0 ? 1 - (T2 - lim) / Ss : 0; }
+              e = {&x, w, T, f >= x.fin}; return true; };
+          // valeurs d'une aura au poids w : couleur = (c-1)w+1, contour = (c-(1,1,1,0))w+(1,1,1,0), puissance = (c-10)w+10
+          auto evaluer = [&](const Etat& e, double w, double* col, double* rim, double& rimw, double& pw) {
+              const AuraT& x = *e.a; const double D = x.duree > 0 ? x.duree : 1, T = e.T;
+              const double tn = (x.boucle ? (T > D ? fmod(T, D) : T) : std::min(T, D)) / D;
+              auto val = [&](size_t k, double* out) -> bool { if (k >= x.courbes.size() || x.courbes[k].empty()) return false; const auto& ks = x.courbes[k];
+                  auto g = [&](size_t a, int j) { return j < (int)ks[a].size() ? ks[a][j] : 0.0; };
+                  size_t i = 0; while (i < ks.size() && tn >= ks[i][0]) i++;
+                  if (i == 0) { for (int j = 0; j < 4; j++) out[j] = g(0, j + 1); return true; }
+                  if (i >= ks.size()) { for (int j = 0; j < 4; j++) out[j] = g(ks.size() - 1, j + 1); return true; }
+                  const double dt = ks[i][0] - ks[i - 1][0], u = dt > 0 ? (tn - ks[i - 1][0]) / dt : 0;
+                  for (int j = 0; j < 4; j++) out[j] = (g(i, j + 1) - g(i - 1, j + 1)) * u + g(i - 1, j + 1);
+                  return true; };
+              double c[4];
+              for (int j = 0; j < 3; j++) { col[j] = 1; rim[j] = 0; } rimw = 0; pw = 1;   // (valeurs de départ d'avant, sans courbe)
+              if (val(0, c)) for (int j = 0; j < 3; j++) col[j] = (c[j] - 1) * w + 1;
+              if (val(1, c)) { for (int j = 0; j < 3; j++) rim[j] = (c[j] - 1) * w + 1; rimw = c[3] * w; }
+              if (val(2, c)) pw = (c[0] - 10) * w + 10; };
+          std::vector<std::string> vus; for (auto& x0 : auras) { Etat e0; if (!etat(x0, e0) || std::find(vus.begin(), vus.end(), x0.acteur) != vus.end()) continue;
+          vus.push_back(x0.acteur); bool aStatut = false;
+          std::vector<Etat> pres; for (auto& x : auras) { Etat e; if (x.acteur == x0.acteur && etat(x, e)) pres.push_back(e); }
+          const Etat* nv = nullptr; const Etat* an = nullptr;
+          for (auto& e : pres) if (!nv || e.a->debut > nv->a->debut) nv = &e;
+          for (auto& e : pres) if (&e != nv && (!an || e.a->debut > an->a->debut)) an = &e;
+          if (nv) {
+              double c1[3], r1[3], rw1, p1;
+              if (!an) { if (nv->w > 0) { evaluer(*nv, nv->w, c1, r1, rw1, p1); aStatut = true; } }
+              else {
+                  const double fb = (nv->a->prio < an->a->prio && an->sort) ? 1 - an->w : nv->w;
+                  if (nv->a->genre == 1) { double c0[3], r0[3], rw0, p0; evaluer(*an, 1, c0, r0, rw0, p0); evaluer(*nv, 1, c1, r1, rw1, p1);
+                      for (int j = 0; j < 3; j++) { c1[j] = (c1[j] - c0[j]) * fb + c0[j]; r1[j] = (r1[j] - r0[j]) * fb + r0[j]; }
+                      rw1 = (rw1 - rw0) * fb + rw0; p1 = (p1 - p0) * fb + p0; }
+                  else if (nv->a->genre == 2) { if (fb <= 0.5) evaluer(*an, 1 - 2 * fb, c1, r1, rw1, p1); else evaluer(*nv, 2 * fb - 1, c1, r1, rw1, p1); }
+                  else evaluer(*nv, 1, c1, r1, rw1, p1);
+                  aStatut = true; }
+              if (aStatut) { StatutA S{nv->a->acteur, {c1[0], c1[1], c1[2]}, {r1[0], r1[1], r1[2]}, rw1, p1}; statuts.push_back(S); }
+          } } }
+        return statuts;
+    }
+    // aura du personnage x (son acteur, ou le ballon b000001 quel que soit son n°)
+    static void poserStatut(const std::vector<StatutA>& statuts, ActeurImage& x) {
+        const StatutA* sa = nullptr;
+        for (auto& S : statuts) if (S.acteur == x.acteur) { sa = &S; break; }
+        if (!sa) for (auto& S : statuts) if (S.acteur.rfind("b000001", 0) == 0 && x.acteur.rfind("b000001", 0) == 0) { sa = &S; break; }
+        x.statut = sa ? 1 : 0;
+        if (sa) { const float st[12] = {(float)sa->col[0], (float)sa->col[1], (float)sa->col[2], 1, (float)sa->rim[0], (float)sa->rim[1], (float)sa->rim[2], (float)sa->rimw, (float)ou(sa->pow, 1), 0, 0, 0}; memcpy(x.st, st, sizeof st); }
+    }
     void image(int f, Image& im) {
         Res res; L.calculer(f, res);
         calculerLumieres(res);
@@ -293,57 +375,8 @@ struct Technique {
         // effet de statut (aura du ballon) : courbes 1, 2, 3 -> StatusColor, RimColor, PowInOutDis
         // CORRIGÉ 14/11/2026 (comme vue3d.js), LU dans nie.exe (0x140f0a390, 0x140f0aa40, 0x1402a44d0) : temps des courbes =
         // temps / durée (boucle si mode 0), poids w des fondus, couleur = (c-1)w+1, contour = (c-(1,1,1,0))w+(1,1,1,0), puissance = (c-10)w+10
-        bool aStatut = false; std::string stActeur; double stCol[3] = {1, 1, 1}, stRim[3] = {0, 0, 0}, stRimW = 0, stPow = 1;
-        // (14/11/2026) DEUX AURAS PRÉSENTES (LU 0x140f07d50 / 0x140f0a7e9) : chaque aura reçoit la fonction table[genre]
-        // (0x141918a50 ; genre = octet +0x5A de la définition) qui combine (ancienne, nouvelle) :
-        //  0 (0x140f0b870) : la nouvelle seule, poids 1 ; 1 (0x140f0b5e0) : mélange linéaire des deux (poids 1 chacune) au taux f ;
-        //  2 (0x140f0b530) : f <= 0,5 -> ancienne au poids 1 - 2f, sinon nouvelle au poids 2f - 1.
-        //  f = poids de la nouvelle, ou 1 - poids de l'ancienne si celle-ci a une priorité plus haute (octet +0x58) et sort.
-        //  Une seule aura : son propre poids (0x140f0aa40).
-        { struct Etat { const AuraT* a; double w, T; bool sort; };
-          auto etat = [&](const AuraT& x, Etat& e) -> bool {
-              if (!x.aCourbes) return false;
-              const bool dedans = f >= x.debut && f < x.fin, sortie = !dedans && x.sortie > 0 && x.fin < 1e6 && f >= x.fin && f < x.fin + x.sortie * 60;
-              if (!dedans && !sortie) return false;
-              const double T = (f - x.debut) / 60, D = x.duree > 0 ? x.duree : 1, Ee = x.entree, Ss = x.sortie; double w = 1;
-              if (f >= x.fin) w = Ss > 0 ? 1 - ((f - x.fin) / 60) / Ss : 0;
-              else if (Ee > 0 && T <= Ee) w = T / Ee;
-              else if (!x.boucle) { const double T2 = T - Ee, lim = D - Ee - Ss; if (T2 > lim) w = Ss > 0 ? 1 - (T2 - lim) / Ss : 0; }
-              e = {&x, w, T, f >= x.fin}; return true; };
-          // valeurs d'une aura au poids w : couleur = (c-1)w+1, contour = (c-(1,1,1,0))w+(1,1,1,0), puissance = (c-10)w+10
-          auto evaluer = [&](const Etat& e, double w, double* col, double* rim, double& rimw, double& pw) {
-              const AuraT& x = *e.a; const double D = x.duree > 0 ? x.duree : 1, T = e.T;
-              const double tn = (x.boucle ? (T > D ? fmod(T, D) : T) : std::min(T, D)) / D;
-              auto val = [&](size_t k, double* out) -> bool { if (k >= x.courbes.size() || x.courbes[k].empty()) return false; const auto& ks = x.courbes[k];
-                  auto g = [&](size_t a, int j) { return j < (int)ks[a].size() ? ks[a][j] : 0.0; };
-                  size_t i = 0; while (i < ks.size() && tn >= ks[i][0]) i++;
-                  if (i == 0) { for (int j = 0; j < 4; j++) out[j] = g(0, j + 1); return true; }
-                  if (i >= ks.size()) { for (int j = 0; j < 4; j++) out[j] = g(ks.size() - 1, j + 1); return true; }
-                  const double dt = ks[i][0] - ks[i - 1][0], u = dt > 0 ? (tn - ks[i - 1][0]) / dt : 0;
-                  for (int j = 0; j < 4; j++) out[j] = (g(i, j + 1) - g(i - 1, j + 1)) * u + g(i - 1, j + 1);
-                  return true; };
-              double c[4];
-              for (int j = 0; j < 3; j++) { col[j] = 1; rim[j] = 0; } rimw = 0; pw = 1;   // (valeurs de départ d'avant, sans courbe)
-              if (val(0, c)) for (int j = 0; j < 3; j++) col[j] = (c[j] - 1) * w + 1;
-              if (val(1, c)) { for (int j = 0; j < 3; j++) rim[j] = (c[j] - 1) * w + 1; rimw = c[3] * w; }
-              if (val(2, c)) pw = (c[0] - 10) * w + 10; };
-          std::vector<Etat> pres; for (auto& x : auras) { Etat e; if (etat(x, e) && (pres.empty() || x.acteur == pres[0].a->acteur)) pres.push_back(e); }
-          const Etat* nv = nullptr; const Etat* an = nullptr;
-          for (auto& e : pres) if (!nv || e.a->debut > nv->a->debut) nv = &e;
-          for (auto& e : pres) if (&e != nv && (!an || e.a->debut > an->a->debut)) an = &e;
-          if (nv) {
-              double c1[3], r1[3], rw1, p1;
-              if (!an) { if (nv->w > 0) { evaluer(*nv, nv->w, c1, r1, rw1, p1); aStatut = true; } }
-              else {
-                  const double fb = (nv->a->prio < an->a->prio && an->sort) ? 1 - an->w : nv->w;
-                  if (nv->a->genre == 1) { double c0[3], r0[3], rw0, p0; evaluer(*an, 1, c0, r0, rw0, p0); evaluer(*nv, 1, c1, r1, rw1, p1);
-                      for (int j = 0; j < 3; j++) { c1[j] = (c1[j] - c0[j]) * fb + c0[j]; r1[j] = (r1[j] - r0[j]) * fb + r0[j]; }
-                      rw1 = (rw1 - rw0) * fb + rw0; p1 = (p1 - p0) * fb + p0; }
-                  else if (nv->a->genre == 2) { if (fb <= 0.5) evaluer(*an, 1 - 2 * fb, c1, r1, rw1, p1); else evaluer(*nv, 2 * fb - 1, c1, r1, rw1, p1); }
-                  else evaluer(*nv, 1, c1, r1, rw1, p1);
-                  aStatut = true; }
-              if (aStatut) { stActeur = nv->a->acteur; for (int j = 0; j < 3; j++) { stCol[j] = c1[j]; stRim[j] = r1[j]; } stRimW = rw1; stPow = p1; }
-          } }
+        // (25/11) UNE AURA PAR PERSONNAGE (Main céleste de l'amitié : deux joueurs en même temps ; avant : seulement le 1er trouvé)
+        const std::vector<StatutA> statuts = statutsImage(f);   // (25/11) à part : refaites quand la couleur change
         // caméra du jeu (vue3d._boucle) : vue + projection en 32 bits ; image 16:9 de la fenêtre
         if (res.aCamera) {
             const double* oe = res.oeil; double z[3] = {oe[0] - res.cible[0], oe[1] - res.cible[1], oe[2] - res.cible[2]};
@@ -431,8 +464,7 @@ struct Technique {
             { auto fi = res.fondus.find(a.acteur); x.alpha = fi != res.fondus.end() ? (float)std::min(1.0, fi->second) : 1.0f; }   // (15/11/2026) fondu
             for (int i : a.ordre) x.pieces.push_back(i);   // (21/11) toutes les pièces, dans l'ordre de dessin du jeu (ordre_pieces, LU)
             x.mats.resize(16 * it->second.size()); for (size_t b = 0; b < it->second.size(); b++) for (int i = 0; i < 16; i++) x.mats[16 * b + i] = it->second[b][i];
-            x.statut = aStatut && (stActeur == a.acteur || (stActeur.rfind("b000001", 0) == 0 && a.acteur.rfind("b000001", 0) == 0)) ? 1 : 0;
-            if (x.statut) { const float st[12] = {(float)stCol[0], (float)stCol[1], (float)stCol[2], 1, (float)stRim[0], (float)stRim[1], (float)stRim[2], (float)stRimW, (float)ou(stPow, 1), 0, 0, 0}; memcpy(x.st, st, sizeof st); }
+            x.acteur = a.acteur; poserStatut(statuts, x);
             im.acteurs.push_back(std::move(x)); }
         for (auto& A_ : L.acteurs) { auto it = res.peaux.find(A_.acteur); if (it == res.peaux.end() || !A_.aCollision) continue; const auto& Mm = it->second;
             for (auto& c : A_.collision) { int i = -1; for (size_t b = 0; b < A_.sq.os.size(); b++) if (A_.sq.os[b].nom == c.os) { i = (int)b; break; }

@@ -275,6 +275,42 @@ def reparer_echecs(cfg, sortie):
     return faits
 
 
+def reparer_marges(cfg, sortie):
+    """(25/11) bannières des copies faites avant le 25/11 : sans ligne de marges à elles, le niveau d'une technique améliorée
+    se plaçait d'après le nom d'ORIGINE -> marges mesurées et ligne propre ajoutées à l'installation (voir ecrire_telops)"""
+    f = os.path.join(sortie, 'content', 'telops', 'any', 'telops.toml')
+    if not MARGES_PROPRES or not os.path.isfile(f):
+        return []
+    try:
+        decl = tomllib.load(open(f, 'rb')).get('telop') or []
+    except (OSError, ValueError):
+        return []
+    faits = []
+    for nom, e in _deja_dans_le_mod(sortie).items():
+        key = e.get('key')
+        b = next((x for x in decl if x.get('id') == key), None)
+        if not key or not b or not os.path.isfile(os.path.join(os.path.dirname(f), key + '.png')):
+            continue
+        try:                                            # cellule perdue (technique refaite) -> refaite aussi
+            cell = (tomllib.load(open(os.path.join(sortie, 'content', 'techniques', nom + '.toml'), 'rb'))['technique'][0]
+                    .get('cells') or {}).get('telopInfoId')
+        except (OSError, ValueError, KeyError, IndexError):
+            cell = None
+        if b.get('info') and cell == b.get('info'):
+            continue
+        try:
+            ecrire_telops(cfg, sortie, key, b.get('from') or e.get('base'))
+            faits.append('%s : place du niveau sur la bannière (marges mesurées)' % (e.get('nom') or key))
+            f_mod = os.path.join(sortie, 'mod.toml')         # `info` / `margins` : lus par VRFW 0.3.1 (version essayée)
+            if os.path.isfile(f_mod):
+                tm = open(f_mod, encoding='utf-8').read()
+                if 'VRFW>=0.3.0' in tm:
+                    _ecrire(f_mod, tm.replace('VRFW>=0.3.0', 'VRFW>=0.3.1'))
+        except Exception as ex:
+            faits.append('%s : marges de la bannière non écrites (%s)' % (e.get('nom') or key, ex))
+    return faits
+
+
 def reparer_assignes(cfg, sortie):
     """(22/11, Frappe du loup d'un ami : pas de loup en jeu) avant le 22/11, seuls les esprits (k…) d'une cinématique étaient
     vus : une copie d'une technique à TOTEM (loup a000020 dans ev60_02700) ne livrait pas ses animations sous l'id neuf, et
@@ -476,71 +512,29 @@ def _cles_aura(cfg, aura, rvb):
     return (['color = %s' % cles(c[0], 0.0, garder_gris=True)] if c[0] else []) + (['rim = %s' % cles(c[1], 1.0)] if c[1] else [])
 
 
-def exporter(cfg, demande, infos_technique):
-    """demande : {code, nom, description, couleur_tir, prix, banniere:{texte, couleur, contour}, trainee:{famille, element},
-                 objets:{acteur:{textures:{nom: dataURL}, lueurs:{hue, saturation, value} | None}}, auras:{nom:[r,v,b]}}"""
-    sortie = os.path.join(cfg['outil_dir'], 'sortie', MOD_ID)
-    os.makedirs(sortie, exist_ok=True)
-    nom = slug(demande['nom'])
-    code, ev0 = demande['code'], infos_technique['cinematique']
-    # (23/11, demande de muku) COSMÉTIQUE (couleur du tir, traînée, prix, bannière) réglée dans « En attente de stats /
-    # cosmétique », plus dans « Créer la technique » : gardée dans le registre et réappliquée quand la technique est refaite
-    cos = cosmetique_pour_export(sortie, nom, demande)
-    demande = dict(demande, couleur_tir=cos['couleur_tir'], prix=cos['prix'], trainee=cos['trainee'],
-                   banniere=_banniere_a_ecrire(cos, demande))
-    key, ev = nouveaux_numeros(cfg, code, ev0, sortie, nom)
-    rapport = ['technique « %s » : code %s, cinématique %s (copie de %s)' % (demande['nom'], key, ev, ev0)]
-
-    # --- mod.toml
-    _ecrire(os.path.join(sortie, 'mod.toml'), '\n'.join([
-        'id = "%s"' % MOD_ID, 'name = "Mes techniques"', 'prefix = "%s"' % MOD_ID, 'folder = "%s"' % MOD_ID,
-        'version = "1.0.0"', 'author = "muku"',
-        'description = "Techniques recolorées créées avec l\'Atelier Couleurs (copies : les techniques d\'origine ne changent pas)."',
-        'priority = 0', 'tags = ["Techniques", "Visual"]', 'updated = "%s"' % datetime.date.today().isoformat(),
-        'requires = ["VRFW>=0.3.0"]', 'optional = ["InazumaFantasy"]', 'conflicts = []', '']))
-
-    # --- technique
-    desc = demande.get('description') or ''
-    lignes = ['schema = "VRFW.technique/3"',
-              '# Créée par l\'Atelier Couleurs le %s : copie de %s (%s).' % (datetime.date.today().isoformat(), code, infos_technique.get('nom', '')),
-              '', '[[technique]]', 'name = %s' % _q(nom), 'key = %s' % _q(key), 'base = %s' % _q(code), 'manual = true',
-              'event = %s' % _q('%s.%s' % (MOD_ID, nom))]
-    # (22/11) CINÉMATIQUE D'ÉCHEC : LU dans skill_config, la fiche d'une technique porte après le crc32 de sa cinématique
-    # (r[4]) celui de sa 2e partie <scène>_2 (r[6]) : vrai pour les 227 techniques qui en ont une (gardiens, défenses). Sans
-    # fail_event, la copie jouait la scène d'échec de l'ORIGINAL (couleurs d'origine). Copiée comme la première.
-    ev0_2 = infos_technique.get('cinematique_2')
-    if ev0_2 and not os.path.exists(os.path.join(cfg['data_dir'], 'common', 'event_cfg', 'evt', ev0_2 + '.cfg.bin')):
-        ev0_2 = None
-    ev_2 = id_echec(ev) if ev0_2 else None
-    if ev0_2:
-        lignes.append('fail_event = %s' % _q('%s.%s_echec' % (MOD_ID, nom)))
-    if demande.get('couleur_tir') is not None:
-        lignes.append('color = %d' % int(demande['couleur_tir']))
-    # (22/11) stats réglées plus tard (« En attente de stats ») : gardées quand la technique est refaite
-    # (23/11) appelé aussi sans stats : une copie d'un tir lointain reçoit range = "both" (tous les duels)
-    _stats_avant = (_deja_dans_le_mod(sortie).get(nom) or {}).get('stats')
-    from . import stats as _st
-    lignes += _st.lignes_technique(_stats_avant or {}, _st.jeu_technique(cfg['data_dir'], code))
-    for lg in ('fr', 'en', 'es', 'de', 'it', 'pt'):
-        lignes += ['  [technique.text.%s]' % lg, '  name = %s' % _q(demande['nom'])]
-        if desc:
-            lignes.append('  description = %s' % _q(desc))
-    _ecrire(os.path.join(sortie, 'content', 'techniques', nom + '.toml'), '\n'.join(lignes) + '\n')
-
-    # --- cinématique copiée (+ animations de l'esprit invoqué, sinon VRFW le cache : voir esprit_assigne)
-    assigne = esprit_assigne(cfg, sortie, ev0, ev)
-    ecrire_anim(sortie, nom, ev0, ev, key, assigne, echec=ev0_2 or '')
-    if assigne:
-        rapport.append('esprit dans la cinématique : animations de %s livrées sous %s' % (', '.join(assigne), ev))
-
-    # --- couleurs
-    e = ['schema = "VRFW.effect/1"', '# Couleurs de « %s » (Atelier Couleurs) : copies des objets d\'effet de %s.' % (demande['nom'], ev0), '']
+def _couleurs(cfg, demande, infos_technique, nom, ev, ev0, sortie, rapport):
+    """(25/11) lignes VRFW.effect des COULEURS d'une scène (objets d'effet, modèles, auras) pour la scène copiée « ev »
+    (copie de « ev0 ») : sorti tel quel de exporter() pour servir aussi à l'apparition d'un esprit guerrier
+    (esprits.ecrire_vrfw, scène à part). Renvoie (lignes, lignes VRFW.character des modèles copiés) ; complète « rapport »."""
+    e = []
     dossier_img = os.path.join(sortie, 'assets', 'images', 'fx', nom)
     objets = {o['acteur']: o for o in infos_technique['objets']}
     # (14/11/2026) modèles de personnages de la cinématique (esprit guerrier…) : copie recolorée du modèle
     modeles = {o['acteur']: o for o in infos_technique.get('objets_details') or [] if o.get('modeleActeur')}
     persos = ['schema = "VRFW.character/2"', '# Copies recolorées des modèles de « %s » (Atelier Couleurs).' % demande['nom'], 'default_lang = "en"', '']
+    # (25/11, retour de danifdez : Tiger fang) modèle d'un MOD fait d'un .glb (VRFW.model/1) : toujours copié, retouché ou
+    # non (sans lui, la copie montrerait le modèle de la scène du jeu) -> notre propre VRFW.model (moteur/copie_modele_mod.py)
+    from . import copie_modele_mod as _cmm
+    acteurs_glb = {a for a, m_ in modeles.items() if m_.get('modeleOrigine') and _cmm.modele_glb(cfg, m_['modeleActeur'])}
+    for acteur, m_ in modeles.items():
+        if acteur in acteurs_glb:
+            r_ = _cmm.copier(cfg, sortie, nom, acteur, m_, ((demande.get('objets') or {}).get(acteur) or {}).get('textures') or {}, [ev])
+            persos += r_['persos']
+            e += r_['commandes']
+            rapport += r_['rapport']
     for acteur, reglage in (demande.get('objets') or {}).items():
+        if acteur in acteurs_glb:
+            continue                                       # (25/11) modèle .glb d'un mod : copié juste au-dessus
         if acteur in modeles and reglage.get('textures') and modeles[acteur].get('espritDuJoueur'):
             # (22/11, VU EN JEU par muku : Frappe du loup (couleurs), loup recoloré dans la technique -> en jeu c'est le loup du
             # TOTEM du joueur) <ASSIGN> + INVARID = totem / esprit du lanceur, remplacé par le jeu : la copie recolorée ne
@@ -688,6 +682,81 @@ def exporter(cfg, demande, infos_technique):
             e += ['[[event_command]]', 'event = %s' % _q(ev), 'command = "CMD_C3FB5CC5"', 'args = [%s, %s]' % (_q(acteur), _q(aura)),
                   'set = [%s, %s]' % (_q(acteur), _q(copie)), '']
         rapport.append('aura %s -> %s' % (aura, copie))
+    return e, persos
+
+
+def exporter(cfg, demande, infos_technique):
+    """demande : {code, nom, description, couleur_tir, prix, banniere:{texte, couleur, contour}, trainee:{famille, element},
+                 objets:{acteur:{textures:{nom: dataURL}, lueurs:{hue, saturation, value} | None}}, auras:{nom:[r,v,b]}}"""
+    sortie = os.path.join(cfg['outil_dir'], 'sortie', MOD_ID)
+    os.makedirs(sortie, exist_ok=True)
+    nom = slug(demande['nom'])
+    # (28/11, muku : « Modifier refait des doubles ») « Modifier » : demande['cle'] = code de LA création -> son nom interne
+    if demande.get('cle'):
+        nom = next((n for n, v in _deja_dans_le_mod(sortie).items() if v.get('key') == demande['cle']), nom)
+    else:                                            # (28/11) même nom interne, autre nom affiché (« Feu ! » / « Feu ? ») -> nom neuf
+        _d, _n0, _i = _deja_dans_le_mod(sortie), nom, 2
+        while nom in _d and _d[nom].get('nom') not in (None, demande['nom']):
+            nom = '%s_%d' % (_n0, _i); _i += 1
+    code, ev0 = demande['code'], infos_technique['cinematique']
+    # (23/11, demande de muku) COSMÉTIQUE (couleur du tir, traînée, prix, bannière) réglée dans « En attente de stats /
+    # cosmétique », plus dans « Créer la technique » : gardée dans le registre et réappliquée quand la technique est refaite
+    cos = cosmetique_pour_export(sortie, nom, demande)
+    demande = dict(demande, couleur_tir=cos['couleur_tir'], prix=cos['prix'], trainee=cos['trainee'],
+                   banniere=_banniere_a_ecrire(cos, demande))
+    key, ev = nouveaux_numeros(cfg, code, ev0, sortie, nom)
+    rapport = ['technique « %s » : code %s, cinématique %s (copie de %s)' % (demande['nom'], key, ev, ev0)]
+
+    # --- mod.toml
+    _ecrire(os.path.join(sortie, 'mod.toml'), '\n'.join([
+        'id = "%s"' % MOD_ID, 'name = "Mes techniques"', 'prefix = "%s"' % MOD_ID, 'folder = "%s"' % MOD_ID,
+        'version = "1.0.0"', 'author = "muku"',
+        'description = "Techniques recolorées créées avec l\'Atelier Couleurs (copies : les techniques d\'origine ne changent pas)."',
+        'priority = 0', 'tags = ["Techniques", "Visual"]', 'updated = "%s"' % datetime.date.today().isoformat(),
+        'requires = ["VRFW>=0.3.1"]', 'optional = ["InazumaFantasy"]', 'conflicts = []', '']))
+
+    # --- technique
+    desc = demande.get('description') or ''
+    lignes = ['schema = "VRFW.technique/3"',
+              '# Créée par l\'Atelier Couleurs le %s : copie de %s (%s).' % (datetime.date.today().isoformat(), code, infos_technique.get('nom', '')),
+              '', '[[technique]]', 'name = %s' % _q(nom), 'key = %s' % _q(key), 'base = %s' % _q(code), 'manual = true',
+              'event = %s' % _q('%s.%s' % (MOD_ID, nom))]
+    # (22/11) CINÉMATIQUE D'ÉCHEC : LU dans skill_config, la fiche d'une technique porte après le crc32 de sa cinématique
+    # (r[4]) celui de sa 2e partie <scène>_2 (r[6]) : vrai pour les 227 techniques qui en ont une (gardiens, défenses). Sans
+    # fail_event, la copie jouait la scène d'échec de l'ORIGINAL (couleurs d'origine). Copiée comme la première.
+    ev0_2 = infos_technique.get('cinematique_2')
+    if ev0_2 and not os.path.exists(os.path.join(cfg['data_dir'], 'common', 'event_cfg', 'evt', ev0_2 + '.cfg.bin')):
+        ev0_2 = None
+    ev_2 = id_echec(ev) if ev0_2 else None
+    if ev0_2:
+        lignes.append('fail_event = %s' % _q('%s.%s_echec' % (MOD_ID, nom)))
+    if demande.get('couleur_tir') is not None:
+        lignes.append('color = %d' % int(demande['couleur_tir']))
+    # (22/11) stats réglées plus tard (« En attente de stats ») : gardées quand la technique est refaite
+    # (23/11) appelé aussi sans stats : une copie d'un tir lointain reçoit range = "both" (tous les duels)
+    _stats_avant = (_deja_dans_le_mod(sortie).get(nom) or {}).get('stats')
+    # (25/11) copie d'une technique de MOD (Tiger fang : base Beast fang « fire ») : l'élément du mod (« mountain ») est
+    # gardé, sans compter comme des stats réglées (la création reste « En attente de stats ») ; serveur._creation_stats aussi
+    element_mod = infos_technique.get('element') if infos_technique.get('mod') else None
+    from . import stats as _st
+    lignes += _st.lignes_technique(dict({'element': element_mod} if element_mod else {}, **(_stats_avant or {})),
+                                   _st.jeu_technique(cfg['data_dir'], code))
+    for lg in ('fr', 'en', 'es', 'de', 'it', 'pt'):
+        lignes += ['  [technique.text.%s]' % lg, '  name = %s' % _q(demande['nom'])]
+        if desc:
+            lignes.append('  description = %s' % _q(desc))
+    _ecrire(os.path.join(sortie, 'content', 'techniques', nom + '.toml'), '\n'.join(lignes) + '\n')
+
+    # --- cinématique copiée (+ animations de l'esprit invoqué, sinon VRFW le cache : voir esprit_assigne)
+    assigne = esprit_assigne(cfg, sortie, ev0, ev)
+    ecrire_anim(sortie, nom, ev0, ev, key, assigne, echec=ev0_2 or '')
+    if assigne:
+        rapport.append('esprit dans la cinématique : animations de %s livrées sous %s' % (', '.join(assigne), ev))
+
+    # --- couleurs (25/11 : bloc mis dans _couleurs, aussi pour l'apparition des esprits guerriers : moteur/esprits.py)
+    e = ['schema = "VRFW.effect/1"', '# Couleurs de « %s » (Atelier Couleurs) : copies des objets d\'effet de %s.' % (demande['nom'], ev0), '']
+    e_, persos = _couleurs(cfg, demande, infos_technique, nom, ev, ev0, sortie, rapport)
+    e += e_
     tr = demande.get('trainee')
     if tr and tr.get('famille') and code.startswith('whs'):
         e += ['[[shot_aura]]', 'name = %s' % _q(nom), 'when = { techniques = [%s] }' % _q(key),
@@ -721,7 +790,9 @@ def exporter(cfg, demande, infos_technique):
 
     deja = _deja_dans_le_mod(sortie)
     deja[nom] = dict({'key': key, 'id': ev, 'base': code, 'nom': demande['nom'], 'date': datetime.datetime.now().isoformat(timespec='seconds')},
-                     **({'stats': _stats_avant} if _stats_avant is not None else {}), cosmetique=cos)
+                     **({'stats': _stats_avant} if _stats_avant is not None else {}), cosmetique=cos,
+                     # (25/11) copie d'une technique de mod : « Mes créations » la rouvre (source), son élément est gardé
+                     **({'source': infos_technique.get('code'), 'element_mod': element_mod} if infos_technique.get('mod') else {}))
     json.dump(deja, open(os.path.join(sortie, 'outil_techniques.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     # (16/11/2026) PAR DÉFAUT : cinématique livrée en fichiers (scene_en_fichiers ; VÉRIFIÉ EN JEU le 16/11 par muku :
     # Feinte angélique (couleurs), l'adversaire garde son visage). Si la scène ne s'y prête pas, la copie automatique de
@@ -752,11 +823,81 @@ def ecrire_png_banniere(data_url, png):
     open(png, 'wb').write(brut)
 
 
+SEUIL_MARGES = 15        # (25/11) VRFW mesure les bannières avec alpha > 15 (LU : FUN_181b752dc de winmm.dll 0.3.1)
+# (25/11) ligne de marges propre à chaque copie : ÉTEINT tant qu'un démarrage du jeu n'a pas montré que VRFW crée la ligne
+# `info` (sinon le jeu ne trouve aucune marge : 0 / 0 -> niveau au bout de la bannière et bannière resserrée, pire qu'avant)
+MARGES_PROPRES = True      # VU EN JEU le 25/11 (muku) : « V3 » et « 3 » collés au bout du nouveau nom
+
+
+def marges_banniere(png):
+    """(25/11, retour de danifdez : le NIVEAU d'une technique améliorée tombe loin du nom ou sur le nom quand le nom de la
+    copie n'a pas la longueur de celui d'origine) -> [gauche, droite] = colonnes vides à chaque bout de la bannière.
+    LU dans nie.exe : FUN_140f50410 (ouverture de la bannière) lit telopInfoId de la technique (skill_config), demande ses
+    marges à FUN_140e4e940 (ligne de skill_telop_info_config, langue du texte) et les passe à soccer10_01_lv<n> ;
+    FUN_1410270e0 place alors le calque _wlv_offset01 à x = gauche - 864 (ou 864 - droite de l'autre côté de l'écran) :
+    la marque se colle au bord du nom TEL QUE LA TABLE LE DÉCRIT ; gauche + droite < 270 -> animation 0x6c50b40a (le jeu
+    resserre la bannière). MESURÉ : les marges des bannières du jeu = pixels transparents de chaque côté (±1 px)."""
+    from .maillots import images as _img
+    w, h, rows = _img.lire_png(png)
+    n = len(rows[0]) // w
+    if n not in (2, 4):                      # pas d'alpha : toute l'image compte
+        return [0, 0]
+    table = bytes(1 if v > SEUIL_MARGES else 0 for v in range(256))
+    g, dr = w, -1
+    for r in rows:
+        a = bytes(r[n - 1::n]).translate(table)
+        i = a.find(1)
+        if i >= 0:
+            g = min(g, i)
+            dr = max(dr, a.rfind(1))
+    if dr < 0:
+        return [w // 2, w - w // 2]           # bannière vide
+    return [g, w - 1 - dr]
+
+
+def _ligne_marges(key):
+    """nom de la ligne de skill_telop_info_config propre à la copie (VRFW : un texte = son crc32)"""
+    nom = 'atelier_' + key
+    return nom, zlib.crc32(nom.encode()) & 0xffffffff
+
+
+def _cellule_telop(sortie, key, crc):
+    """met (ou retire, crc None) cells.telopInfoId dans le [[technique]] de la copie <key> (content/techniques/*.toml).
+    MESURÉ (25/11, skill_config construite par VRFW) : une copie (base = …) garde le telopInfoId de sa base, donc les marges
+    du NOM D'ORIGINE (whs96010 = whs00830 = #674f37d3). Le mod IECross écrit `cells = { telopInfoId = 0x… }` de la même façon."""
+    for f in glob.glob(os.path.join(sortie, 'content', 'techniques', '*.toml')):
+        L = open(f, encoding='utf-8').read().split('\n')
+        if 'key = %s' % _q(key) not in L:
+            continue
+        i = L.index('[[technique]]')
+        j = i + 1
+        while j < len(L) and L[j].strip() and not L[j].startswith((' ', '[')):
+            j += 1
+        bloc = L[i + 1:j]
+        k = next((x for x, l in enumerate(bloc) if l.split('=')[0].strip() == 'cells'), None)
+        autres = {}
+        if k is not None:
+            autres = tomllib.loads(bloc[k]).get('cells') or {}
+            autres.pop('telopInfoId', None)
+            del bloc[k]
+        champs = ['%s = %s' % (c, ('0x%08X' % v) if isinstance(v, int) else _q(v)) for c, v in autres.items()]
+        if crc is not None:
+            champs.insert(0, 'telopInfoId = 0x%08X' % crc)
+        if champs:
+            bloc.append('cells = { %s }' % ', '.join(champs))
+        L[i + 1:j] = bloc
+        _ecrire(f, '\n'.join(L))
+        return True
+    return False
+
+
 def ecrire_telops(cfg, sortie, key, telop_origine):
     """(22/11, retour d'un joueur : la bannière d'une copie de Frappe du loup n'apparaissait pas ; VRFW : « the game has no
     telop whs96010 … retail telop kept ») la scène nomme sa bannière « soccer10_01_<base>_<CHARA_ID> » : le jeu a une bannière
     par lanceur (whs02700.g4tx + whs02700_a000020 / _a000350 / _a000390 .g4tx, LU dans dx11/menu/220_img/telop_waza). On
-    déclare donc la bannière de la copie sous <clé> (from = <base>) ET sous chaque variante <clé>_<suffixe> (même image)."""
+    déclare donc la bannière de la copie sous <clé> (from = <base>) ET sous chaque variante <clé>_<suffixe> (même image).
+    (25/11) + MARGES : la copie reçoit sa propre ligne de skill_telop_info_config (`info`, `margins` = vides mesurés sur SA
+    bannière, champs LUS dans winmm.dll) et sa technique pointe dessus (cells.telopInfoId) -> le niveau suit le nouveau nom."""
     base = re.sub(r'_<[^>]+>$', '', str(telop_origine))
     d = os.path.join(sortie, 'content', 'telops', 'any')
     png = os.path.join(d, key + '.png')
@@ -764,13 +905,25 @@ def ecrire_telops(cfg, sortie, key, telop_origine):
         cfg['data_dir'], 'dx11', 'menu', '220_img', 'telop_waza', 'fr', base + '_*.g4tx'))})
     f = os.path.join(d, 'telops.toml')
     t = open(f, encoding='utf-8').read() if os.path.exists(f) else 'schema = "VRFW.telop_list/2"\n'
-    t = re.sub(r'\n\[\[telop\]\]\nid = "%s(?:_[^"]*)?"\nfrom = "[^"]*"\n' % re.escape(key), '\n', t)
+    blocs = t.split('\n[[telop]]')                   # (25/11) blocs entiers (ils ont aussi info / margins maintenant)
+    vise = lambda b: re.search(r'^id = "%s(?:_[^"]*)?"$' % re.escape(key), b, re.M)
+    t = '\n[[telop]]'.join([blocs[0]] + [b for b in blocs[1:] if not vise(b)]).rstrip('\n') + '\n'
+    marges = None
+    if os.path.exists(png) and MARGES_PROPRES:
+        try:
+            marges = marges_banniere(png)
+        except Exception as ex:
+            print('marges de la bannière :', ex)
+    nom_ligne, crc = _ligne_marges(key)
     t += '\n[[telop]]\nid = "%s"\nfrom = "%s"\n' % (key, base)
+    if marges:                                       # info en NOMBRE (= la cellule de la technique), pas de crc à deviner
+        t += 'info = 0x%08X\nmargins = [%d, %d]\n' % (crc, marges[0], marges[1])
     for v in variantes:
         t += '\n[[telop]]\nid = "%s%s"\nfrom = "%s%s"\n' % (key, v, base, v)
         if os.path.exists(png):
             shutil.copyfile(png, os.path.join(d, key + v + '.png'))
     _ecrire(f, t)
+    _cellule_telop(sortie, key, crc if marges else None)
     return variantes
 
 
@@ -787,7 +940,7 @@ def enregistrer_banniere(cfg, nom, image, telop_origine):
     cos['banniere'] = {'editeur': True}
     deja[nom]['cosmetique'] = cos
     json.dump(deja, open(os.path.join(sortie, 'outil_techniques.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
-    return {'ok': True, 'dossier': sortie, 'rapport': ['bannière de %s (%s) remplacée' % (deja[nom]['nom'], key),
+    return {'ok': True, 'dossier': sortie, 'key': key, 'rapport': ['bannière de %s (%s) remplacée' % (deja[nom]['nom'], key),
                                                        'pas encore dans le jeu : « Installer dans le jeu » (onglet Techniques)']}
 
 
@@ -1072,6 +1225,7 @@ def installer(cfg, mod_id=MOD_ID, forcer=False):
             print('bannières des esprits :', ex)      # (22/11) copies à totem faites avant
     if mod_id == 'MesTechniques':                       # (22/11) copies sans leur cinématique d'échec (fail_event)
         repares += reparer_echecs(cfg, src)
+        repares += reparer_marges(cfg, src)             # (25/11) bannières d'avant : place du niveau (marges)
     if mod_id == 'MesEsprits':                          # (23/11) armures d'avant : un seul modèle (corps 0) -> un par corps
         try:
             from . import armures_copies
@@ -1327,6 +1481,36 @@ def reparer_modeles(cfg):
     return {'ok': True, 'dossier': sortie, 'rapport': rapport or ['rien à réparer']}
 
 
+def remplacements_commandes(cfg, commandes, ev_o, remplacer, rapport):
+    """(25/11, sorti de scene_en_fichiers) [[event_command]] {list, command, args, set} de la copie -> textes à remplacer
+    SUR PLACE (même longueur) dans les fichiers de la scène du jeu ev_o : remplacer[liste][ancien] = nouveau (méthode de
+    Zan, marche en jeu ; aussi pour l'apparition des esprits guerriers, moteur/esprits.py)"""
+    from .anim import _commandes
+    from . import cfgbin
+    src = os.path.join(cfg['data_dir'], 'common', 'event_cfg')
+    for c in commandes:
+        liste = c.get('list') or 'eff'
+        fichier = os.path.join(src, liste, ev_o + ('' if liste == 'evt' else '_' + liste) + '.cfg.bin')
+        anc = next((a for _, cmd, a in _commandes(fichier) if cfgbin.NOMS.get(cmd, 'CMD_%08X' % cmd) == c['command'] or 'CMD_%08X' % cmd == c['command']
+                    if a and list(a[:len(c['args'])]) == list(c['args'])), None)
+        # (22/11, essai des 227 cinématiques d'échec : 3 retombaient ici) un acteur qui porte DEUX auras (ball_aura_out30_<BALL_AURA>
+        # et l'aura recolorée) : la commande est celle dont les arguments sont ceux du bloc (acteur, aura), pas la 1re de l'acteur
+        if not anc or len(anc) < 2 or len(c['set']) < 2 or anc[1] == c['set'][1]:
+            continue
+        assert len(anc[1]) == len(c['set'][1]), (anc[1], c['set'][1])
+        # la table des textes d'une scène est partagée : le texte à changer ne doit servir qu'aux commandes de cet acteur
+        autres = [a for _, cmd, a in _commandes(fichier) if anc[1] in a and (not a or a[0] != c['args'][0])]
+        # (22/11, essai des 858 techniques : 7 tombaient ici) une AURA (CMD_C3FB5CC5) est recolorée pour tous ses acteurs, et
+        # les autres commandes qui la nomment (la retirer, la poser sur un autre acteur) doivent viser la copie aussi :
+        # remplacer le texte partout est alors exactement ce qu'il faut
+        if c['command'] != 'CMD_C3FB5CC5':
+            assert not autres, 'texte %s partagé par une autre commande' % anc[1]
+        remplacer[liste][anc[1]] = c['set'][1]
+        if '%s : %s -> %s' % (liste, anc[1], c['set'][1]) not in rapport:     # (22/11) une aura à plusieurs acteurs : une ligne
+            rapport.append('%s : %s -> %s' % (liste, anc[1], c['set'][1]))
+    return remplacer
+
+
 def scene_en_fichiers(cfg, nom):
     """(16/11/2026) LA CINÉMATIQUE DE LA COPIE LIVRÉE EN FICHIERS, sans la copie automatique de VRFW (content/anims) :
     test de muku (Feinte angélique (couleurs), ev61_89100) : l'adversaire perd son visage. VRFW RÉÉCRIT les paquets
@@ -1357,28 +1541,7 @@ def scene_en_fichiers(cfg, nom):
     # valeurs des commandes de chargement que la copie change ([[event_command]] de content/effects)
     blocs_gardes, rapport = [], []
     d_eff = tomllib.load(open(f_eff, 'rb')) if os.path.exists(f_eff) else {}
-    for c in d_eff.get('event_command', []):
-        if c.get('event') != ev:
-            continue
-        liste = c.get('list') or 'eff'
-        fichier = os.path.join(src, liste, ev_o + ('' if liste == 'evt' else '_' + liste) + '.cfg.bin')
-        anc = next((a for _, cmd, a in _commandes(fichier) if cfgbin.NOMS.get(cmd, 'CMD_%08X' % cmd) == c['command'] or 'CMD_%08X' % cmd == c['command']
-                    if a and list(a[:len(c['args'])]) == list(c['args'])), None)
-        # (22/11, essai des 227 cinématiques d'échec : 3 retombaient ici) un acteur qui porte DEUX auras (ball_aura_out30_<BALL_AURA>
-        # et l'aura recolorée) : la commande est celle dont les arguments sont ceux du bloc (acteur, aura), pas la 1re de l'acteur
-        if not anc or len(anc) < 2 or len(c['set']) < 2 or anc[1] == c['set'][1]:
-            continue
-        assert len(anc[1]) == len(c['set'][1]), (anc[1], c['set'][1])
-        # la table des textes d'une scène est partagée : le texte à changer ne doit servir qu'aux commandes de cet acteur
-        autres = [a for _, cmd, a in _commandes(fichier) if anc[1] in a and (not a or a[0] != c['args'][0])]
-        # (22/11, essai des 858 techniques : 7 tombaient ici) une AURA (CMD_C3FB5CC5) est recolorée pour tous ses acteurs, et
-        # les autres commandes qui la nomment (la retirer, la poser sur un autre acteur) doivent viser la copie aussi :
-        # remplacer le texte partout est alors exactement ce qu'il faut
-        if c['command'] != 'CMD_C3FB5CC5':
-            assert not autres, 'texte %s partagé par une autre commande' % anc[1]
-        remplacer[liste][anc[1]] = c['set'][1]
-        if '%s : %s -> %s' % (liste, anc[1], c['set'][1]) not in rapport:     # (22/11) une aura à plusieurs acteurs : une ligne
-            rapport.append('%s : %s -> %s' % (liste, anc[1], c['set'][1]))
+    remplacements_commandes(cfg, [c for c in d_eff.get('event_command', []) if c.get('event') == ev], ev_o, remplacer, rapport)
     # (22/11, Frappe du loup) <ASSIGN> = le totem / l'esprit DU JOUEUR qui lance (nie.exe : remplacement des balises ; table
     # GDSEventTagWordReplaceConfig). ESSAYÉ EN JEU le 22/11 : écrire le totem (a000020) à sa place NE MARCHE PAS (ses paquets
     # ne sont jamais ouverts : un acteur « a000020_s00 » n'est pas un modèle à charger) -> retiré, <ASSIGN> gardé.

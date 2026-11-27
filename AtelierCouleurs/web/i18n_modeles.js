@@ -2,8 +2,19 @@
 // Sentence templates built with data (fixed pieces, read from the code by Partage/generer_modeles.py).
 window.MODELES_FR = [
 [
+"<p class=\"msj-note msjt-note\">Ta copie prend les gestes de l’esprit choisi, dans la scène de son élément. Tous sont proposés : ceux en pointillés n’ont pas tous leurs os chez ta copie (des pièces peuvent rester figées), regarde l’aperçu à gauche avant de choisir. « Enregistrer » garde ton choix.</p>",
+""
+],
+[
 "VRFW n’est pas dans le dossier mods de ce jeu (",
 ") : le mod ne se chargera pas. Si ton gestionnaire de mods utilise une autre installation du jeu, choisis-la dans ⚙ Paramètres > Dossier du jeu, puis installe à nouveau. Sinon, installe VRFW (avec Inazuma Fantasy)."
+],
+[
+"",
+" : ",
+" (",
+" pièce(s), ",
+" texture(s), au repos). Dans Substance Painter : un « texture set » par texture, du même nom ; exporte-les en PNG puis « ⬆ Remplacer par une image » (plusieurs à la fois : reconnues par leur nom)."
 ],
 [
 "Un fichier du mod est utilisé par un autre programme (le jeu, le gestionnaire de mods, un antivirus, OneDrive…) : ferme-le puis clique à nouveau sur « Installer ». Rien n’a été changé dans le jeu. (",
@@ -23,10 +34,24 @@ window.MODELES_FR = [
 "  (totem / esprit du joueur : en jeu, c’est celui du joueur qui lance — pour le recolorer, fais une copie dans Totems ou Esprits)"
 ],
 [
+"L’apparition ouverte (",
+") n’est pas celle enregistrée (",
+") : « Enregistrer » d’abord la fiche de l’esprit, puis rouvre ses couleurs."
+],
+[
+"Image posée sur ",
+" texture(s)",
+". Pour revenir en arrière : « Annuler le dernier » (bloc Remplacer une couleur partout)."
+],
+[
 "",
 " : ",
 " × ",
 " pixels. Les changements partent dans l'aperçu et le lecteur natif ; le mod les reprend à « Créer le mod »."
+],
+[
+"  from = ",
+"                                  # gabarit du modèle du mod, écrit comme le mod (LU : InazumaFantasy)"
 ],
 [
 "Image de ",
@@ -63,6 +88,10 @@ window.MODELES_FR = [
 " choisie : seule elle se colorie (Maj + clic pour en ajouter, clic dans le vide pour tout)."
 ],
 [
+"  skin_color = 0x",
+"FF                                # peau des bras et des jambes (comme la tête)"
+],
+[
 "Image de ",
 " copiée (",
 " × ",
@@ -88,6 +117,11 @@ window.MODELES_FR = [
 "), le jeu ne la recolore pas dans cette copie -> ignorée"
 ],
 [
+"",
+" : ",
+" (PNG, retouches comprises). Une fois peinte, « ⬆ Remplacer par une image » la remet ici."
+],
+[
 "Atelier Inazuma : ",
 "  (",
 " techniques, ",
@@ -96,6 +130,11 @@ window.MODELES_FR = [
 [
 "Le corps « ",
 " » n’a pas de version de cette tenue, ni de corps au même squelette à emprunter."
+],
+[
+"seulement ",
+" joueur(s) : ",
+" (leur corpulence doit être cochée, sinon la tenue ne leur va pas)"
 ],
 [
 "cinématique : faite pour l'esprit ",
@@ -169,12 +208,12 @@ window.MODELES_FR = [
 ""
 ],
 [
-"ATTENTION : déjà remplacé par le mod ",
-" (le mod le plus haut dans l’ordre gagne)"
+"",
+" pièce(s) cachée(s) non comprises (cases décochées à gauche ou « Voir seul »)."
 ],
 [
-"Un NOUVEL objet : ton nom, ta description, ton prix ; les mêmes effets que « ",
-""
+"ATTENTION : déjà remplacé par le mod ",
+" (le mod le plus haut dans l’ordre gagne)"
 ],
 [
 "",
@@ -186,12 +225,12 @@ window.MODELES_FR = [
 "\") : objet recoloré"
 ],
 [
-"« ",
-" » : copie de « ",
-" » (",
-", ",
-"), ",
-" jetons à la boutique générale d’Inazuma Fantasy"
+"",
+" : aucune texture de ce nom ici (choisis la texture, puis une seule image)."
+],
+[
+"Cette copie d'esprit a déjà une armure : « ",
+" ». La remplacer par celle-ci ?"
 ],
 [
 "la technique liée doit être un tir, un dribble, une défense ou un arrêt (",
@@ -202,6 +241,14 @@ window.MODELES_FR = [
 " livrée en fichiers (copie de ",
 ", ",
 " changement(s) repris)"
+],
+[
+"modèle ",
+" du mod ",
+" (.glb) -> copie ",
+" : ",
+" texture(s) retouchée(s), ",
+" recopiée(s)"
 ],
 [
 "cinématique d'échec : première partie illisible (",
@@ -311,6 +358,10 @@ window.MODELES_FR = [
 " pixels recolorés. Si ça déborde, Annuler et baisse la tolérance."
 ],
 [
+"Couleurs de l’apparition enregistrées (pas encore installées) : ",
+""
+],
+[
 "",
 " : copie de ",
 " (",
@@ -352,8 +403,21 @@ window.MODELES_FR = [
 " » : choisis-la dans la liste qui s’ouvre quand tu tapes."
 ],
 [
+"",
+" : image sans transparence, celle de la texture est gardée."
+],
+[
 "# Copies recolorées des modèles de « ",
 " » (Atelier Couleurs)."
+],
+[
+"« ",
+" » : copie de « ",
+" » (",
+", ",
+"), ",
+" jetons à la ",
+" d’Inazuma Fantasy"
 ],
 [
 "",
@@ -369,12 +433,43 @@ window.MODELES_FR = [
 " (Impact utilisée à la place)."
 ],
 [
+"couleurs de l’apparition de ",
+" : scène à part ",
+" (copie de ",
+")"
+],
+[
 "Installer retirerait du jeu : ",
 " (absents de cet Atelier)."
 ],
 [
+"modèle 3D recoloré : ",
+" ",
+" (copie de ",
+", porté par le kit 0x",
+")"
+],
+[
+"Automatique : comme la peau du visage (",
+"). Original : ",
+"."
+],
+[
+"",
+" : ignorée (une seule image par texture : ",
+" est prise)."
+],
+[
 "technique 0x",
 " inconnue (ni du jeu, ni de mes créations)"
+],
+[
+"",
+" : image de ",
+" × ",
+" mise à la taille de la texture (",
+" × ",
+")."
 ],
 [
 "fichier du jeu illisible / unreadable game file : ",
@@ -387,6 +482,10 @@ window.MODELES_FR = [
 " caractères, capitales ",
 " px, écart ",
 " px"
+],
+[
+"",
+" : place du niveau sur la bannière (marges mesurées)"
 ],
 [
 "",
@@ -427,6 +526,15 @@ window.MODELES_FR = [
 ")"
 ],
 [
+"couleurs des tenues sans nom : ",
+" (une seule fois)…"
+],
+[
+"objet ",
+" : intensité des lumières NON appliquée (",
+")"
+],
+[
 "technique « ",
 " » : code ",
 ", cinématique ",
@@ -434,9 +542,11 @@ window.MODELES_FR = [
 ")"
 ],
 [
-"objet ",
-" : intensité des lumières NON appliquée (",
-")"
+"synergie ",
+" ",
+" : ",
+" effet(s), ",
+" joueur(s) nécessaire(s)"
 ],
 [
 "bannière ",
@@ -449,10 +559,23 @@ window.MODELES_FR = [
 ")…"
 ],
 [
+"900 ",
+"px \"Inazuma Jeu\", \"Arial Black\", sans-serif"
+],
+[
+"",
+" : peau des bras et des jambes de l'original (",
+")"
+],
+[
 "",
 " piste(s) de couleur de lumière, ",
 " échelle(s) × ",
 ""
+],
+[
+"Cette copie d’esprit a déjà une armure (« ",
+" »)."
 ],
 [
 "copie ",
@@ -468,6 +591,11 @@ window.MODELES_FR = [
 " : cinématique ",
 " livrée en fichiers (copie de ",
 ")"
+],
+[
+"synergie : ",
+" effet(s), ",
+" joueur(s) nécessaire(s)"
 ],
 [
 "",
@@ -526,6 +654,10 @@ window.MODELES_FR = [
 ") : la couleur du "
 ],
 [
+"Réglages de la synergie indisponibles : ",
+""
+],
+[
 "tenue supprimée (",
 " fichiers rangés dans ",
 ")"
@@ -549,6 +681,11 @@ window.MODELES_FR = [
 "code neuf de longueur différente : ",
 " -> ",
 ""
+],
+[
+"",
+" : marges de la bannière non écrites (",
+")"
 ],
 [
 "# modèle ",
@@ -594,6 +731,13 @@ window.MODELES_FR = [
 [
 "",
 " n’a pas de carte de joueur à copier."
+],
+[
+"# modèle ",
+" du mod ",
+" (acteur ",
+") -> copie ",
+""
 ],
 [
 "cinématique d'échec de ",
@@ -649,6 +793,10 @@ window.MODELES_FR = [
 ""
 ],
 [
+"nom de copie ",
+" déjà pris dans le jeu"
+],
+[
 "",
 " : format pas encore pris en charge"
 ],
@@ -667,6 +815,11 @@ window.MODELES_FR = [
 "Clic : particules de ",
 " (émetteur ",
 ")."
+],
+[
+"Choisie à la main : ",
+". Original : ",
+"."
 ],
 [
 "Bord de la sélection adouci (",
@@ -697,6 +850,15 @@ window.MODELES_FR = [
 ")"
 ],
 [
+"Celles du jeu pour ce vêtement (",
+""
+],
+[
+"",
+" : peau des bras et des jambes #",
+""
+],
+[
 "",
 " : pas de texture, copie laissée"
 ],
@@ -725,6 +887,10 @@ window.MODELES_FR = [
 ") déjà utilisé : réessaie"
 ],
 [
+"peau des bras et des jambes : #",
+""
+],
+[
 "aucune lumière ponctuelle dans ",
 ""
 ],
@@ -741,10 +907,6 @@ window.MODELES_FR = [
 " » de tes maillots ?"
 ],
 [
-" ». L’original ne change pas. ",
-""
-],
-[
 "aucune lettre du jeu pour « ",
 " »"
 ],
@@ -755,6 +917,10 @@ window.MODELES_FR = [
 [
 "",
 " : aucune pièce ne l'utilise."
+],
+[
+"Rien n’a changé : l’armure « ",
+""
 ],
 [
 "id déjà utilisé (",
@@ -784,6 +950,10 @@ window.MODELES_FR = [
 " % de la texture"
 ],
 [
+" : « ",
+" » passe dans Terminées"
+],
+[
 " (aussi sous ses variantes ",
 ")"
 ],
@@ -806,6 +976,11 @@ window.MODELES_FR = [
 [
 "boutique d'entraînement : ",
 ""
+],
+[
+"Pas de copie pour « ",
+" » : ",
+"."
 ],
 [
 "icône recolorée (planche ",
@@ -878,6 +1053,14 @@ window.MODELES_FR = [
 ""
 ],
 [
+"la même tactique que « ",
+""
+],
+[
+"les mêmes effets que « ",
+""
+],
+[
 "",
 " (techniques du joueur)"
 ],
@@ -928,6 +1111,10 @@ window.MODELES_FR = [
 " (accueil)"
 ],
 [
+"icône automatique : ",
+""
+],
+[
 "C’est dans le jeu ! ",
 ""
 ],
@@ -972,6 +1159,10 @@ window.MODELES_FR = [
 ""
 ],
 [
+"Image non posée : ",
+""
+],
+[
 " — pas supprimé : ",
 ""
 ],
@@ -987,6 +1178,11 @@ window.MODELES_FR = [
 [
 "# copie de « ",
 " » (",
+")"
+],
+[
+"# « ",
+" » (copie de ",
 ")"
 ],
 [
@@ -1087,6 +1283,15 @@ window.MODELES_FR = [
 ],
 [
 "dégradé du o : ",
+""
+],
+[
+"# ",
+" : ",
+" recolorés"
+],
+[
+"quantité max : ",
 ""
 ],
 [
@@ -1204,6 +1409,10 @@ window.MODELES_FR = [
 ""
 ],
 [
+"Choisir « ",
+""
+],
+[
 "",
 " remplacée"
 ],
@@ -1224,7 +1433,15 @@ window.MODELES_FR = [
 ""
 ],
 [
+"Échec : ",
+""
+],
+[
 "",
 " pièces"
+],
+[
+" pièce",
+""
 ]
 ];

@@ -126,7 +126,7 @@ def exporter(cfg, demande, entree):
         return {'ok': False, 'erreur': 'Choisis qui portera la tenue (un personnage qui la porte déjà dans le jeu).'}
     D = cfg['data_dir']
     orig = CP.personnage_de_tete  # (non utilisé : la tête reste celle du porteur)
-    reg = CP.registre(cfg); cle = slug(nom)
+    reg = CP.registre(cfg); cle = CP.cle_creation(reg, demande, slug(nom), nom, lambda x: x.get('genre') == 'tenue' and x.get('base') == p['code'])   # (28/11) Modifier : LA création ; slug pris -> neuf
     e = reg.get(cle) or {}
     if e and (e.get('genre') != 'tenue' or e.get('base') != p['code']):
         return {'ok': False, 'erreur': 'Le nom « %s » est déjà pris par une autre copie : choisis-en un autre.' % nom}
@@ -164,7 +164,8 @@ def exporter(cfg, demande, entree):
     if not any(rows):
         return {'ok': False, 'erreur': 'cette texture n’est pas dans une colonne connue du vêtement %s' % p['modele']}
     e['vetement'].update(type=g, source=p['modele'], rows=rows, texture=chemin)
-    e.update(nom=nom, description=str(demande.get('description') or ''), nom_origine=p['nom'], date=datetime.datetime.now().isoformat(timespec='seconds'))
+    e.update(nom=nom, description=str(demande.get('description') or ''), nom_origine=p['nom'], date=datetime.datetime.now().isoformat(timespec='seconds'),
+             source_jeu=entree['code'])   # (28/11) la tenue / l'accessoire recoloré : « Modifier » rouvre CELUI-LÀ (onglet Tenues)
     # texture : mêmes noms d'images (les maillages du jeu sont gardés), posée au nouveau chemin
     src = os.path.join(D, 'dx11', 'chr', *chemin.split('/'))
     gt = images.G4TX(open(src, 'rb').read())
@@ -242,7 +243,7 @@ def exporter_objet(cfg, demande, entree):
     p = CP.personnage_de_tete(D, tete['chemin']) if tete else None
     if not p:
         return {'ok': False, 'erreur': 'Choisis le personnage qui portera l’objet (un joueur du jeu).'}
-    reg = CP.registre(cfg); cle = slug(nom)
+    reg = CP.registre(cfg); cle = CP.cle_creation(reg, demande, slug(nom), nom, lambda x: x.get('genre') == 'objet' and x.get('base') == p['code'])   # (28/11) Modifier : LA création ; slug pris -> neuf
     e = reg.get(cle) or {}
     if e and (e.get('genre') != 'objet' or e.get('base') != p['code']):
         return {'ok': False, 'erreur': 'Le nom « %s » est déjà pris par une autre copie : choisis-en un autre.' % nom}
@@ -264,7 +265,8 @@ def exporter_objet(cfg, demande, entree):
     if not any(r[1] == '_item/%s/%s.g4tx' % (m, m) for r in rows):
         return {'ok': False, 'erreur': 'la texture %s n’est pas celle de l’accessoire' % chemin}
     e['vetement'].update(type='exmesh', source=code, rows=rows, texture=chemin)
-    e.update(nom=nom, description=str(demande.get('description') or ''), nom_origine=p['nom'], date=datetime.datetime.now().isoformat(timespec='seconds'))
+    e.update(nom=nom, description=str(demande.get('description') or ''), nom_origine=p['nom'], date=datetime.datetime.now().isoformat(timespec='seconds'),
+             source_jeu=entree['code'])   # (28/11) la tenue / l'accessoire recoloré : « Modifier » rouvre CELUI-LÀ (onglet Tenues)
     gt = images.G4TX(open(os.path.join(D, 'dx11', *rel.split('/')), 'rb').read())
     rempl, rapport, tmp = {}, [], tempfile.mkdtemp()
     try:

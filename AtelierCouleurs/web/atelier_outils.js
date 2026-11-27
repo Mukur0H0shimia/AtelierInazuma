@@ -92,7 +92,7 @@ function edBoiteCible(d) { const m = atMasque(d); if (!m) return { x: 0, y: 0, w
   return x1 < 0 ? { x: 0, y: 0, w: d.W, h: d.H } : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }; }
 
 // ---------------------------------------------------------------------- pose : dessin -> calque actif (ou fond), dans la sélection
-function edVerrou() { return !$('at-verrou') || $('at-verrou').checked; }
+function edVerrou() { return !($('at-vide') && $('at-vide').checked); }     // (27/11) « Dessiner dans le vide » décoché = garder la forme
 function edPoser(nom, dessin) {
   const d = A.doc; if (!d) return;
   const t = document.createElement('canvas'); t.width = d.W; t.height = d.H; const x = t.getContext('2d', { willReadFrequently: true }); dessin(x);

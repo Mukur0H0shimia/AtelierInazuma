@@ -279,19 +279,25 @@ ELEMENT = {1: 'Air', 2: 'Forêt', 3: 'Feu', 4: 'Montagne', 5: 'Néant'}
 
 
 def stats(data_dir, cache_dir):
-    """{code: [puissance min, puissance max, tension, élément]} du jeu de base ; esprits : {code: [0, 0, 0, 0, modèle crc]}"""
-    f = os.path.join(cache_dir, 'index_coups_stats.json')
+    """{code: [puissance min, puissance max, coût PT, élément, 0, recharge (s), type d'évolution]} du jeu de base ;
+    esprits : {code: [0, 0, 0, 0, modèle crc]}
+    CORRIGÉ 25/11 (colonnes LUES par leur nom dans la table RDBN, stats._rdbn_lignes) : le flottant +52 lu avant comme
+    « tension » est `recastTime` (recharge en secondes, 60 / 70 / 90) ; le coût PT est `consumeTp` (octet +49, 40-120) ;
+    `growthType` (octet +47, 0-7) = type d'évolution (soccer_common GetSkillEvoCode : 1-3 God, 4-6 Infinity, 7 GO, 0 aucun)"""
+    f = os.path.join(cache_dir, 'index_coups_stats_v2.json')
     if os.path.exists(f):
         return json.load(open(f, encoding='utf-8'))
     S = os.path.join(data_dir, 'common', 'gamedata', 'skill')
     sc = open(_dernier(os.path.join(S, 'skill_config_*.cfg.bin')), 'rb').read()
+    from .stats import _rdbn_lignes
+    T = _rdbn_lignes(sc, 'm_skillInfoList', ['skillID', 'power_min', 'power_max', 'consumeTp', 'element', 'recastTime', 'growthType'])
     out = {}
     for x in catalogue(data_dir, cache_dir):
         if x['code'][:2] in ('wh', 'rh'):
-            i = sc.find(struct.pack('<I', x['id']))
-            if 8 <= i <= len(sc) - 56:
-                pw = struct.unpack_from('<I', sc, i + 40)[0]
-                out[x['code']] = [pw & 0xFFFF, pw >> 16, round(struct.unpack_from('<f', sc, i + 52)[0]), struct.unpack_from('<I', sc, i + 44)[0] & 0xFF]
+            r = T.get(x['id'])
+            if r:
+                rc = struct.unpack('<f', struct.pack('<I', r['recastTime'] & 0xFFFFFFFF))[0]
+                out[x['code']] = [r['power_min'], r['power_max'], r['consumeTp'], r['element'], 0, round(rc, 1), r['growthType']]
     for k, v in cfgbin.lire(open(_dernier(os.path.join(S, 'aura_skill_config_*.cfg.bin')), 'rb').read()):
         if len(v) > 7 and isinstance(v[1], str) and isinstance(v[7], int):
             out.setdefault(v[1], [0, 0, 0, 0, v[7] & 0xFFFFFFFF])      # colonne 7 = crc32(code du modèle de l'esprit)
@@ -311,28 +317,29 @@ def stats_mods(cfg):
         for f in sorted(glob.glob(os.path.join(mods, m, 'content', 'techniques', '**', '*.toml'), recursive=True)):
             try:
                 t = open(f, encoding='utf-8').read()
-                if 'power_m' not in t and 'tp =' not in t:
+                if 'power_m' not in t and 'tp =' not in t and 'recast' not in t and 'growth' not in t:
                     continue
                 d = tomllib.loads(t)
             except (OSError, ValueError):
                 continue
             for e in d.get('edit') or []:
                 if isinstance(e, dict) and isinstance(e.get('target'), str):
-                    for cle, n in (('power_min', 0), ('power_max', 1), ('tp', 2)):
+                    for cle, n in (('power_min', 0), ('power_max', 1), ('tp', 2), ('recast', 5), ('growth', 6)):   # (25/11) + recharge, évolution
                         if isinstance(e.get(cle), (int, float)):
                             out.setdefault(e['target'], {})[n] = e[cle]
     return out
 
 
 def fiches(cfg, cache_dir, mes=()):
-    """{code: [puissance max, tension, élément, modèle d'esprit]} avec les mods ; mes techniques = celles de leur base"""
+    """{code: [puissance max, coût PT, élément, modèle d'esprit, recharge (s), type d'évolution 0-7]} avec les mods ;
+    mes techniques = celles de leur base. (25/11) [1] = coût PT `consumeTp` (avant : la recharge, lue par erreur)"""
     base, M = stats(cfg['data_dir'], cache_dir), stats_mods(cfg)
     out = {}
     for code, v in base.items():
-        v = list(v)
+        v = list(v) + [0] * (7 - len(v))
         for n, x in M.get(code, {}).items():
             v[n] = x
-        out[code] = [v[1], v[2], v[3], v[4] if len(v) > 4 else 0]
+        out[code] = [v[1], v[2], v[3], v[4], v[5], v[6]]
     for x in mes:
         if x.get('base') in out and x['code'] not in out:
             out[x['code']] = out[x['base']]

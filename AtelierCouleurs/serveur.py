@@ -135,7 +135,9 @@ def charger_catalogues():
     if 'objets3d' not in JEU:
         JEU['objets3d'] = JEU.get('objets', [])
         _acc = _essayer('accessoires (chara_parts)', _accessoires_3d, set())
-        JEU['tenues'] = JEU.get('tenues', []) + [dict(x, nom='Accessoire ' + x['code'], genre='Accessoire') for x in JEU['objets3d'] if x['code'] in _acc]
+        _accs = [dict(x, nom='Accessoire ' + x['code'], genre='Accessoire') for x in JEU['objets3d'] if x['code'] in _acc]
+        _essayer('noms des accessoires', lambda: jeu.nommer_accessoires(_accs, CFG['data_dir'], CT), None)   # (28/11) par couleurs
+        JEU['tenues'] = JEU.get('tenues', []) + _accs
     JEU['objets'] = _essayer('objets', lambda: objets_jeu.construire(CFG['data_dir'], CT), [])
     # (23/11) maillots : noms dans la langue de l'Atelier (cache/index_jeu.json garde ceux du catalogue d'origine, en français)
     try:
@@ -396,6 +398,243 @@ def technique_invocation(code):
             'vrfw_event': {'assigned': [copie]}, 'anim_assign': donneur if code.startswith('invoc_') else None, 'couleur_tir': 0, 'invocation_de': copie}
 
 
+def couleurs_apparition(demande):
+    """(25/11, demande de muku : « modifier la couleur de l'animation quand on invoque un esprit guerrier ») COULEURS DE
+    L'APPARITION d'une copie d'esprit guerrier, faites dans l'éditeur sur « invoc_<copie> » (objets d'effet de sa scène
+    d'invocation, auras). Écrites comme ZanUltimateMod (Lancelot ev80_88500, marche en jeu) : la scène À PART de la copie
+    (esprits.plans_apparition) est livrée avec le nom de chaque objet recoloré remplacé sur place (même longueur) et un
+    [[recolor]] crée la copie de l'objet (export._couleurs, le même code que les techniques). Jamais sur la scène du jeu
+    (elle sert à tous les esprits de l'élément). Le modèle de l'esprit lui-même n'est pas pris ici (ses couleurs = sa copie)."""
+    copie = os.path.basename(str(demande.get('copie') or ''))
+    sortie = os.path.join(ICI, 'sortie', 'MesEsprits')
+    reg = esprits.registre(sortie)
+    c = reg.get(copie)
+    if not c:
+        return {'ok': False, 'erreur': 'esprit guerrier inconnu : ' + copie}
+    pl = esprits.plans_apparition(CFG, reg).get(copie) or {}
+    if not pl.get('scene') or not pl.get('ev'):
+        return {'ok': False, 'erreur': 'Cette apparition n’a pas encore de scène à part (totem, ou esprit sans invocation à lui) : '
+                                       'ses couleurs ne peuvent pas encore être changées sans toucher celles des autres.'}
+    d = details('invoc_' + copie)
+    if not d or d.get('cinematique') != pl['scene']:
+        return {'ok': False, 'erreur': 'L’apparition ouverte (%s) n’est pas celle enregistrée (%s) : « Enregistrer » d’abord la fiche de '
+                                       'l’esprit, puis rouvre ses couleurs.' % ((d or {}).get('cinematique'), pl['scene'])}
+    modeles = {o['acteur'] for o in d.get('objets_details') or [] if o.get('modeleActeur')}
+    objets = {a: o for a, o in (demande.get('objets') or {}).items() if a not in modeles}
+    # l'aperçu lit la scène dans la sortie (« racine:atelier:MesEsprits|chemin ») : en jeu, le chemin du jeu
+    propre = lambda o: dict(o, chemin=o['chemin'].split('|', 1)[1]) if str(o.get('chemin', '')).startswith('racine:') else o
+    d = dict(d, objets=[propre(o) for o in d.get('objets') or []], objets_details=[propre(o) for o in d.get('objets_details') or []])
+    auras = demande.get('auras') or {}
+    rapport = []
+    if not objets and not auras:
+        c.pop('couleurs_apparition', None)
+        rapport.append('couleurs de l’apparition retirées (celles du jeu)')
+    else:
+        nom = 'apparition_' + copie
+        ev_nom = pl['ev'][:5] + pl['ev'][6:10]            # 4 derniers chiffres de la scène à part (uniques) : noms des copies
+        for a in objets:
+            cp = export.copie_objet(a, ev_nom)
+            if glob.glob(os.path.join(CFG['data_dir'], 'common', 'effect', '**', cp), recursive=True):
+                return {'ok': False, 'erreur': 'nom de copie %s déjà pris dans le jeu' % cp}
+        shutil_ = __import__('shutil')
+        # images : l'ancien dossier mis de côté, remis si l'enregistrement échoue (le registre garde alors les anciennes couleurs)
+        d_img = os.path.join(sortie, 'assets', 'images', 'fx', nom)
+        d_bak = d_img + '.ancien'
+        shutil_.rmtree(d_bak, ignore_errors=True)
+        if os.path.isdir(d_img):
+            os.replace(d_img, d_bak)
+        try:
+            e, persos = export._couleurs(CFG, {'nom': c.get('nom') or copie, 'objets': objets, 'auras': auras}, d, nom, ev_nom, pl['scene'], sortie, rapport)
+            texte = '\n'.join(e) + '\n'
+            import tomllib as _tl
+            cmds = [x for x in _tl.loads('schema = "VRFW.effect/1"\n' + texte).get('event_command', []) if x.get('event') == ev_nom]
+            remplacer = {'evt': {}, 'eff': {}, 'snd': {}}
+            export.remplacements_commandes(CFG, cmds, pl['scene'], remplacer, rapport)
+            # EFFET COMMUN (ega0001…) : chargé, créé et joué PAR SON NOM (commandes à une valeur, que remplacements_commandes
+            # laisse) -> le nom entier remplacé partout dans la scène par celui de sa copie (même longueur, egz…)
+            for x in cmds:
+                a_, s_ = x.get('args') or [], x.get('set') or []
+                if len(a_) == 1 and s_ and all(v == s_[0] for v in s_) and s_[0] != a_[0] and len(s_[0]) == len(a_[0]):
+                    remplacer[x.get('list') or 'eff'][a_[0]] = s_[0]
+                    if 'effet commun %s -> %s' % (a_[0], s_[0]) not in rapport:
+                        rapport.append('effet commun %s -> %s' % (a_[0], s_[0]))
+            import re as _re
+            sans = _re.sub(r'\n\[\[event_command\]\]\nevent = "%s"\n(?:[^\[\n][^\n]*\n)*' % _re.escape(ev_nom), '\n', '\n' + texte)
+            if not any(remplacer.values()):
+                raise ValueError('aucun objet recoloré n’a pu être branché dans la scène d’apparition')
+        except Exception as ex:
+            shutil_.rmtree(d_img, ignore_errors=True)
+            if os.path.isdir(d_bak):
+                os.replace(d_bak, d_img)
+            traceback.print_exc()
+            return {'ok': False, 'erreur': str(ex) or ex.__class__.__name__, 'rapport': rapport}
+        shutil_.rmtree(d_bak, ignore_errors=True)
+        c['couleurs_apparition'] = {'scene': pl['scene'], 'ev': pl['ev'], 'effets': sans.strip(), 'remplacer': remplacer,
+                                    'date': datetime.datetime.now().isoformat(timespec='seconds')}
+        rapport.insert(0, 'couleurs de l’apparition de %s : scène à part %s (copie de %s)' % (c.get('nom') or copie, pl['ev'], pl['scene']))
+    reg[copie] = c
+    esprits.ecrire_vrfw(CFG, sortie, reg)
+    json.dump(reg, open(os.path.join(sortie, 'outil_esprits.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    rapport.append('pas encore dans le jeu : « Installer » (Mes créations)')
+    return {'ok': True, 'dossier': sortie, 'rapport': rapport}
+
+
+def _png_url(f):
+    import base64 as _b
+    return 'data:image/png;base64,' + _b.b64encode(open(f, 'rb').read()).decode() if f and os.path.isfile(f) else None
+
+
+def _entree_cosmetique(mod, code):
+    """(26/11) l'entrée d'une création cosmétique : (registre, clé, entrée, enregistrer())"""
+    from moteur import objets_jeu, copies_outfits
+    if mod == 'MesObjets':
+        reg = objets_jeu.registre(CFG)
+        f = os.path.join(objets_jeu._sortie(CFG), 'outil_objets.json')
+        return reg, code, reg.get(code), lambda: (json.dump(reg, open(f, 'w', encoding='utf-8'), ensure_ascii=False, indent=1), objets_jeu.ecrire(CFG, reg))
+    if mod == 'MesTenues':
+        reg = copies_outfits.registre(CFG)
+        cle = code if code in reg else next((k for k, e in reg.items() if e.get('modele') == code), None)
+        f = os.path.join(copies_outfits._sortie(CFG), 'outil_tenues.json')
+        return reg, cle, reg.get(cle) if cle else None, lambda: (json.dump(reg, open(f, 'w', encoding='utf-8'), ensure_ascii=False, indent=1), copies_outfits.ecrire(CFG, reg))
+    if mod == 'MesMaillots':
+        A = mes_maillots.A
+        p = A.charger_projet()
+        m = next((x for x in p['maillots'] if x['id'] == code), None)
+        return p, code, m, lambda: A.sauver_projet(p)
+    return None, None, None, None
+
+
+def _icone_tenue(e):
+    from moteur import copies_outfits
+    return os.path.join(copies_outfits._sortie(CFG), 'content', 'images', 'menu', '200_icon', '02_icon_item', 'mes_tenues_icones', str(e.get('icone')) + '.png')
+
+
+def cosmetique_infos(mod, code):
+    """(26/11, demande de muku) ÉTAPE « COSMÉTIQUE » des objets, tenues et maillots (comme « En attente de stats » pour les
+    techniques) : ce qui s'y règle -> {prix, icone, embleme (data URL ou None), fait}"""
+    reg, cle, e, _ = _entree_cosmetique(mod, code)
+    if e is None:
+        return {'ok': False, 'erreur': 'création inconnue'}
+    out = {'ok': True, 'mod': mod, 'prix': e.get('prix'), 'fait': bool(e.get('cosmetique_ok')), 'icone': None, 'embleme': None,
+           'boutique': 'general', 'famille': None}
+    if mod == 'MesObjets':                          # (26/11) aperçu façon boutique : l'icône (recolorée, sinon celle de l'original)
+        from moteur import objets_jeu
+        # (26/11, muku : « fais tous les menus ») onglet de la boutique = famille de l'objet d'origine (item_config) ; les
+        # équipements sont vendus à la boutique d'entraînement (objets_jeu.ecrire), le reste à la boutique générale
+        try:
+            o = next((x for x in objets_jeu.construire(CFG['data_dir'], CACHE) if x.get('code') == e.get('base')), None)
+            out['famille'] = o.get('famille') if o else None
+        except Exception as ex:
+            print('famille de l’objet :', ex)
+        out['boutique'] = 'entrainement' if out['famille'] in objets_jeu.ENTRAINEMENT else 'general'
+        # (27/11) « Modifier » d'une copie : ses réglages (bonus, synergie) et ses textes reviennent dans la création
+        out.update(nom=e.get('nom'), description=e.get('description'), stats=e.get('stats'), synergie=e.get('synergie'), rarete=e.get('rarete'), max=e.get('max'))
+        try:
+            o_ = next((x for x in objets_jeu.construire(CFG['data_dir'], CACHE) if x.get('code') == e.get('base')), None)
+            out['dessin'] = bool(o_ and objets_jeu.icone_remplacable(o_))      # (27/11) tactiques : icône de la tactique, pas à dessiner
+            if o_:                       # (27/11, muku) réglages de l'étape Cosmétique : ceux de l'original (unique, choix, bonus, synergie)
+                dd = objets_jeu.details(CFG, CACHE, o_)
+                out['reglages'] = {k: dd.get(k) for k in ('commun', 'equipement', 'synergie')}
+                if out['reglages'].get('commun'):
+                    out['reglages']['commun'] = dict(out['reglages']['commun'], refus=None)
+        except Exception:
+            out['dessin'] = True
+        out['nom_embleme'] = None
+        f = os.path.join(objets_jeu._sortie(CFG), 'content', 'images', 'menu', '200_icon', '02_icon_item', 'mesobjets_icones', str(e.get('icone')) + '.png')
+        if e.get('mode_icone') == 'fichier':                 # (27/11) icône en fichier à part (emblème, plaque…) : son aperçu
+            f = os.path.join(CFG['outil_dir'], 'cache', 'icones_objets', 'MesObjets~' + cle + '.png')
+        if not os.path.isfile(f):
+            try:
+                import re
+                o = next((x for x in objets_jeu.construire(CFG['data_dir'], CACHE) if x.get('code') == e.get('base')), None)
+                if o and objets_jeu.icone(CFG['data_dir'], CACHE, o):
+                    f = os.path.join(CACHE, 'icones_objets', re.sub(r'[^\w~.-]', '_', o['code']) + '.png')
+            except Exception as ex:
+                print('icône de l’objet :', ex)
+        out['icone'] = _png_url(f)
+    elif mod == 'MesTenues':
+        out['icone'] = _png_url(_icone_tenue(e))
+    elif mod == 'MesMaillots':
+        out['icone'], out['embleme'] = _png_url(e.get('icone')), _png_url(e.get('embleme'))
+        # nom de l'objet emblème tel que l'écrit le mod (moteur/maillots/atelier_mod.py) : « Emblème <nom sans Maillot> »
+        import re as _re
+        court = _re.sub(r'^(Maillot|Tenue)\s+', '', e.get('nom') or '')
+        out['nom_embleme'] = {'fr': 'Emblème ' + court, 'en': court + ' crest', 'es': court + ' crest'}
+    return out
+
+
+def regler_cosmetique(d):
+    """(26/11) « Enregistrer » (prix, icône, emblème) ou « Garder » de l'étape Cosmétique : la création passe dans Terminées.
+    Objet : le prix (son icône EST son visuel, recolorée dans l'éditeur) ; tenue : prix + icône (256 × 256) ; maillot : prix +
+    icône de boutique + emblème (le mod des maillots est reconstruit, comme « Ajouter au mod »)."""
+    mod, code = str(d.get('mod') or ''), str(d.get('code') or '')
+    reg, cle, e, sauver = _entree_cosmetique(mod, code)
+    if e is None:
+        return {'ok': False, 'erreur': 'création inconnue'}
+    rapport = []
+    if mod == 'MesTenues' and d.get('icone_auto') and d.get('icone'):
+        # (27/11) icône « mannequin » faite toute seule juste après « Créer la tenue » : écrite, mais l'étape Cosmétique n'est pas
+        # validée (la création reste « En attente : Cosmétique ») et une icône dessinée par muku n'est jamais remplacée
+        if e.get('icone_perso'):
+            return {'ok': True, 'rapport': ['icône dessinée gardée']}
+        f = _icone_tenue(e); os.makedirs(os.path.dirname(f), exist_ok=True)
+        import base64 as _b
+        open(f, 'wb').write(_b.b64decode(d['icone'].split(',', 1)[1]))
+        w, h, rows = g4.images.lire_png(f)
+        if (w, h) != (256, 256):
+            g4.images.ecrire_png(f, 256, 256, g4.images.redimensionner(w, h, rows, 256, 256))
+        e['icone_auto'] = True; sauver()
+        return {'ok': True, 'rapport': ['icône automatique (mannequin) écrite']}
+    if not d.get('garder'):
+        if d.get('prix') not in (None, ''):
+            e['prix'] = max(1, int(d['prix'])); rapport.append('prix : %d' % e['prix'])
+        if mod == 'MesTenues' and d.get('icone'):
+            f = _icone_tenue(e); os.makedirs(os.path.dirname(f), exist_ok=True)
+            import base64 as _b
+            open(f, 'wb').write(_b.b64decode(d['icone'].split(',', 1)[1]))
+            w, h, rows = g4.images.lire_png(f)
+            if (w, h) != (256, 256):
+                g4.images.ecrire_png(f, 256, 256, g4.images.redimensionner(w, h, rows, 256, 256))
+            e['icone_perso'] = True; rapport.append('icône changée')
+        if mod == 'MesObjets':                          # (27/11, muku) les réglages se font ici (comme « Régler les stats »)
+            from moteur import objets_jeu
+            try:
+                rapport += objets_jeu.appliquer_reglages(CFG, e, d)
+            except ValueError as ex:
+                return {'ok': False, 'erreur': str(ex)}
+        if mod == 'MesMaillots' and d.get('sans_embleme') and e.get('embleme'):
+            # (27/11, muku : « un maillot ne fait pas forcément un emblème ») emblème retiré : le mod n'écrit plus l'objet emblème
+            # (atelier_mod : « if m.get('embleme') and os.path.exists(...) »)
+            e['embleme'] = None; rapport.append('emblème retiré (maillot vendu sans emblème)')
+        if mod == 'MesMaillots':
+            for k in ('icone', 'embleme'):
+                if d.get(k):
+                    mes_maillots._ecrire(e, k, d[k]); rapport.append(('icône' if k == 'icone' else 'emblème') + ' changé' + ('e' if k == 'icone' else ''))
+    e['cosmetique_ok'] = True
+    sauver()
+    if mod == 'MesMaillots' and not d.get('garder'):            # « Garder » : rien ne change dans le mod
+        r = mes_maillots.construire(CFG)
+        rapport.append('mod des maillots reconstruit (en cours)' if r.get('ok') else 'mod des maillots : ' + str(r.get('erreur')))
+    # (27/11, essai de tous les types) objets et tenues : le MOD est réécrit (avant : le nouveau prix restait dans le registre de
+    # l'Atelier, la boutique du mod gardait l'ancien jusqu'au prochain « Créer »)
+    if mod == 'MesObjets' and not d.get('garder'):
+        from moteur import objets_jeu
+        if d.get('icone'):                                   # icône dessinée dans la boutique : écrite comme à la création
+            o = next((x for x in objets_jeu.construire(CFG['data_dir'], CACHE) if x.get('code') == e.get('base')), None)
+            if o and o.get('icone'):
+                r = objets_jeu.exporter(CFG, {'cle': cle, 'nom': e.get('nom'), 'description': e.get('description'), 'prix': e.get('prix'), 'icone': d['icone']}, o)
+                rapport += (r.get('rapport') or [])[1:] if r.get('ok') else ['icône : ' + str(r.get('erreur'))]
+            else:
+                rapport.append('icône : cet objet n’a pas d’image dans le jeu')
+        else:
+            objets_jeu.ecrire(CFG, objets_jeu.registre(CFG)); rapport.append('mod « Mes objets » réécrit')
+    if mod == 'MesTenues' and not d.get('garder'):
+        from moteur import copies_outfits
+        copies_outfits.ecrire(CFG, copies_outfits.registre(CFG)); rapport.append('mod « Mes tenues » réécrit')
+    rapport.insert(0, ('valeurs gardées' if d.get('garder') else 'cosmétique enregistrée') + ' : « %s » passe dans Terminées' % (e.get('nom') or code))
+    return {'ok': True, 'rapport': rapport}
+
+
 def technique(code):
     """technique du jeu ou d'un mod (17/11/2026)"""
     t = PAR_CODE.get(code) or entree_mod(code) or (technique_invocation(code) if str(code).startswith(('invoc_', 'armure_')) else None)
@@ -485,8 +724,22 @@ def cinematique_de(t, pour_anim=False):
             if act not in [o['acteur'] for o in cin['objets']]:
                 cin['objets'].append({'acteur': act, 'chemin': ch, 'ajoute': True})
         sub = dict(mods_recolor.commandes(CFG, m, t.get('event_id')))
+        # (25/11, retour de danifdez : « Tiger fang d'InazumaFantasy montre les textures de Beast fang ») LU dans le mod :
+        # content/effects/tiger_fang.toml [[event_command]] LOAD_ACTOR_RESOURCE set = ["ev63_00300_s00_p<VARIATION>",
+        # "ev63_86020"] = un CODE DE MODÈLE (pas un chemin d'objet d'effet) ; ce modèle vient d'un .glb du mod (VRFW.model/1,
+        # converti par moteur/glb_vrfw.py dans la racine du mod). LU dans le cache de VRFW : la cinématique copiée charge
+        # bien « ev63_86020 » pour cet acteur. Avant, seuls les objets d'effet étaient remplacés : l'acteur gardait ev63_00300.
+        import re as _re
+        cin['modeles_mod'] = {}
+        for mo in cin.get('modeles') or []:
+            v = sub.get(mo['acteur'])
+            if isinstance(v, str) and _re.fullmatch(r'[\w~-]+', v) and v != mo['modele'] and \
+                    anim._dossier_chr(os.path.join(D_, 'common'), v):
+                cin['modeles_mod'][mo['acteur']] = [mo['modele'], v]
+                mo['modele_origine'], mo['modele'] = mo['modele'], v
+                mo.pop('chemin', None)
         for o in cin['objets']:
-            if o['acteur'] in sub:
+            if o['acteur'] in sub and o['acteur'] not in cin['modeles_mod']:
                 o['chemin'] = sub[o['acteur']]
             if pour_anim and not os.path.exists(os.path.join(D_, *o['chemin'].split('/'))):
                 nom = os.path.basename(o['chemin']).rsplit('.', 1)[0]
@@ -547,6 +800,12 @@ def anim_de(t):
         r = vrfw_anim.recomposer(r, ev, os.path.join(CFG['jeu_dir'], 'mods', t.get('vrfw_mod') or ''), t.get('vrfw_cameras') or [])
     if t.get('mod_effets'):
         vrfw_anim.appliquer_effets(r, vrfw_anim.effets_ajoutes(CFG, t['mod_effets'], t.get('event_id')))
+    # (25/11) modèle d'acteur remplacé par le mod (LOAD_ACTOR_RESOURCE vers un code de modèle, cinematique_de) : on montre le
+    # modèle du mod ; les gestes restent ceux de la scène d'origine (mêmes os : le .glb du mod suit le squelette du gabarit)
+    for a in r.get('acteurs') or []:
+        x = (cin.get('modeles_mod') or {}).get(a.get('acteur'))
+        if x and a.get('code') == x[0]:
+            a['code'], a['code_origine'] = x[1], x[0]
     if ev and ev.get('assigned'):
         # (17/11/2026) [[event]] assigned = ["k002090"] : l'esprit « <ASSIGN> » de la cinématique est celui-là (Lumière de
         # Michael -> Michael, dont l'apparence est remplacée par Michael astral k002093 : modele_binaire / modele_remplace)
@@ -686,7 +945,9 @@ def lecteur_natif(demande):
     # (14/11/2026) + couleurs de matériau choisies dans l'Atelier : {pièce : [r, v, b]} (remplacent u_diffuse.rgb)
     json.dump({'caches': demande.get('caches') or [], 'couleurs': demande.get('couleurs') or {},
                'sommets': demande.get('sommets') or {}, 'particules': demande.get('particules') or {},   # (14/11/2026) teintes
-               'lumieres': demande.get('lumieres') or {}},   # (23/11) intensité des lumières de l'effet
+               'lumieres': demande.get('lumieres') or {},   # (23/11) intensité des lumières de l'effet
+               'auras': demande.get('auras') or {},   # (25/11) couleurs d'aura choisies {nom : [r, v, b]} (0..1)
+               'fil': demande.get('fil') or []},   # (25/11) pièces sélectionnées en fil de fer
               open(os.path.join(r['dossier'], 'options.json'), 'w', encoding='utf-8'))
     exe = os.path.join(d, 'lecteur.exe')
     if not os.path.exists(exe):
@@ -946,7 +1207,9 @@ def details(code):
             ch = pre + 'common/%s/%s.objbin' % (rel, m['modele'])          # dossier du modèle (chr/_keshin/<code>…)
             ob = objet(ch)
             infos = ob.extraire_textures(CACHE)
-            objs.append({'acteur': m['acteur'], 'chemin': ch, 'nom': ob.nom, 'modeleActeur': m['modele'], 'liste': m.get('liste', 'evt'), 'cheminLoad': m.get('chemin'), 'commandeLoad': m.get('commande'), 'espritDuJoueur': bool(m.get('esprit_du_joueur')), 'pieces': [],
+            objs.append({'acteur': m['acteur'], 'chemin': ch, 'nom': ob.nom, 'modeleActeur': m['modele'],
+                         'modeleOrigine': m.get('modele_origine'),     # (25/11) modèle de la scène remplacé par celui du mod
+                         'liste': m.get('liste', 'evt'), 'cheminLoad': m.get('chemin'), 'commandeLoad': m.get('commande'), 'espritDuJoueur': bool(m.get('esprit_du_joueur')), 'pieces': [],
                          'textures': [infos.get(n, {'nom': n, 'lisible': False, 'donnees': False}) for n in ob.textures]})
         except Exception as ex:
             print('modèle', m, ex)
@@ -1005,7 +1268,17 @@ def details_jeu(cat, code, modele=None, cote=None):
         mods_liste(frais=True)
     p = JEU_CODE[(cat, code)]
     if cat == 'objets' and p.get('type') == 'objet':          # (15/11/2026) objet du jeu : son icône, pas de 3D
-        return objets_jeu.details(CFG, CACHE, p)
+        d = objets_jeu.details(CFG, CACHE, p)
+        # (27/11, muku) crampons / gants : leur MODÈLE 3D porté, à recolorer aussi (2e objet de l'éditeur, après l'icône)
+        m = objets_jeu.modele_porte(CFG['data_dir'], code) if p.get('famille') in objets_jeu.EQUIPEMENTS else None
+        if m and m.get('chemin'):
+            try:
+                d['objets_details'] = d['objets_details'] + [dict(_objet_details(m['chemin'], code, 'chaussures' if m['sorte'] == 'shoes' else 'gants'),
+                                                                  modele_jeu=m['cle'])]
+                d['modele_porte'] = {'sorte': m['sorte'], 'cle': m['cle']}
+            except Exception as ex:
+                print('modèle porté', code, ex)
+        return d
     if cat == 'maillots' and p.get('modele_mod'):            # (17/11/2026) maillot d'un mod : sa coupe + sa texture (domicile / extérieur)
         cote = '20' if cote == '20' and p.get('tx20') else '10'
         o = _objet_details(p['chemin'] + ('|20' if cote == '20' else ''), p['code'], 'maillot')
@@ -1072,7 +1345,11 @@ def telop_apercu(code_tech, code_telop, projet=None):
                  glob.glob(os.path.join(CFG.get('jeu_dir') or ICI, 'mods', '*', 'content', 'telops', 'any', c + '.png')):
             if os.path.isfile(p):
                 return p
-    return telop_png(code_telop or code_tech)
+    # (27/11, parcours de l'appli : 404 sur « whs02700_<CHARA_ID> ») bannière à balise (une par lanceur) : celle de la technique
+    if code_telop and '<' in code_telop:
+        code_telop = code_telop.split('_<')[0] if '_<' in code_telop else code_tech
+    f = telop_png(code_telop or code_tech)
+    return f if os.path.isfile(f) or not code_tech else telop_png(code_tech)
 
 
 def telop_apercu_version(code_tech, projet=None):
@@ -1155,6 +1432,13 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
     armure = code[len('armure:'):] if quoi == 'joueur' and code and str(code).startswith('armure:') else None
     if armure:
         code = None
+    # (27/11, muku : « fais aussi les tenues en 3D comme sur le jeu ») « tenue:<copie> » : le MANNEQUIN du jeu (tête c21000010,
+    # comme la boutique) qui porte le vêtement de ma tenue (chara_parts CLOTHES de sa source, ligne du corps normal, + peau des bras
+    # et manches) avec SA texture (sortie/MesTenues/assets/chr/_uniform/<modèle>/<modèle>_10.g4tx, noms internes ceux du jeu) ;
+    # pas noir (le mannequin de la boutique est gris)
+    tenue = code[len('tenue:'):] if quoi == 'joueur' and code and str(code).startswith('tenue:') else None
+    if tenue:
+        code = None
     if quoi == 'joueur':
         # joueur générique, ou le vrai personnage « code » : sa tête + maillot / chaussures / squelette de sa corpulence
         info = personnages.joueur(D, code) if code else None
@@ -1203,6 +1487,21 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
                 rel_arm = 'chr/_armd/%s/%s_10.g4tx' % (a_.get('modele'), a_.get('modele'))
                 if not os.path.isfile(os.path.join(D_arm, rel_arm)):
                     D_arm = rel_arm = None                       # pas de texture à moi : celle de l'armure du jeu
+        if tenue:
+            e_ = copies_outfits.registre(CFG).get(tenue) or {}
+            rows = copies_tenues._parties(D)['clothes'].get(e_.get('source') or '') or []
+            if rows:
+                r0, cm, cx = rows[0], (lambda x: 'common/chr/' + x), (lambda x: 'dx11/chr/' + x)
+                md_arm, tx_arm = cm(r0[0]), cx(r0[1])
+                parties = [(md_arm, tx_arm)]
+                for i_md, i_tx in ((6, 7), (8, 9)):             # peau des bras, manches
+                    if len(r0) > i_md and isinstance(r0[i_md], str) and isinstance(r0[i_tx], str):
+                        parties.append((cm(r0[i_md]), cx(r0[i_tx])))
+                parties.append(('common/chr/_uniform/s000101/s00010%d.g4md' % t, 'dx11/chr/c000101/c000101.g4tx'))   # chaussures
+                D_arm = os.path.join(CFG['outil_dir'], 'sortie', 'MesTenues', 'assets')
+                rel_arm = 'chr/_uniform/%s/%s_10.g4tx' % (e_.get('modele'), e_.get('modele'))
+                if not os.path.isfile(os.path.join(D_arm, rel_arm)):
+                    D_arm = rel_arm = None
         if info:
             tete = 'common/chr/' + info['tete']
             tx = [os.path.relpath(f, D).replace('\\', '/') for f in sorted(glob.glob(os.path.join(D, 'dx11', 'chr', os.path.dirname(info['tete']), '*.g4tx')))]
@@ -1212,7 +1511,7 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
             parties.append(('common/chr/_face/21_MANNEQUIN/c21000010/c21000010.g4md', None))
         dossier = 'joueur_' + (code or 'generique') + ('_' + maillot + '_' + cote if lignes else '')
         if md_arm:                                       # (24/11) dossier à part, refait quand la texture de ma copie change
-            dossier = 'joueur_armure_%s_%d' % (armure, int(os.path.getmtime(os.path.join(D_arm, rel_arm))) if rel_arm else 0)
+            dossier = 'joueur_%s_%s_%d' % ('tenue' if tenue else 'armure', tenue or armure, int(os.path.getmtime(os.path.join(D_arm, rel_arm))) if rel_arm else 0)
         liste_tx = sorted({x for _, x in parties if x and not (rel_arm and x == tx_arm)} | set(tx))
         noms = _textures_png(dossier, liste_tx)
         if rel_arm:                                      # (24/11) + ses masques (msk / sp / spm) : les shaders du jeu les lisent
@@ -1233,7 +1532,7 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
             _texture_par_materiau(md, dict(parties).get(md) or (tx[0] if tx else None), lot, noms)
             # joueur mannequin : ENTIÈREMENT noir (maillot, chaussures, peau, tête ; choix de l'utilisateur, 13/11/2026)
             # (24/11) sauf l'armure qu'il porte (aperçu de mise en armure)
-            if not info and md != md_arm:
+            if not info and md != md_arm and not tenue:   # (27/11) mannequin d'une tenue : gris, comme la boutique du jeu
                 for m in lot:
                     m['noir'] = True
             ms += lot
@@ -1260,15 +1559,32 @@ def modele_binaire(quoi, code=None, maillot=None, cote='10'):
         rel = os.path.relpath(d, os.path.join(D, 'common')).replace('\\', '/')
         tx = 'dx11/%s/%s.g4tx' % (rel, code_f)
         liste_tx = [tx] if os.path.exists(os.path.join(D, tx)) else []
-        noms = _textures_png(code_f, liste_tx, data_dir=D)
+        # (25/11) modèle qui n'existe que dans un mod (Tiger fang ev63_86020, orbes k002091 de Mukuro) : ses textures sous
+        # « <code>~<mod> », le même nom que l'objet lu dans la racine du mod (objet() : ob.nom) ; sans cela, une texture
+        # retouchée dans la liste (clé « ev63_86020~InazumaFantasy/… ») n'atteignait pas l'acteur (clé « ev63_86020/… »)
+        dossier = code_f
+        if code_f == code and os.path.normcase(D) != os.path.normcase(CFG['data_dir']):
+            from moteur import racines as _rac
+            mod_d = next((k for k, v in list(_rac._memo.items()) if os.path.normcase(v[1] or '') == os.path.normcase(D)), None)
+            if mod_d and ':' not in str(mod_d):
+                dossier = '%s~%s' % (code_f, mod_d)
+        noms = _textures_png(dossier, liste_tx, data_dir=D)
         b_md, b_mg = pk[a:], open(base + '.g4mg', 'rb').read()
-        ms = modele.lire(b_md, b_mg, sk, noms, CACHE, code_f)
+        ms = modele.lire(b_md, b_mg, sk, noms, CACHE, dossier)
         for m in ms:
             m['_md'], m['_mg'] = b_md, b_mg
-        dossier = code_f
     # ombrage du jeu : carte d'ombres <texture>oc et couleur de contour <texture>line (8 x 8 unie)
+    if quoi == 'joueur' and info:                       # (pas le mannequin noir des techniques : il n'en a pas besoin)
+        # (26/11) masques msk tout de suite (avant : seulement plus tard, dans un fil, pour Direct3D) : la vue en tire la peau du
+        # corps comme chr_toon_edit (couleur = texture × lerp(1, u_skinColor, msk.r))
+        try:
+            _textures_png(dossier, liste_tx, True)
+        except Exception as ex:
+            print('masques du joueur :', ex)
     for m in ms:
         t = m['texture']
+        m['masque'] = (dossier + '/' + t + 'msk') if quoi == 'joueur' and t and (t + 'msk') in noms and not m.get('noir') \
+            and os.path.exists(os.path.join(CACHE, dossier, t + 'msk.png')) else None
         m['ombre'] = (dossier + '/' + t + 'oc') if t and (t + 'oc') in noms else None
         m['contour'] = couleur_moyenne(os.path.join(CACHE, dossier, t + 'line.png')) if t and (t + 'line') in noms else None
         m['texture'] = (dossier + '/' + t) if t else None
@@ -1340,8 +1656,30 @@ def geometrie_binaire(chemin):
     return struct.pack('<I', len(entete)) + entete + b''.join(morceaux)
 
 
+# (25/11/2026, demande d'un joueur : textures et modèles pour Substance Painter) fichier fait par la page (PNG d'une texture,
+# .glb du modèle ouvert) -> dossier « exports » de l'Atelier ; l'Explorateur s'ouvre dessus, le fichier choisi
+EXPORTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'exports')
+
+
+def enregistrer_export(d):
+    import base64, re
+    nom = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', '_', str(d.get('nom') or '')).strip(' .')[:120]
+    if not nom or os.path.splitext(nom)[1].lower() not in ('.png', '.glb'):
+        return {'ok': False, 'erreur': 'nom de fichier refusé'}
+    os.makedirs(EXPORTS, exist_ok=True)
+    chemin = os.path.join(EXPORTS, nom)
+    with open(chemin, 'wb') as f:
+        f.write(base64.b64decode(d.get('donnees') or ''))
+    if d.get('ouvrir') and os.name == 'nt':
+        try:
+            subprocess.Popen(['explorer', '/select,', chemin])
+        except Exception:
+            pass
+    return {'ok': True, 'chemin': chemin}
+
+
 # (15/11/2026) préréglages de couleurs et projets en cours (sauvegarde automatique de l'Atelier)
-PREREGLAGES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prereglages.json')
+PREREGLAGES =os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prereglages.json')
 PROJETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'projets')
 
 
@@ -1377,6 +1715,10 @@ def liste_projets():
             if c and c not in vus:
                 vus.append(c)
         perso = e.get('onglet') in ('esprits', 'totems')
+        # (28/11) projets d'avant les noms d'armures (« Armure ka000101 ») : le nom actuel (« Armure · Pégase »)
+        nom_ = e.get('nom')
+        if e.get('onglet') == 'armures' and nom_ == 'Armure %s' % e.get('code'):
+            nom_ = (JEU_CODE.get(('armures', e.get('code'))) or {}).get('nom') or nom_
         vign = e.get('vignette')
         if not vign:                           # pas encore d'image de l'aperçu : la 1re texture retouchée
             vign = next(iter((e.get('textures') or {}).values()), None)
@@ -1384,9 +1726,9 @@ def liste_projets():
                     'cle': os.path.basename(f)[:-5], 'code': e.get('code'), 'onglet': e.get('onglet') or 'techniques',
                     # (21/11) le champ de nom de SON onglet (avant : celui des techniques pour tout -> objets, tenues,
                     # armures… prenaient le nom de la dernière technique) ; sinon le nom de l'élément
-                    'base': e.get('nom'), 'titre': ch.get({'techniques': 'f-nom', 'esprits': 'p-nom', 'totems': 'p-nom', 'personnages': 'cp-nom',
+                    'base': nom_, 'titre': ch.get({'techniques': 'f-nom', 'esprits': 'p-nom', 'totems': 'p-nom', 'personnages': 'cp-nom',
                                                           'tenues': 'ct-nom', 'armures': 'ca-nom', 'objets': 'oj-nom-copie'}.get(e.get('onglet') or 'techniques', ''))
-                                                   or e.get('nom'), 'date': e.get('date'),
+                                                   or nom_, 'date': e.get('date'),
                     'textures': len(e.get('textures') or {}), 'materiaux': len(e.get('coulMat') or {}),
                     'teintes': len(e.get('teinteSom') or {}) + len(e.get('teintePtl') or {}), 'remplacements': len(e.get('recette') or []),
                     'couleurs': vus[:4], 'cree': e.get('cree')})       # (22/11) création faite depuis ce projet
@@ -1468,12 +1810,14 @@ def _creation_stats(mod, code):
         if k is None:
             return None
         jeu = st.jeu_technique(CFG['data_dir'], reg[k]['base'])
+        # (25/11) copie d'une technique de mod (Tiger fang) : l'élément du mod est sa valeur « d'origine » et reste écrit
+        em = reg[k].get('element_mod')
 
         def sauver():
             json.dump(reg, open(f, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
             toml = os.path.join(ICI, 'sortie', 'MesTechniques', 'content', 'techniques', k + '.toml')
-            st.appliquer_technique(toml, st.lignes_technique(reg[k].get('stats'), jeu))
-        return 'technique', reg, k, reg[k], jeu, sauver
+            st.appliquer_technique(toml, st.lignes_technique(dict({'element': em} if em else {}, **(reg[k].get('stats') or {})), jeu))
+        return 'technique', reg, k, reg[k], (dict(jeu, element=em) if em else jeu), sauver
     if mod == 'MesEsprits':
         sortie = os.path.join(ICI, 'sortie', 'MesEsprits')
         reg = esprits.registre(sortie)
@@ -1904,9 +2248,11 @@ def liste_creations():
         inst = os.path.join(jeu, 'MesTechniques', 'content', 'techniques', os.path.basename(f))
         installe = os.path.isfile(inst) and open(inst, 'rb').read() == open(f, 'rb').read() and a_jour('MesTechniques')
         for x in t.get('technique') or []:
+            e_t = next((e for e in reg_t.values() if e.get('key') == x.get('key')), None) or {'stats': 1}
             out.append({'genre': 'technique', 'mod': 'MesTechniques', 'nom': ((x.get('text') or {}).get(langue.code()) or (x.get('text') or {}).get('fr') or {}).get('name') or x.get('name'),
-                        'code': x.get('key'), 'base': x.get('base'), 'onglet': 'techniques', 'installe': installe,
-                        'attente': 'stats' not in (next((e for e in reg_t.values() if e.get('key') == x.get('key')), None) or {'stats': 1}),
+                        # (25/11) copie d'une technique de mod : rouverte sur la technique du mod (Tiger fang), pas sur sa base
+                        'code': x.get('key'), 'base': e_t.get('source') or x.get('base'), 'onglet': 'techniques', 'installe': installe,
+                        'attente': 'stats' not in e_t,
                         'date': os.path.getmtime(f)})
     # dans le jeu seulement (installées avant, plus dans sortie : « Installer » les remplacerait)
     noms_sortie = {os.path.basename(x) for x in glob.glob(os.path.join(dos, '*.toml'))}
@@ -1927,20 +2273,33 @@ def liste_creations():
         txt_inst = open(inst, encoding='utf-8').read() if os.path.isfile(inst) else ''
         reg_e = esprits.contenu(CFG)
         txt_sortie = open(f, encoding='utf-8').read()
+        try:                                     # (28/11) installé = SA ligne du registre identique dans le jeu (voir _reg)
+            reg_ej = json.load(open(os.path.join(jeu, 'MesEsprits', 'outil_esprits.json'), encoding='utf-8'))
+        except (OSError, ValueError):
+            reg_ej = None
         for m in re.finditer(r'^# (.+?) : copie de (.+?) \((\w+)\), code (\w+)', open(f, encoding='utf-8').read(), re.M):
             out.append({'genre': 'totem' if m.group(4).startswith('a') else 'esprit', 'mod': 'MesEsprits', 'nom': m.group(1),
                         'code': m.group(4), 'base': m.group(3), 'nom_base': m.group(2),
-                        'onglet': 'totems' if m.group(4).startswith('a') else 'esprits', 'installe': txt_inst == txt_sortie and a_jour('MesEsprits'),     # (15/11) fichier identique : une technique liée changée = à réinstaller
+                        'onglet': 'totems' if m.group(4).startswith('a') else 'esprits', 'installe': (reg_ej.get(m.group(4)) == reg_e.get(m.group(4)) and m.group(4) in reg_ej) if reg_ej is not None and m.group(4) in reg_e
+                                    else txt_inst == txt_sortie and a_jour('MesEsprits'),     # (15/11) fichier identique : une technique liée changée = à réinstaller
                         'liee': ((reg_e.get(m.group(4)) or {}).get('technique_liee') or {}).get('nom'),
                         'attente': m.group(4) in reg_e and 'stats' not in reg_e[m.group(4)],
                         'date': os.path.getmtime(f)})
+    try:                                         # (28/11) installé = SA ligne du registre identique dans le jeu (voir _reg)
+        reg_pj = json.load(open(os.path.join(jeu, 'MesPersonnages', 'outil_personnages.json'), encoding='utf-8'))
+    except (OSError, ValueError):
+        reg_pj = None
     for e in copies_persos.contenu(CFG):         # (15/11/2026) copies de personnages
         f_j = os.path.join(jeu, 'MesPersonnages', 'content', 'characters', 'mes_personnages.toml')
         f_s = os.path.join(ICI, 'sortie', 'MesPersonnages', 'content', 'characters', 'mes_personnages.toml')
         # (21/11) copies de TENUE aussi rangées ici : pas de « tete_origine », leur « base » (avant : accueil planté)
-        out.append({'genre': 'personnages', 'mod': 'MesPersonnages', 'nom': e['nom'], 'code': e['code'], 'base': e.get('tete_origine') or e.get('base'), 'nom_base': e.get('nom_origine'),
+        # (28/11, banc d'essai) joueur fait depuis une TENUE ou un ACCESSOIRE (onglet Tenues) : « Modifier » rouvrait l'onglet
+        # Personnages avec le code du porteur ; maintenant la tenue / l'accessoire recoloré (source_jeu, gardé depuis le 28/11)
+        _src = e.get('source_jeu') if e.get('genre') in ('tenue', 'objet') else None
+        out.append({'genre': 'personnages', 'mod': 'MesPersonnages', 'nom': e['nom'], 'code': e['code'], 'base': _src or e.get('tete_origine') or e.get('base'), 'nom_base': e.get('nom_origine'),
                     'cle': e['cle'], 'nb_coups': len(e.get('coups') or []), 'attente': 'stats' not in e and bool(e.get('tete_origine')),
-                    'onglet': 'personnages', 'installe': os.path.isfile(f_j) and os.path.isfile(f_s) and open(f_j, 'rb').read() == open(f_s, 'rb').read() and a_jour('MesPersonnages'),
+                    'onglet': 'tenues' if _src else 'personnages', 'copie': e.get('genre'), 'installe': (e['cle'] in reg_pj and reg_pj[e['cle']] == {k: v for k, v in e.items() if k != 'cle'}) if reg_pj is not None
+                    else os.path.isfile(f_j) and os.path.isfile(f_s) and open(f_j, 'rb').read() == open(f_s, 'rb').read() and a_jour('MesPersonnages'),
                     'date': datetime.datetime.fromisoformat(e['date']).timestamp() if e.get('date') else 0})
     # (21/11) tenues à équiper, objets et armures : créés et installables, mais absents de « Mes créations » (avant : une
     # tenue ou un objet fait n'apparaissait nulle part, ni bouton « Installer » dans l'accueil). Installé = registre identique.
@@ -1950,8 +2309,14 @@ def liste_creations():
             reg = json.load(open(f_s, encoding='utf-8')) if os.path.isfile(f_s) else {}
         except (OSError, ValueError):
             reg = {}
-        inst = bool(reg) and os.path.isfile(f_j) and open(f_j, 'rb').read() == open(f_s, 'rb').read() and a_jour(mod)
-        return reg, inst
+        # (28/11, grand test) installée = SA ligne du registre est la même dans le jeu (l'installation copie tout le mod, registre
+        # compris). Avant : registre ENTIER identique + mod entier à jour -> une seule nouvelle création non installée faisait
+        # retomber toutes les autres (déjà dans le jeu) hors de « Terminées » (« Installées dans le jeu : 0 »)
+        try:
+            reg_j = json.load(open(f_j, encoding='utf-8')) if os.path.isfile(f_j) else {}
+        except (OSError, ValueError):
+            reg_j = {}
+        return reg, (lambda cle: cle in reg_j and reg_j[cle] == reg.get(cle))
     def _date(e):
         try:
             return datetime.datetime.fromisoformat(e['date']).timestamp()
@@ -1960,15 +2325,17 @@ def liste_creations():
     reg, inst = _reg('MesTenues', 'outil_tenues.json')
     for cle, e in reg.items():
         out.append({'genre': 'tenues', 'mod': 'MesTenues', 'nom': e.get('nom') or cle, 'code': e.get('modele'), 'base': e.get('source'),
-                    'nom_base': e.get('nom_origine'), 'onglet': 'tenues', 'installe': inst, 'date': _date(e)})
+                    'nom_base': e.get('nom_origine'), 'onglet': 'tenues', 'installe': inst(cle), 'date': _date(e),
+                    'cle': cle, 'attenteCosm': not e.get('cosmetique_ok') and not inst(cle)})   # (27/11, muku) installée = Terminées     # (26/11) étape « Cosmétique » (prix, icône)
     reg, inst = _reg('MesObjets', 'outil_objets.json')
     for cle, e in reg.items():
         out.append({'genre': 'objets', 'mod': 'MesObjets', 'nom': e.get('nom') or cle, 'code': cle, 'base': e.get('base'),
-                    'nom_base': e.get('nom_origine'), 'onglet': 'objets', 'installe': inst, 'date': _date(e)})
+                    'nom_base': e.get('nom_origine'), 'onglet': 'objets', 'installe': inst(cle), 'date': _date(e),
+                    'cle': cle, 'attenteCosm': not e.get('cosmetique_ok') and not inst(cle)})   # (27/11, muku) installée = Terminées     # (26/11) étape « Cosmétique » (prix)
     reg, inst = _reg('MesEsprits', 'outil_armures.json')
     for cle, e in reg.items():
         out.append({'genre': 'armures', 'mod': 'MesEsprits', 'nom': e.get('nom') or cle, 'code': e.get('modele'), 'base': e.get('armure'),
-                    'nom_base': e.get('armure'), 'onglet': 'armures', 'installe': inst, 'date': _date(e)})
+                    'nom_base': e.get('armure'), 'onglet': 'armures', 'installe': inst(cle), 'date': _date(e)})
     # (15/11/2026) maillots ajoutés au mod (sortie/MesMaillots, « Ajouter au mod » de l'onglet Maillots)
     s_mm =os.path.join(CFG['outil_dir'], 'sortie', 'MesMaillots')
     if os.path.isfile(os.path.join(s_mm, 'mod.toml')):
@@ -1985,6 +2352,7 @@ def liste_creations():
                 continue
             out.append({'genre': 'maillots', 'mod': 'MesMaillots', 'nom': m['nom'], 'code': m['id'], 'base': m.get('code'), 'nom_base': m.get('nom_base'),
                         'onglet': 'maillots', 'installe': bool(t_j) and t_j == t_s and a_jour('MesMaillots'), 'maillot': m,
+                        'attenteCosm': not m.get('cosmetique_ok') and not (bool(t_j) and t_j == t_s and a_jour('MesMaillots')),   # (27/11) installé = Terminées     # (26/11) étape « Cosmétique » (prix, icône, emblème)
                         'vignette': m.get('icone') or (m.get('images') or {}).get('haut_dom'),
                         'date': os.path.getmtime(os.path.join(s_mm, 'mod.toml'))})
     for x in out:                              # image gardée à « Créer le mod » (projets/vignettes/<code neuf>.jpg)
@@ -1992,6 +2360,17 @@ def liste_creations():
         if os.path.isfile(f):
             import base64
             x.setdefault('vignette', 'data:image/jpeg;base64,' + base64.b64encode(open(f, 'rb').read()).decode())
+    # (28/11, grand test en anglais : « Item · copy of Challenger du tournoi ») nom de l'ORIGINAL dans la langue de l'Atelier
+    # (le registre garde celui du jour de la création, en français) ; armures : « Armure · Pégase » au lieu du code
+    for x in out:
+        o_, b_ = x.get('onglet'), x.get('base')
+        try:
+            v_ = (PAR_CODE.get(b_) if o_ == 'techniques' else PERSO_CODE.get(b_) if o_ in ('esprits', 'totems')
+                  else JEU_CODE.get((o_, b_)) if o_ in ('tenues', 'armures', 'personnages', 'objets', 'maillots') else None) or {}
+        except (TypeError, NameError):
+            v_ = {}
+        if v_.get('nom') and v_['nom'] != b_:
+            x['nom_base'] = v_['nom']
     out.sort(key=lambda x: x['date'], reverse=True)
     return out
 
@@ -2048,6 +2427,39 @@ def icone_esprit(code):
     return _png_icone('icones_esprits', f, code)
 
 
+def peau_perso(cle='', tete='', code=''):
+    """(26/11/2026) couleur de peau du corps (bras, jambes, cou) : {'origine': '#RRGGBB' de l'original (chara_model col. 16),
+    'copie': celle réglée sur la copie ou None, 'base': code du personnage}. cle = une copie, tete = code d'une tête de
+    l'onglet Personnages, code = un personnage du jeu"""
+    D = CFG['data_dir']
+    e = copies_persos.registre(CFG).get(cle) if cle else None
+    base = (e or {}).get('base') or code or None
+    if not base and tete:
+        t = JEU_CODE.get(('personnages', tete))
+        p = copies_persos.personnage_de_tete(D, t['chemin']) if t else None
+        base = p['code'] if p else None
+    if not base:
+        return {'ok': False, 'erreur': 'personnage inconnu'}
+    p = (e or {}).get('peau')
+    return {'ok': True, 'base': base, 'origine': copies_persos.peau_origine(D, base), 'copie': ('#' + p) if p else None}
+
+
+def morphologie_perso(tete='', cree=''):
+    """(27/11) choix de la morphologie d'un nouveau joueur : {'liste': corps communs du jeu, 'origine': n° du corps de
+    l'original, 'copie': celui de la copie « cree » (code de la création, « Modifier ») ou None}"""
+    D = CFG['data_dir']
+    e = next((x for x in copies_persos.registre(CFG).values() if cree and str(x.get('code')) == str(cree)), None)
+    base = (e or {}).get('base')
+    if not base and tete:
+        t = JEU_CODE.get(('personnages', tete))
+        p = copies_persos.personnage_de_tete(D, t['chemin']) if t else None
+        base = p['code'] if p else None
+    if not base:
+        return {'ok': False, 'erreur': 'personnage inconnu'}
+    return {'ok': True, 'base': base, 'origine': copies_persos.corps_origine(D, base), 'copie': (e or {}).get('corps'),
+            'liste': copies_persos.morphologies(D)}
+
+
 def copie_textures(cle):
     """(15/11/2026) textures recolorées d'une copie de personnage (sa tête), pour l'aperçu du tableau des compétences :
     {nom de la texture d'origine: url du PNG}. Les noms de la copie portent le code neuf : on remet celui d'origine."""
@@ -2072,6 +2484,31 @@ def copie_textures(cle):
 
 
 _POSES = {}
+
+
+_GARDIENS = {}
+
+
+def maillot_gardien(code):
+    """(26/11) LU : gamedata/character/uniform_config, m_UniformModelInfoList (colonnes par leur nom) = maillot des joueurs de
+    champ (uniformFielderModelIdCrc = crc32 de « <coupe>_10 ») -> maillot du GARDIEN (uniformKeeperModelIdCrc). Ex. u080101 -> u080151"""
+    import zlib as _z, struct as _s, glob as _g
+    code = os.path.basename(str(code or ''))
+    if code not in _GARDIENS:
+        r = None
+        try:
+            from moteur import stats as _st
+            f = sorted(_g.glob(os.path.join(CFG['data_dir'], 'common', 'gamedata', 'character', 'uniform_config_*.cfg.bin')))[-1]
+            R = _st._rdbn_lignes(open(f, 'rb').read(), 'm_UniformModelInfoList', ['uniformFielderModelIdCrc', 'uniformKeeperModelIdCrc'])
+            P = copies_tenues._parties(CFG['data_dir'])['clothes']
+            par_crc = {_z.crc32(k.encode()): k for k in P}
+            ligne = R.get(_z.crc32((code + '_10').encode()))
+            g = ligne and par_crc.get(ligne['uniformKeeperModelIdCrc'])
+            r = g[:-3] if g and g.endswith('_10') else None
+        except Exception as ex:
+            print('maillot du gardien :', ex)
+        _GARDIENS[code] = r
+    return {'ok': bool(_GARDIENS[code]), 'gardien': _GARDIENS[code]}
 
 
 def pose_joueur(code, paquet='p010', clip=1):
@@ -2278,7 +2715,9 @@ class Gestion(BaseHTTPRequestHandler):
                 l, _ = copies_tenues.porteurs(CFG, e)
                 vet, _, _ = copies_outfits.vetement_de(CFG, e)
                 return self._envoyer(200, {'porteurs': l, 'accessoire': False, 'vetement': vet, 'corps': copies_tenues.corpulences(CFG, e),
-                                          'corps_tenue': copies_outfits.corps_tenue(CFG, e) if vet else []})
+                                          'corps_tenue': copies_outfits.corps_tenue(CFG, e) if vet else [],
+                                          'chaussures': copies_outfits.chaussures_de(CFG['data_dir'], vet) if vet else None,
+                                          'kit_jeu': copies_outfits.kit_du_jeu(CFG['data_dir'], vet) if vet else None})
             if u.path == '/api/coups':                   # (15/11/2026) techniques d'une copie de personnage (hub)
                 return self._envoyer(200, infos_coups(q.get('cle', [''])[0]))
             if u.path == '/api/portrait':                 # (15/11/2026) tableau des compétences : portrait, icône d'esprit, tête recolorée
@@ -2287,10 +2726,21 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/icone_esprit':
                 f = icone_esprit(q.get('code', [''])[0])
                 return self._fichier(f) if f else self._envoyer(404, {'erreur': "pas d'icône"})
+            if u.path == '/api/maillot_gardien':          # (26/11) maillot du gardien d'un maillot (boutique : joueurs habillés)
+                return self._envoyer(200, maillot_gardien(q.get('code', [''])[0]))
+            if u.path == '/api/synergies_listes':        # (27/11) création d'une synergie : effets du jeu + personnages (conditions)
+                from moteur import synergies
+                lg = q.get('langue', ['fr'])[0]
+                return self._envoyer(200, {'ok': True, 'effets': [x for x in synergies.catalogue_effets(CFG['data_dir']) if not x['essai']],
+                                           'joueurs': synergies.joueurs(CFG['data_dir'], lg if lg in ('fr', 'en', 'es') else 'fr')})
             if u.path == '/api/pose_joueur':
                 return self._envoyer(200, pose_joueur(q.get('code', [''])[0], q.get('paquet', ['p010'])[0], q.get('clip', ['1'])[0]))
             if u.path == '/api/copie_textures':
                 return self._envoyer(200, copie_textures(q.get('cle', [''])[0]))
+            if u.path == '/api/peau_perso':              # (26/11) peau des bras / jambes : celle de l'original (chara_model col. 16) et de la copie
+                return self._envoyer(200, peau_perso(q.get('cle', [''])[0], q.get('tete', [''])[0], q.get('code', [''])[0]))
+            if u.path == '/api/morphologie_perso':       # (27/11) morphologies d'un nouveau joueur (corps du jeu)
+                return self._envoyer(200, morphologie_perso(q.get('tete', [''])[0], q.get('cree', [''])[0]))
             if u.path == '/api/technique_liee':          # (15/11/2026) technique liée d'une copie d'esprit (hub)
                 return self._envoyer(200, infos_technique_liee(q.get('code', [''])[0]))
             if u.path == '/api/copies_esprits':
@@ -2442,6 +2892,19 @@ class Gestion(BaseHTTPRequestHandler):
         try:
             n = int(self.headers.get('Content-Length', 0))
             demande = json.loads(self.rfile.read(n).decode('utf-8')) if n else {}
+            if u.path == '/api/exporter' and demande.get('action') != 'retirer' and '~' in str(demande.get('code')) \
+                    and entree_mod(str(demande.get('code'))) is not None:
+                # (25/11, retour de danifdez : Tiger fang) technique d'un mod qui ne fait que remplacer des modèles de la scène
+                # du jeu par des modèles .glb : copie possible (base = la technique du jeu, modèle du mod recopié sous un code
+                # neuf : moteur/copie_modele_mod.py) ; sinon la phrase dit pourquoi
+                from moteur import copie_modele_mod as _cmm
+                t_ = technique(demande['code'])
+                d_ = details(demande['code'])
+                ok_, raison_ = _cmm.possible(CFG, t_, d_) if t_.get('base') else (False, None)
+                if not ok_:
+                    return self._envoyer(200, {'ok': False, 'erreur': raison_ or 'Cet élément vient d’un mod : la copie n’est pas '
+                                                                                  'encore possible (aperçu et recoloration seulement).'})
+                return self._envoyer(200, export.exporter(CFG, dict(demande, code=t_['base']), d_))
             if u.path in ('/api/copie_outfit', '/api/copie_tenue', '/api/copie_objet', '/api/copie_objet_jeu', '/api/copie_armure',
                           '/api/copie_personnage', '/api/exporter', '/api/exporter_personnage') and demande.get('action') != 'retirer' \
                     and '~' in str(demande.get('code')) and entree_mod(str(demande.get('code'))) is not None:
@@ -2510,6 +2973,10 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, {'ok': True, 'langue': l_})
             if u.path == '/api/exporter':
                 return self._envoyer(200, export.exporter(CFG, demande, details(demande['code'])))
+            if u.path == '/api/cosmetique':              # (26/11) étape « Cosmétique » des objets, tenues, maillots
+                return self._envoyer(200, cosmetique_infos(str(demande.get('mod')), str(demande.get('code'))) if demande.get('lire') else regler_cosmetique(demande))
+            if u.path == '/api/couleurs_apparition':     # (25/11) couleurs de l'apparition d'un esprit guerrier
+                return self._envoyer(200, couleurs_apparition(demande))
             if u.path == '/api/prereglages':              # (15/11/2026) garder / supprimer un préréglage
                 L = [p for p in lire_prereglages() if p.get('nom') != (demande.get('prereglage') or {}).get('nom', demande.get('nom'))]
                 if demande.get('action') == 'garder':
@@ -2585,7 +3052,27 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/banniere':
                 t = PAR_CODE.get(demande.get('base', ''))
                 telop = techniques.lire_cinematique(CFG['data_dir'], t['cinematique'])['telop'] if t else demande.get('base')
-                return self._envoyer(200, export.enregistrer_banniere(CFG, demande['nom'], demande['image'], telop or demande.get('base')))
+                r_ban = export.enregistrer_banniere(CFG, demande['nom'], demande['image'], telop or demande.get('base'))
+                # (25/11, retour de muku : « j'ai changé la bannière mais sur la preview ça ne change pas ») l'aperçu prend d'abord
+                # cache/bannieres_apercu/<projet>.png (telop_apercu, faite à la création avec le nom) : les projets liés à cette
+                # copie reçoivent la même image, et le lecteur du jeu ouvert sur elle la relit
+                if r_ban.get('ok') and r_ban.get('key'):
+                    for f_pj in glob.glob(os.path.join(ICI, 'projets', '*.json')):
+                        try:
+                            cr = (json.load(open(f_pj, encoding='utf-8')) or {}).get('cree') or {}
+                        except (OSError, ValueError, AttributeError):
+                            continue
+                        if cr.get('mod') == 'MesTechniques' and str(cr.get('code')) == r_ban['key']:
+                            export.ecrire_png_banniere(demande['image'], os.path.join(CACHE, 'bannieres_apercu', os.path.basename(f_pj)[:-5] + '.png'))
+                    X = _natif()
+                    dos = os.path.join(os.path.dirname(X.__file__), 'scenes', 'tech_' + r_ban['key']) if X is not None else None
+                    if dos and os.path.isfile(os.path.join(dos, 'tech.json')):
+                        try:
+                            X._ecrire_telop(dos, r_ban['key'], json.load(open(os.path.join(dos, 'tech.json'), encoding='utf-8')).get('telop'), sys.modules[__name__])
+                            natif_commande('telop')
+                        except Exception as ex:
+                            print('bannière du lecteur natif :', ex)
+                return self._envoyer(200, r_ban)
             if u.path == '/api/vignette':                # comparaison aux vidéos officielles : image de l'Atelier (JPEG) -> cache
                 import base64, re as _re
                 code = _re.sub(r'[^a-z0-9_]', '', demande.get('code', ''))
@@ -2611,7 +3098,7 @@ class Gestion(BaseHTTPRequestHandler):
                     return self._envoyer(200, {'actif': False})
                 dos = os.path.join(os.path.dirname(X.__file__), 'scenes', 'tech_' + os.path.basename(str(demande['technique'])))
                 if os.path.isdir(dos):
-                    json.dump({k: demande.get(k) or ([] if k == 'caches' else {}) for k in ('caches', 'couleurs', 'sommets', 'particules', 'lumieres')},
+                    json.dump({k: demande.get(k) or ([] if k in ('caches', 'fil') else {}) for k in ('caches', 'couleurs', 'sommets', 'particules', 'lumieres', 'auras', 'fil')},
                               open(os.path.join(dos, 'options.json'), 'w', encoding='utf-8'))
                 return self._envoyer(200, natif_commande('options'))
             if u.path == '/api/natif':                   # lecteur natif (C++ / Direct3D 11) : export de la scène + lancement
@@ -2642,6 +3129,8 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/coups':                   # (15/11/2026) choisir les techniques d'une copie de personnage
                 return self._envoyer(200, copies_persos.choisir_coups(CFG, demande.get('cle'), demande.get('coups'),
                                                                       coups.catalogue(CFG['data_dir'], cache_txt()), coups.mes_coups(CFG)))
+            if u.path == '/api/peau_copie':              # (26/11) peau des bras / jambes d'une copie de personnage déjà créée
+                return self._envoyer(200, copies_persos.regler_peau(CFG, demande.get('cle'), demande.get('peau')))
             if u.path == '/api/technique_liee':          # (15/11/2026) « c'est la technique de cet esprit »
                 t = demande.get('technique')
                 if t:
@@ -2679,6 +3168,8 @@ class Gestion(BaseHTTPRequestHandler):
                 return self._envoyer(200, esprits.exporter(CFG, demande, PERSO_CODE[demande['code']]))
             if u.path == '/api/installer':
                 return self._envoyer(200, export.installer(CFG, demande.get('mod', export.MOD_ID), forcer=bool(demande.get('forcer'))))
+            if u.path == '/api/enregistrer_export':      # (25/11/2026) ⬇ PNG / ⬇ Modèle (.glb) : web/export_modele.js
+                return self._envoyer(200, enregistrer_export(demande))
             if u.path == '/api/ouvrir_maillots':
                 if not os.path.isfile(MAILLOTS):
                     return self._envoyer(200, {'ok': False, 'erreur': 'Atelier Maillots introuvable : ' + MAILLOTS})

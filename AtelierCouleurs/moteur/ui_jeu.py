@@ -107,13 +107,15 @@ def _dossier(cache_dir, *p):
     return d
 
 
-def zone(cfg, cache_dir, planche, nom):
-    """chemin du PNG d'une zone nommée (fait une fois)"""
+def zone(cfg, cache_dir, planche, nom, langue='fr'):
+    """chemin du PNG d'une zone nommée (fait une fois) ; (25/11) langue : planche de cette langue (marques d'évolution
+    gaiji_game2 : « 2 » en français, « +1 » en anglais)"""
     planche, nom = os.path.basename(planche), os.path.basename(nom)
-    f = os.path.join(_dossier(cache_dir, 'zone', planche), nom + '.png')
+    langue = langue if langue in LANGUES else 'fr'
+    f = os.path.join(_dossier(cache_dir, 'zone', planche if langue == 'fr' else planche + '_' + langue), nom + '.png')
     if os.path.exists(f):
         return f
-    src = trouver(cfg, planche)
+    src = trouver(cfg, planche, langue)
     if not src:
         return None
     tailles, zones, g = lire_planche(src)
@@ -184,6 +186,8 @@ def servir(cfg, cache_dir, chemin):
     try:
         if p[0] == 'zone' and len(p) == 3:
             return zone(cfg, cache_dir, p[1], p[2][:-4] if p[2].endswith('.png') else p[2])
+        if p[0] == 'zone' and len(p) == 4:            # (25/11) /ui_jeu/zone/<planche>/<langue>/<nom>.png
+            return zone(cfg, cache_dir, p[1], p[3][:-4] if p[3].endswith('.png') else p[3], p[2])
         if p[0] == 'img' and len(p) == 3:
             return image(cfg, cache_dir, p[1], p[2].split('.')[0])
         if p[0] == 'fond.png':

@@ -627,11 +627,15 @@ def ecrire_images(chemin, images_, effets=None):
             o.u32(k, len(A.get('pieces') or [])); o.u32(*(A.get('pieces') or []))
             mats = A.get('mats') or []
             o.u32(len(mats) // 16); o.f64(*mats)
-            app = bool(sta) and (sta.get('acteur') == A['acteur'] or (str(sta.get('acteur')).startswith('b000001') and str(A['acteur']).startswith('b000001')))
+            # (25/11) une aura par personnage (liste « statuts » de la page ; ancienne page : « statut » seul)
+            L = st.get('statuts') if st.get('statuts') is not None else ([sta] if sta else [])
+            sa = next((x for x in L if x.get('acteur') == A['acteur']), None) or next(
+                (x for x in L if str(x.get('acteur')).startswith('b000001') and str(A['acteur']).startswith('b000001')), None)
+            app = bool(sa)
             o.u32(1 if app else 0)
             if app:
-                o.f32(*(list(sta.get('col') or [1, 1, 1])[:3] + [1.0]), *(list(sta.get('rim') or [0, 0, 0])[:3] + [float(sta.get('rim_w', 1.0))]),
-                      float(sta.get('pow') or 1), 0, 0, 0)
+                o.f32(*(list(sa.get('col') or [1, 1, 1])[:3] + [1.0]), *(list(sa.get('rim') or [0, 0, 0])[:3] + [float(sa.get('rim_w', 1.0))]),
+                      float(sa.get('pow') or 1), 0, 0, 0)
         pieds = [p for p in (st.get('pieds') or []) if len(p) == 12]
         o.u32(len(pieds))
         for p in pieds:
@@ -645,7 +649,7 @@ def ecrire_images(chemin, images_, effets=None):
 # web/vue3d.js et web/app.js) : la page n'a plus rien à calculer. Ici, une fois par technique (gardé dans
 # scenes/tech_<code>), ce que la page prépare au chargement : données d'animation (/api/anim), pièces dans l'ordre de la
 # vue (V.pieces), émetteurs de particules, lumières ponctuelles, personnages, réglages de lumière des plans.
-VERSION_TECH = 37           # (30 : 17/11/2026, techniques des mods recomposées par VRFW) à changer à chaque modification de tech.json / effets.bin (la technique est alors refaite)
+VERSION_TECH = 39           # (38-39 : 25/11/2026, modèle d'acteur remplacé par un mod, Tiger fang ; textures « <code>~<mod> ») (30 : 17/11/2026, techniques des mods recomposées par VRFW) à changer à chaque modification de tech.json / effets.bin (la technique est alors refaite)
 VERSION_SCENE = 5          # décor seul (scene.bin) : ne dépend plus des réglages de la technique
 SRV = None                 # module du serveur de l'Atelier (posé par serveur.py ; sinon importé)
 

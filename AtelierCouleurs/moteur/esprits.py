@@ -26,6 +26,16 @@ def slug(t):
     return re.sub(r'[^a-z0-9]+', '_', t).strip('_')[:24] or 'copie'
 
 
+def cle_libre(reg, cle, nom, meme=None):
+    """(28/11, banc d'essai) le slug est coupé à 24 caractères : « TEST objets eq_sh110001 A » et « … B » donnaient la MÊME clé
+    et la 2e création écrasait la 1re sans rien dire. Clé prise par une création d'un AUTRE nom (ou d'une autre base : meme(e)
+    faux) -> clé neuve « <clé>_2 », « _3 »… ; même nom et même base = la même création (refaite), comme avant"""
+    k, n = cle, 2
+    while k in reg and not (reg[k].get('nom') == nom and (meme is None or meme(reg[k]))):
+        k = '%s_%d' % (cle, n); n += 1
+    return k
+
+
 # ------------------------------------------------------------------ renommage (généralisé depuis Mukuro_atelier/ecrire_michael.py)
 def remplacer_crc(b, noms, anc, neuf):
     """remplace les crc32 de chaque nom contenant anc par celui du nom avec neuf"""
@@ -408,10 +418,36 @@ def env_scene_copie(cfg, neuf, scene, tags, snd, titre):
         + (['tag_words = { set = %s }' % f(tags)] if g_tag != 0 else []) + (['snd_tag_words = { set = %s }' % f(snd)] if g_snd != 0 else []) + ['']
 
 
+def plans_apparition(cfg, registre):
+    """(25/11, sorti de ecrire_vrfw) scène d'invocation À PART de chaque copie : {code: {scene, ev, tag, son, totem_don}}.
+    scene = la scène du jeu copiée (celle de l'élément choisi / empruntée, sinon celle de l'original), ev = son numéro neuf
+    (id_scene_copie, dans l'ordre des codes : le même pour le serveur et pour ecrire_vrfw). Totem : pas de scène à part."""
+    pris, out = set(), {}
+    for neuf, c in sorted(registre.items()):
+        anc, dossier = c['base'], c['dossier']
+        inv = c.get('invocation') or {}
+        s_inv, tag_inv, son_inv = None, neuf, anc
+        # (23/11) TOTEM : apparition empruntée à un autre totem = ses gestes et ses sons dans les deux scènes de ev83_00010
+        # (mots de la scène : copie -> totem choisi), pas de scène à part (la scène d'invocation des totems a deux parties)
+        totem_don = inv.get('esprit') if est_totem(c) and inv.get('etat') == 'emprunt' and inv.get('scene') == TOTEM_SCENE else None
+        if totem_don:
+            pass
+        elif inv.get('etat') == 'emprunt' and inv.get('scene') and inv.get('esprit'):
+            s_inv, tag_inv, son_inv = inv['scene'], inv['esprit'], inv['esprit']
+        elif dossier == '_keshin' and str(c.get('technique', '')).startswith('wk'):
+            s_inv = invocation_du_jeu(cfg['data_dir'], c['technique'])[1]
+            if s_inv and s_inv not in (c.get('scenes') or []):     # ses animations ne sont pas dans cette scène : l'original
+                tag_inv = anc
+        out[neuf] = {'scene': s_inv, 'ev': id_scene_copie(cfg, s_inv[:4], neuf, pris) if s_inv else None,
+                     'tag': tag_inv, 'son': son_inv, 'totem_don': totem_don}
+    return out
+
+
 def ecrire_vrfw(cfg, sortie, registre):
     ch, tech, txt, shop = [], [], [], []
     scenes, bases = {}, {}
-    pris, env_copies = set(), []                   # (23/11) scènes d'invocation à part
+    env_copies = []                                # (23/11) scènes d'invocation à part
+    plans, effets_ap = plans_apparition(cfg, registre), {}    # (25/11) + couleurs de l'apparition
     for k, (neuf, c) in enumerate(sorted(registre.items())):
         anc, dossier = c['base'], c['dossier']
         ch += ['[[character]]', 'name = %s' % _q('mesesprits_' + c['slug']), 'based_on = %s' % _q(anc), 'battle = false', '',
@@ -429,24 +465,24 @@ def ecrire_vrfw(cfg, sortie, registre):
         if c.get('stats'):
             from . import stats as _st
             cel_lie += _st.cellules_esprit(c['stats'], _st.jeu_esprit(cfg['data_dir'], c['technique']))
-        inv = c.get('invocation') or {}
-        # (23/11) INVOCATION : sa propre scène (copie de celle de son élément si elle a été changée, sinon de celle de
-        # l'original), jamais la scène partagée du jeu
-        s_inv, tag_inv, son_inv = None, neuf, anc
-        # (23/11) TOTEM : apparition empruntée à un autre totem = ses gestes et ses sons dans les deux scènes de ev83_00010
-        # (mots de la scène : copie -> totem choisi), pas de scène à part (la scène d'invocation des totems a deux parties)
-        totem_don = inv.get('esprit') if est_totem(c) and inv.get('etat') == 'emprunt' and inv.get('scene') == TOTEM_SCENE else None
-        if totem_don:
-            pass
-        elif inv.get('etat') == 'emprunt' and inv.get('scene') and inv.get('esprit'):
-            s_inv, tag_inv, son_inv = inv['scene'], inv['esprit'], inv['esprit']
-        elif dossier == '_keshin' and str(c.get('technique', '')).startswith('wk'):
-            s_inv = invocation_du_jeu(cfg['data_dir'], c['technique'])[1]
-            if s_inv and s_inv not in (c.get('scenes') or []):     # ses animations ne sont pas dans cette scène : l'original
-                tag_inv = anc
+        # (23/11) INVOCATION : sa propre scène (plans_apparition) ; (25/11) + COULEURS DE L'APPARITION enregistrées pour cette
+        # scène : livrée avec les noms des objets recolorés remplacés sur place + leurs [[recolor]] (méthode de Zan)
+        pl_ap = plans.get(neuf) or {}
+        s_inv, tag_inv, son_inv, totem_don = pl_ap.get('scene'), pl_ap.get('tag', neuf), pl_ap.get('son', anc), pl_ap.get('totem_don')
         if s_inv:
-            ev_inv = id_scene_copie(cfg, s_inv[:4], neuf, pris)
-            if copier_scene(cfg, sortie, s_inv, ev_inv):
+            ev_inv = pl_ap['ev']
+            ap = c.get('couleurs_apparition') or {}
+            ap_ok = bool(ap) and ap.get('scene') == s_inv and ap.get('ev') == ev_inv
+            if ap_ok:
+                from .export import _livrer_scene
+                src_ = os.path.join(cfg['data_dir'], 'common', 'event_cfg')
+                ok_ = os.path.exists(os.path.join(src_, 'evt', s_inv + '.cfg.bin'))
+                if ok_:
+                    _livrer_scene(src_, sortie, s_inv, ev_inv, ap.get('remplacer') or {}, strict=True)
+                    effets_ap[neuf] = ap.get('effets') or ''
+            else:
+                ok_ = copier_scene(cfg, sortie, s_inv, ev_inv)
+            if ok_:
                 cel_lie += ', event = 0x%08X' % zlib.crc32(ev_inv.encode())
                 env_copies += env_scene_copie(cfg, ev_inv, s_inv, {neuf: tag_inv}, {neuf: son_inv}, 'invocation de %s (%s)' % (c['nom'], neuf))
             else:
@@ -537,6 +573,14 @@ def ecrire_vrfw(cfg, sortie, registre):
         'requires = ["VRFW>=0.3.0"]', 'optional = ["InazumaFantasy", "CharacterReforged"%s]' % (', "MesTechniques"' if any(
             (c.get('technique_liee') or {}).get('mod') == 'MesTechniques' for c in registre.values()) else ''),
         'conflicts = []', '']))   # (CharacterReforged : armures ; MesTechniques : technique liée faite dans l'Atelier)
+    d_eff = os.path.join(sortie, 'content', 'effects')
+    for f_ in glob.glob(os.path.join(d_eff, 'apparition_*.toml')):
+        if os.path.basename(f_)[len('apparition_'):-5] not in effets_ap:
+            os.replace(f_, f_ + '.retire')
+    for neuf_, txt_ in effets_ap.items():
+        _ecrire(os.path.join(d_eff, 'apparition_%s.toml' % neuf_), 'schema = "VRFW.effect/1"\n' + entete
+                + '# Couleurs de l\'apparition de %s (scène à part, objets recolorés : Atelier Inazuma)\n\n' % (registre[neuf_].get('nom') or neuf_)
+                + txt_.strip() + '\n')
     ecrire_bannieres(cfg, sortie, registre)
 
 
@@ -601,6 +645,13 @@ def exporter(cfg, demande, infos):
     sortie = os.path.join(cfg['outil_dir'], 'sortie', MOD_ID)
     reg = registre(sortie)
     s = slug(nom)
+    # (28/11, muku : « Modifier refait des doubles ») « Modifier » : demande['cle'] = code de LA création -> son nom interne
+    if demande.get('cle') in reg and reg[demande['cle']].get('base') == anc:
+        s = reg[demande['cle']]['slug']
+    else:                                        # (28/11) slug coupé à 24 : même slug, autre nom -> slug neuf (sinon écrasée)
+        s0, n = s, 2
+        while any(v.get('slug') == s and not (v.get('base') == anc and v.get('nom') == nom) for v in reg.values()):
+            s = '%s_%d' % (s0, n); n += 1
     neuf = next((k for k, v in reg.items() if v['slug'] == s and v['base'] == anc), None) or code_libre(cfg, dossier, reg)
     with tempfile.TemporaryDirectory() as tmp, multiprocessing.Pool(max(1, (os.cpu_count() or 2) - 1)) as pool:
         noeuds, rapport = copier_modele(cfg, anc, neuf, dossier, demande['textures'], sortie, pool, tmp)
@@ -611,7 +662,8 @@ def exporter(cfg, demande, infos):
                  'technique': technique, 'key': '%s_mesesprits_%s' % (technique[:3], s), 'scenes': scenes,
                  'date': datetime.datetime.now().isoformat(timespec='seconds'),
                  # gardés si on refait la copie (23/11 : stats et invocation aussi, avant seule la technique liée restait)
-                 **{x: reg[neuf][x] for x in ('technique_liee', 'stats', 'invocation') if reg.get(neuf, {}).get(x)}}
+                 # (25/11) + bonus / effet unique (« effets ») et couleurs de l'apparition : perdus avant quand on refaisait la copie
+                 **{x: reg[neuf][x] for x in ('technique_liee', 'stats', 'invocation', 'effets', 'couleurs_apparition') if reg.get(neuf, {}).get(x)}}
     ecrire_vrfw(cfg, sortie, reg)
     json.dump(reg, open(os.path.join(sortie, 'outil_esprits.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     rapport = ['copie %s → code neuf %s (l\'original ne change pas)' % (anc, neuf)] + ['texture ' + r for r in rapport] \

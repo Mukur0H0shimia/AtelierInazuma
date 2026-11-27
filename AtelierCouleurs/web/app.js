@@ -23,6 +23,13 @@ const ONGLETS = {
 // (21/11) éléments des techniques : le catalogue les donne en anglais (wind, fire…) -> noms du jeu en français
 const EL_FR = { wind: 'Air', fire: 'Feu', forest: 'Forêt', mountain: 'Montagne', void: 'Néant' };
 const libElement = e => (window.ATELIER_LANGUE === 'en' ? (e ? e.charAt(0).toUpperCase() + e.slice(1) : e) : EL_FR[e] || e);
+// (25/11, demande de danifdez) TYPE D'ÉVOLUTION d'une technique (skill_config growthType 0-7), LU dans le jeu
+// (soccer_common GetSkillEvoCode) : 1-3 God, 4-6 Infinity, 7 GO, 0 aucun ; marques gaiji_wlvNNN des niveaux 2 à 5 de la
+// planche gaiji_game2 de la langue (fr : 2 3 4 4X 5 / V2 V3 V4 A ∞ / N2 N3 N4 Nx GO ; en : +1… / L2…)
+const EVOL_CODES = t => t >= 1 && t <= 3 ? ['101', '102', '103', ['104', '114', '124'][t - 1], '105']
+  : t >= 4 && t <= 6 ? ['201', '202', '203', ['204', '214', '224'][t - 4], '205'] : t === 7 ? ['301', '302', '303', '304', '305'] : [];
+const nomEvol = t => (+t >= 1 && +t <= 3 ? 'God' : +t >= 4 && +t <= 6 ? 'Infinity' : +t === 7 ? 'GO' : 'Aucune');
+const marquesEvol = (t, h) => EVOL_CODES(+t).map(c => `<img class="evol-marque" src="/ui_jeu/zone/gaiji_game2/${['en', 'es'].includes(window.ATELIER_LANGUE) ? window.ATELIER_LANGUE : 'fr'}/gaiji_wlv${c}.png" alt="" style="height:${h}px" onerror="this.remove()">`).join('');
 const ONGLETS_JEU = ['maillots', 'tenues', 'armures', 'personnages', 'objets'];     // (15/11/2026) tout le jeu (moteur/jeu.py)
 const estPerso = () => E.onglet === 'esprits' || E.onglet === 'totems' || ONGLETS_JEU.includes(E.onglet);
 // E.textures[cle] = {obj, nom, info, orig: ImageData, cur: canvas, modif: bool, moyenne: [r,g,b]}
@@ -178,7 +185,7 @@ async function rendreD3D(opts) {
       camStade = stadeD3D && V._V && V._P ? { code: E.stadeCode, V: Array.from(V._V), P: Array.from(V._P),
         // ombres du soleil (cascades calculées comme le jeu) : dessinées par Direct3D avec shadow_ss du jeu
         ombres: O ? { vp: O.vp.map(m => Array.from(m)), tranches: O.tranches, dir: O.dir, biais: O.biais, taille: O.taille } : null,
-        acteurs: Object.values(acteursD3D), pieds, statut: V._statut || null,
+        acteurs: Object.values(acteursD3D), pieds, statut: V._statut || null, statuts: V._statuts || [],   // (25/11) une par personnage
         // décor caché par la cinématique (commande 0x3DB3FBEB [0], ex. galaxie de Big Bang) : stade ET ciel non dessinés
         decor: !cachees.some(p => p.cle && p.cle.startsWith('stade/') && p.animCachee),   // aura du ballon = effet de statut du jeu
         // mise au point automatique du jeu (scène +0x8CC) = distance œil -> point visé de la caméra
@@ -307,7 +314,7 @@ async function animationPage() {
     imgs.push({ V: Array.from(V._V), P: Array.from(V._P), reglages: idx[k], appels: r ? r.appels : [],
                 lumieres: st ? st.lumieres : [], decor: st ? st.decor !== false : true,
                 // (étape 3) personnages (matrices des os), cascades d'ombre, ombre des pieds, effet de statut, mise au point
-                stade: st ? { ombres: st.ombres, acteurs: st.acteurs, pieds: st.pieds, statut: st.statut, foyer: st.foyer } : null });
+                stade: st ? { ombres: st.ombres, acteurs: st.acteurs, pieds: st.pieds, statut: st.statut, statuts: st.statuts, foyer: st.foyer } : null });
     // textures recolorées dans l'Atelier : envoyées une fois
     for (const a of (r ? r.appels : [])) for (const t of a.tex || []) { const x = t && E.textures[t];
       if (x && x.modif && !E.avant && x.cur && x.cur.getContext && !modifs[t]) { const d = x.cur.getContext('2d').getImageData(0, 0, x.cur.width, x.cur.height);
@@ -399,7 +406,7 @@ function suivreNatif() {                        // zone de la vue (la fenêtre l
     // (23/11) image demandée à l'ouverture : renvoyée tant que le lecteur n'est pas en pause dessus
     if (m && NATIF.imageVoulue !== undefined) { if (+m[1] === NATIF.imageVoulue && m[3] === '1') NATIF.imageVoulue = undefined; else cmdNatif('image ' + NATIF.imageVoulue); }
     if (m) { if (document.activeElement !== $('l-image')) $('l-image').value = +m[1];
-      $('l-info').textContent = `image ${m[1]} / ${m[2]} · lecteur C++`; $('l-jouer').textContent = m[3] === '1' ? '▶' : '❚❚'; }
+      $('l-info').textContent = `${window.I18N ? I18N.trad('image') : 'image'} ${m[1]} / ${m[2]} · ${window.I18N ? I18N.trad('Lecteur natif') : 'Lecteur natif'}`; $('l-jouer').textContent = m[3] === '1' ? '▶' : '❚❚'; }
   }, 200);
 }
 // (15/11/2026) options du lecteur natif (pièces cachées, couleurs de matériau, teintes) : réécrites et relues par le lecteur
@@ -411,7 +418,22 @@ function optionsActuelles() {
   return { caches: V.pieces.filter(p => p.cle && !p.visible && !p.cle.startsWith('stade/') && !p.peau && !p.terrain).map(p => p.cle),
     couleurs: couleursNatif(), sommets: E.avant ? {} : Object.fromEntries(Object.entries(E.teinteSom || {}).map(([k, t]) => [k, tsc(t)])),
     particules: E.avant ? {} : Object.fromEntries(Object.entries(E.teintePtl || {}).map(([k, t]) => [k, tsc(t)])),
-    lumieres: E.avant ? {} : Object.assign({}, E.lumK || {}) };   // (23/11) intensité des lumières de l'effet, par objet
+    lumieres: E.avant ? {} : Object.assign({}, E.lumK || {}),   // (23/11) intensité des lumières de l'effet, par objet
+    auras: E.avant ? {} : aurasChoisies(),
+    // (25/11, retour d'enhanc3) « Fil de fer sélection » aussi dans le lecteur du jeu : pièces sélectionnées (pas les particules)
+    fil: V.fil ? V.pieces.filter(p => p.sel && p.cle && !p.ptl && !p.peau && !p.cle.startsWith('stade/')).map(p => p.cle) : [] };   // (25/11) couleurs d'aura cochées : vues dans le lecteur du jeu (comme l'export)
+}
+// (25/11, muku : « montre les auras dans l'aperçu ») couleurs d'aura cochées {nom : [r, v, b] (0..1)} : lecteur du jeu (options.json
+// « auras ») et aperçu WebGL (Vue3D.aurasCouleurs), même recoloration que l'export (_cles_aura : couleur du modèle + lueur)
+function aurasChoisies() {
+  const out = {};
+  document.querySelectorAll('[data-aura]').forEach(cb => { if (!cb.checked || cb.disabled) return;
+    const c = document.querySelector(`[data-aura-c="${CSS.escape(cb.dataset.aura)}"]`); if (c) out[cb.dataset.aura] = hex2rgb(c.value); });
+  return out;
+}
+function majAurasVue() {                         // (25/11) aperçu WebGL tout de suite, lecteur du jeu par options.json (sans relancer)
+  if (E.vue) { E.vue.aurasCouleurs = E.avant ? {} : aurasChoisies(); Vue3D.activite = performance.now(); }
+  if (NATIF.actif) optionsNatif();
 }
 async function optionsNatif() {
   if (!NATIF.actif || NATIF.hote || !E.tech || !E.vue || NATIF.envoiOpt) return;
@@ -567,7 +589,7 @@ async function lancerNatif(V, caches, cle, numero) {
     document.title = titre + ' · ' + jeton; setTimeout(() => { document.title = titre; }, 4000);
     const opt = optionsActuelles();
     const r = await api('/api/natif', { stade: E.stadeCode || 's10g001', technique: E.tech.code, projet: E.projet, modifs, caches, couleurs: opt.couleurs, sommets: opt.sommets,
-      particules: opt.particules, largeur: w, hauteur: h, incruste: true, rect, jeton });
+      particules: opt.particules, lumieres: opt.lumieres, auras: opt.auras, fil: opt.fil, largeur: w, hauteur: h, incruste: true, rect, jeton });
     if (r.erreur) { $('l-film-info').textContent = 'Lecteur natif : ' + r.erreur; return; }
     if (NATIF.numero !== numero || !E.tech || E.vue !== V) {     // annulé pendant le lancement : CE lecteur seulement
       api('/api/natif_cmd', { cmd: 'quitter', pid: r.pid }).catch(() => {}); return; }
@@ -633,11 +655,19 @@ async function ouvrir_(code) {
   const perso = estPerso();
   const t = await api(perso ? '/api/personnage?code=' + encodeURIComponent(code) + (ONGLETS_JEU.includes(E.onglet) ? '&cat=' + E.onglet + (E.onglet === 'maillots' ? '&cote=' + (MM.cote || '10') : '') : '') : '/api/technique?code=' + code);
   E.tech = t; E.tech.perso = perso; E.tech.onglet = E.onglet; E.objets = t.objets_details; E.textures = {}; E.coulMat = {}; E.teinteSom = {}; E.teintePtl = {}; E.lumK = {}; E.selPieces.clear(); E.selTex.clear();
+  { const inv = !!t.invocation_de;                  // (25/11) apparition d'un esprit guerrier : ses couleurs, pas une technique
+    if ($('exporter')) $('exporter').textContent = inv ? 'Enregistrer les couleurs de l’apparition' : 'Créer le mod';
+    document.querySelectorAll('#f-nom, #f-desc').forEach(x => { const l = x.closest('label'); if (l) l.hidden = inv; }); }
   retirerSuite();                                   // (22/11) les suites d'une création précédente ne concernent pas celle-ci
+  // (28/11, banc d'essai) nouvel élément : noms / descriptions des copies vides (avant : ceux de l'élément d'avant restaient ->
+  // « Créer » reprenait un ancien nom) ; « Modifier » et la reprise d'un projet les remplissent ensuite
+  for (const id of ['ct-nom', 'ct-desc', 'cu-nom', 'cu-desc', 'co-nom', 'co-desc', 'ca-nom']) if ($(id)) $(id).value = '';
   if (!(E.repriseAuto && E.repriseAuto === E.projet)) E.cree = null;   // (22/11) même projet (côté du maillot) : lien gardé
   E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
   if (perso) { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}`;
-    $('p-nom').value = t.nom + ' (couleurs)'; $('p-desc').value = ''; if ($('rt-nom')) $('rt-nom').value = t.nom + ' (couleurs)'; if ($('cp-nom')) { $('cp-nom').value = ''; $('cp-nom').placeholder = t.nom + ' bis'; } }
+    $('p-nom').value = t.nom + ' (couleurs)'; $('p-desc').value = ''; if ($('rt-nom')) $('rt-nom').value = t.nom + ' (couleurs)'; if ($('cp-nom')) { $('cp-nom').value = ''; $('cp-nom').placeholder = t.nom + ' bis'; }
+    if (E.onglet === 'personnages' && typeof cpPeauOuvrir === 'function') cpPeauOuvrir(code);
+    if (E.onglet === 'personnages' && typeof cpCorpsOuvrir === 'function') cpCorpsOuvrir(code); }
   else { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}${t.element ? ' · ' + libElement(t.element) : ''}  ·  cinématique ${t.cinematique}`;
     $('f-nom').value = t.nom + ' (couleurs)'; $('f-ban').value = E.banAuto = (t.nom + ' couleurs').toUpperCase();
     // (22/11, retour de muku) traînée du ballon : tirs seulement (dribble, défense, arrêt : rien à régler)
@@ -666,7 +696,8 @@ async function ouvrir_(code) {
   majRapport(geantes.length ? geantes.length + ' pièce(s) géante(s) cachée(s) au départ (fonds, flashs) : coche-les à gauche pour les voir.' : '');
   dessinerRecette(); paletteTech(); E.sigProjet = signatureProjet(); E.chargement = false; verifierProjet();
   if (E.modifie) { const m = E.modifie; E.modifie = null; E.cree = { mod: m.mod, code: m.code };   // (22/11) « Modifier » d'une création
-    if (m.champ && $(m.champ)) $(m.champ).value = m.nom; }
+    if (m.champ && $(m.champ)) $(m.champ).value = m.nom;
+    if (E.onglet === 'personnages' && m.mod === 'MesPersonnages' && typeof cpCorpsOuvrir === 'function') cpCorpsOuvrir(E.tech.code); }   // (27/11) sa morphologie
   else proposerReprise();
   if (window.zonesPreparer) try { zonesPreparer(); } catch (e) { console.error('zones', e); }   // (15/11/2026) esprits / totems
   if (E.onglet === 'tenues' && window.ctPreparer) ctPreparer().catch(() => {});   // (15/11/2026) copies
@@ -763,15 +794,20 @@ function teintesPieces() {
 function dessinerPieces() {
   const box = $('pieces'); box.innerHTML = '';
   for (const o of E.objets) {
-    const t = document.createElement('div'); t.className = 'objet-titre'; t.textContent = o.erreur ? `${o.acteur} (illisible : ${o.erreur})` : o.espritDuJoueur ? `${o.nom}  (totem / esprit du joueur : en jeu, c’est celui du joueur qui lance — pour le recolorer, fais une copie dans Totems ou Esprits)` : o.modeleActeur ? `${o.nom}  (modèle de personnage : textures seulement)` : `${o.nom}  (${o.pieces.length} pièces)`; box.appendChild(t);
+    const t = document.createElement('div'); t.className = 'objet-titre'; t.textContent = o.erreur ? `${o.acteur} (illisible : ${o.erreur})` : o.espritDuJoueur ? `${o.nom}  (totem / esprit du joueur : en jeu, c’est celui du joueur qui lance — pour le recolorer, fais une copie dans Totems ou Esprits)` : o.modeleActeur ? `${o.nom}  (modèle de personnage : textures seulement)` : `${o.nom}  (${o.pieces.length} pièces)`;
+      // (28/11) mode simple : « Objet 1 · 3 pièces » / « Icône » au lieu des codes
+      if (!o.erreur && !o.espritDuJoueur) { const k = E.objets.indexOf(o) + 1, av = t.textContent;
+        t.innerHTML = `<span class="nom-simple">${echapper(o.role === 'icone' ? 'Icône' : o.modeleActeur ? 'Textures' : (E.objets.length > 1 ? 'Objet ' + k + ' · ' : '') + o.pieces.length + ' pièce' + (o.pieces.length > 1 ? 's' : ''))}</span><span class="nom-av">${echapper(av)}</span>`; }
+      box.appendChild(t);
     if (o.erreur) continue;
-    o.pieces.forEach(p => {
+    o.pieces.forEach((p, kp) => {
       const cle = o.nom + '/' + p.index, d = document.createElement('div'); d.className = 'piece' + (E.selPieces.has(cle) ? ' sel' : ''); d.dataset.cle = cle;
       const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = p.vue ? p.vue.visible : true;
       cb.onclick = ev => { ev.stopPropagation(); if (p.vue) p.vue.visible = cb.checked; };
       const pa = document.createElement('span'); pa.className = 'pastille';
       if (p.pastille) pa.style.background = `rgb(${p.pastille.map(c => Math.round(c * 255)).join(',')})`;
-      const n = document.createElement('span'); n.className = 'n'; n.textContent = `${p.nom} (${p.materiau ?? '-'})`; n.title = p.textures.join(', ');
+      const n = document.createElement('span'); n.className = 'n'; n.title = p.textures.join(', ');
+      n.innerHTML = `<span class="nom-simple">${echapper('Partie ' + (kp + 1))}</span><span class="nom-av">${echapper(p.nom)} (${echapper(String(p.materiau ?? '-'))})</span>`;
       const iso = document.createElement('button'); iso.textContent = 'Isoler';
       iso.onclick = ev => { ev.stopPropagation(); for (const oo of E.objets) for (const pp of oo.pieces || []) if (pp.vue) pp.vue.visible = pp === p; E.vue.recadrer(true); dessinerPieces(); };
       const cac = document.createElement('button'); cac.textContent = 'Cacher';
@@ -812,6 +848,7 @@ function majSelection() {
     for (const o of E.objets) for (const p of o.pieces || []) if (E.selPieces.has(o.nom + '/' + p.index)) for (const n of p.textures) { const x = E.textures[o.nom + '/' + n]; if (x && x.cur && !x.info.donnees) E.selTex.add(o.nom + '/' + n); }
     for (const [o, n] of texturesParticulesChoisies()) { const x = E.textures[o.nom + '/' + n]; if (x && x.cur && !x.info.donnees) E.selTex.add(o.nom + '/' + n); } }
   dessinerPieces(); dessinerTextures(); dessinerMateriaux(); dessinerTeintes(); majCompteurs();
+  if (E.vue && E.vue.fil && NATIF.actif) optionsNatif();     // (25/11) fil de fer de la sélection dans le lecteur du jeu
 }
 
 // ------------------------------------------------------------------ textures
@@ -883,6 +920,8 @@ function menuTexture(ev, cle) {
   const presse = peutDessiner ? [['📄 Copier l’image (pour une autre technique)', () => copierPresse(cle)]]
     .concat(PRESSE.img ? [[`📋 Coller ici : ${PRESSE.nom}${PRESSE.tech ? ' (' + PRESSE.tech + ')' : ''}`, () => collerPresse(cle)]] : []) : [];
   menuContexte(ev, x ? x.nom : cle, [['◎ Localiser la texture', () => allerVersTexture(cle, true)]].concat(peutDessiner ? [['✎ Dessiner', () => ouvrirEditeur(cle)]] : [])
+    // (25/11/2026, export_modele.js) PNG de cette texture / image à sa place
+    .concat(peutDessiner && window.exporterPng ? [['⬇ Enregistrer en PNG', () => exporterPng([cle]).catch(e => majRapport('Échec : ' + e.message))],['⬆ Remplacer par une image', () => choisirImages(cle)]] : [])
     .concat(cibles.map(([k, y]) => [`⧉ Copier cette image sur ${y.nom}${!texturePasMontree(k) && texturePasMontree(cle) ? ' (version montrée)' : ''}`, () => copierTexture(cle, k)]))
     .concat(presse));
 }
@@ -954,14 +993,73 @@ function texturesVisibles() {
   for (const o of E.objets) if (o.modeleActeur && !o.erreur) for (const t of o.textures) s.add(o.nom + '/' + t.nom);
   return [...s];
 }
+// (26/11, retour d'un joueur sur Parade fatale du dragon : « la gueule reste verte ») MESURÉ : 70 pièces du tourbillon ont des
+// COULEURS DE SOMMETS cyan (128, 215, 255) que le jeu multiplie avec la texture -> texture orange × sommets cyan = vert-jaune.
+// Les textures recolorées à la main laissent les sommets d'origine : avertissement + « Teinter leurs sommets comme la texture »
+// (teinte du bloc « Sommets et particules », la même que la pipette ; VRFW vertex_colors à l'export)
+function teinteTexture(x) {                  // teinte dominante d'une texture (pondérée par saturation × valeur), ou null
+  const w = x.cur.width, h = x.cur.height, d = x.cur.getContext('2d').getImageData(0, 0, w, h).data; let sx = 0, sy = 0, sw = 0;
+  for (let i = 0; i < d.length; i += 16) { if (!d[i + 3]) continue; const [hh, s, v] = rgb2hsv(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255), wt = s * v;
+    sx += Math.cos(hh * Math.PI / 180) * wt; sy += Math.sin(hh * Math.PI / 180) * wt; sw += wt; }
+  return sw < 1e-3 ? null : (Math.atan2(sy, sx) * 180 / Math.PI + 360) % 360;
+}
+function piecesSommetsMelanges() {
+  const out = [], hues = new Map(); if (!E.tech || E.tech.perso || E.avant) return out;
+  const hue = x => { if (!hues.has(x)) hues.set(x, teinteTexture(x)); return hues.get(x); };
+  // (26/11, muku : « il n'est pas censé y avoir de pièce qu'on ne peut pas teinter ») texture grise / blanche (pas de couleur à
+  // suivre) : la teinte des AUTRES textures modifiées du même objet (moyenne circulaire), sinon de toutes les textures modifiées
+  const moyH = L => { let sx = 0, sy = 0; for (const h of L) { sx += Math.cos(h * Math.PI / 180); sy += Math.sin(h * Math.PI / 180); }
+    return L.length ? (Math.atan2(sy, sx) * 180 / Math.PI + 360) % 360 : null; };
+  const modH = o => Object.values(E.textures).filter(y => (!o || y.obj === o) && y.modif && y.cur && y.cur.getContext && !y.info.donnees).map(hue).filter(h => h !== null);
+  const parObjet = new Map(); let toutes;
+  const repli = o => { if (!parObjet.has(o)) parObjet.set(o, moyH(modH(o))); const h = parObjet.get(o);
+    if (h !== null) return h; if (toutes === undefined) toutes = moyH(modH(null)); return toutes; };
+  for (const o of E.objets) { if (o.erreur || o.modeleActeur || o.aura_balle) continue;
+    for (const p of o.pieces || []) { if (!p.vue || !p.vue.col0) continue; const cle = o.nom + '/' + p.index; if (E.teinteSom[cle]) continue;
+      const x = (p.textures || []).map(n => E.textures[o.nom + '/' + n]).find(y => y && y.modif && y.cur && y.cur.getContext && !y.info.donnees);
+      if (!x) continue;
+      const m = moyenneSommets(p.vue.col0); if (m.colores < 0.3 || rgb2hsv(...m.c)[1] < 0.15) continue;
+      let H = hue(x); if (H === null) H = repli(o);
+      if (H === null) continue;                    // aucune texture modifiée n'a de couleur : rien à suivre (réglable à la main)
+      out.push({ o, p, cle, x, m, H }); } }
+  return out;
+}
+function conseilSommets() {
+  const L = piecesSommetsMelanges(); if (!L.length) return null;
+  const d = document.createElement('div'); d.className = 'conseil-sommets';
+  d.innerHTML = `<span class="cs-pastille" style="background:${versHex(L[0].m.c)}"></span><span>⚠ Des pièces mélangent tes textures modifiées avec leurs couleurs de sommets : le jeu multiplie les deux (orange × cyan = vert).</span> <b>${L.length}</b> <button type="button">Teinter leurs sommets comme la texture</button>`;
+  d.querySelector('button').onclick = () => { let n = 0;
+    for (const { o, p, cle, H } of piecesSommetsMelanges()) {
+      E.teinteSom[cle] = Object.assign(teinteDe(versHex(hsv2rgb(H, 0.85, 1))), { nom: p.nom, acteur: o.acteur }); n++; }
+    appliquerTeintes(); dessinerTeintes(); dessinerTextures(); if (NATIF.actif) optionsNatif();
+    majRapport(n ? 'Sommets teintés comme leur texture. Réglables dans « Sommets et particules ».' : 'Rien à teinter.'); };
+  return d;
+}
+// (28/11, muku : « noms clairs à la place des codes ») en mode simple, des mots au lieu des noms de fichiers du jeu ; le nom
+// technique reste en mode Avancé et dans l'infobulle
+function nomTextureSimple(x) {
+  if (x.obj && x.obj.role === 'icone') return 'Icône';
+  const s = String(x.nom || '').toLowerCase().replace(String(x.obj && x.obj.nom || '').toLowerCase(), '');
+  if (/line$/.test(s)) return 'Contours';
+  if (/spm$/.test(s)) return 'Métal';
+  if (/msk$|mask$/.test(s)) return 'Masque';
+  if (/sp$|spc$/.test(s)) return 'Reflets';
+  if (/bc$/.test(s)) return 'Ombres';
+  if (/nrm$|nm$|norm/.test(s)) return 'Relief';
+  return 'Couleurs';
+}
 function dessinerTextures() {
   const g = $('textures'); g.innerHTML = '';
+  const vus_ = {}, compte_ = {}; for (const c of texturesVisibles()) { const x = E.textures[c]; if (x) { const k = nomTextureSimple(x); compte_[k] = (compte_[k] || 0) + 1; } }
+  { const cs = conseilSommets(); if (cs) g.appendChild(cs); }   // (26/11) avant les vignettes
   for (const cle of texturesVisibles()) {
     const x = E.textures[cle]; if (!x) continue;
     const d = document.createElement('div'); d.className = 'tex' + (E.selTex.has(cle) ? ' sel' : '') + (x.modif ? ' modif' : '') + (!x.cur || x.info.donnees ? ' donnees' : '');
     const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
     if (x.cur) cv.getContext('2d').drawImage(x.cur, 0, 0, 64, 64);
-    const n = document.createElement('div'); n.className = 'nom'; n.textContent = x.nom.replace(x.obj.nom + '_', '#');
+    const n = document.createElement('div'); n.className = 'nom';
+    const ns_ = nomTextureSimple(x); vus_[ns_] = (vus_[ns_] || 0) + 1;
+    n.innerHTML = `<span class="nom-simple">${echapper(compte_[ns_] > 1 ? ns_ + ' ' + vus_[ns_] : ns_)}</span><span class="nom-av">${echapper(x.nom.replace(x.obj.nom + '_', '#'))}</span>`;
     d.title = `${x.nom}${x.info.w ? ` (${x.info.w}×${x.info.h})` : ''}${x.info.donnees ? ' : carte de données, non modifiable' : !x.cur ? ' : format non lu' : ''}`;
     // (15/11/2026) texture d'une version de l'objet que le jeu ne montre pas dans cette technique
     if (texturePasMontree(cle)) { d.classList.add('cachee');
@@ -1017,8 +1115,9 @@ function recevoirTextureEditee(cle, img) {
   apresRetouche();
 }
 window.ouvrirEditeur = ouvrirEditeur; window.fermerEditeur = fermerEditeur; window.recevoirTextureEditee = recevoirTextureEditee; window.texturePourEditeur = cle => E.textures[cle] || null;
-function apresRetouche() { quitterAvant(); E.rev = (E.rev || 0) + 1; teintesPieces(); dessinerPieces(); dessinerTextures(); dessinerZone(); texturesNatif(); majCompteurs();
-  if (E.onglet === 'objets' && window.ojIcone) ojIcone(); }
+function apresRetouche() { if (window.__bqDessin) return; quitterAvant(); E.rev = (E.rev || 0) + 1; teintesPieces(); dessinerPieces(); dessinerTextures(); dessinerZone(); texturesNatif(); majCompteurs();
+  if (E.onglet === 'objets' && window.ojIcone) ojIcone();
+  if (E.onglet === 'personnages' && typeof cpPeauPlusTard === 'function') cpPeauPlusTard(); }   // (26/11) peau du corps : suit le visage
 // grande vignette de la 1re texture choisie : on y prend la couleur à changer ; la zone visée est surlignée
 function dessinerZone() {
   const cv = $('zone-apercu'); if (!$('zone-on').checked) return;
@@ -1066,14 +1165,15 @@ function blocReplie(titre, lignes) {
   s.textContent = `${titre} (${lignes.length})`; dd.appendChild(s); for (const l of lignes) dd.appendChild(l); return dd;
 }
 function majCompteurs() {
-  const n = (x, mot) => x ? `${x} ${mot}${x > 1 ? 's' : ''}` : '';
+  // (27/11, essai profond EN) mot traduit à part (avant : « 3 changés » restait en français)
+  const T = s => (window.I18N ? I18N.trad(s) : s), n = (x, mot) => x ? `${x} ${T(mot + (x > 1 ? 's' : ''))}` : '';
   const t = !!E.tech;                              // (23/11) rien d'ouvert : compteurs vides
   if ($('cpt-tex')) $('cpt-tex').textContent = t ? n(Object.values(E.textures || {}).filter(x => x.modif).length, 'changée') : '';
   if ($('cpt-mat')) $('cpt-mat').textContent = t ? n(Object.keys(E.coulMat || {}).length, 'changé') : '';
   if ($('cpt-teintes')) $('cpt-teintes').textContent = t ? n(Object.keys(E.teinteSom || {}).length + Object.keys(E.teintePtl || {}).length, 'changé') : '';
   if ($('cpt-lum')) $('cpt-lum').textContent = t ? n(Object.keys(E.lumK || {}).length, 'changée') : '';
   const i = $('info-sel'); if (i) i.innerHTML = !E.tech ? '' : E.selPieces.size
-    ? `<b>${E.selPieces.size} pièce${E.selPieces.size > 1 ? 's' : ''} sélectionnée${E.selPieces.size > 1 ? 's' : ''}</b> : les listes ne montrent que leurs couleurs (Ctrl + clic pour en ajouter).`
+    ? `<b>${E.selPieces.size} ${T(E.selPieces.size > 1 ? 'pièces sélectionnées' : 'pièce sélectionnée')}</b> : ${T('les listes ne montrent que leurs couleurs (Ctrl + clic pour en ajouter).')}`
     : 'Clique une pièce à gauche (ou un nom ci-dessous) pour ne voir que ses couleurs.';
 }
 function dessinerMateriaux() {
@@ -1215,7 +1315,7 @@ function texAffichee(x) { return E.avant && x.orig ? origCanvas(x) : x.cur; }
 function majBoutonAvant() { const b = $('avant-apres'); if (!b) return; b.classList.toggle('actif', !!E.avant); b.textContent = E.avant ? '◐ Original du jeu' : '◐ Avant / après'; }
 function basculerAvant(oui) {
   if (!E.tech) return;
-  E.avant = oui === undefined ? !E.avant : !!oui; majBoutonAvant();
+  E.avant = oui === undefined ? !E.avant : !!oui; majBoutonAvant(); majAurasVue();
   for (const x of Object.values(E.textures)) x.donneesCur = null;
   teintesPieces(); appliquerTeintes(); appliquerLumieres(); if (NATIF.actif) { texturesNatif(); optionsNatif(); }
   majRapport(E.avant ? 'Original du jeu affiché (tes changements sont gardés) : « Avant / après » ou la touche A pour les revoir.' : 'Tes couleurs sont revenues.');
@@ -1366,7 +1466,7 @@ function paletteTech(cible) {
   if (!garder.length) { box.innerHTML = '<span class="aide">Aucune couleur vive.</span>'; return; }
   for (const { C } of garder) { const c = C.c.map(v => v / C.w), mx = Math.max(...c, 1e-6), hex = versHex(c.map(v => v / mx));
     const b = document.createElement('button'); b.className = 'rc-case'; b.style.background = hex; b.dataset.hex = hex;
-    b.title = `${hex} · ${Math.round(C.w / tot * 100)} % · ${[...C.src].join(', ')}\n(clic : remplacer cette couleur)`;
+    b.title = `${hex} · ${Math.round(C.w / tot * 100)} % · ${[...C.src].map(s => (window.I18N ? I18N.trad(s) : s)).join(', ')}\n(clic : remplacer cette couleur)`;
     b.onclick = () => { $('rc-de').value = hex; };
     box.appendChild(b); }
 }
@@ -1478,11 +1578,17 @@ async function reprendreProjet(e) {
   for (const [id, v] of Object.entries(e.champs || {})) { const el = $(id); if (!el) continue; if (el.type === 'checkbox') el.checked = v; else el.value = v; }
   for (const [n, [oui, hex]] of Object.entries(e.auras || {})) { const cb = document.querySelector(`[data-aura="${CSS.escape(n)}"]`), c = document.querySelector(`[data-aura-c="${CSS.escape(n)}"]`);
     if (cb) cb.checked = oui; if (c) c.value = hex; }
+  majAurasVue();
   if ($('lueurs-h')) { $('lueurs-h').dispatchEvent(new Event('input')); $('lueurs-on').dispatchEvent(new Event('change')); }
   if ($('mode')) $('mode').dispatchEvent(new Event('change'));
   apresTout(); majRapport('Projet repris : tu continues là où tu t\'étais arrêté.');
   if (window.zonesPreparer) try { zonesPreparer(); } catch (e) { console.error('zones', e); }
   if (e.calques && window.atelierRestaurer) try { await atelierRestaurer(e.calques); } catch (er) { console.error('calques', er); }
+  // (28/11, « Modifier » d'une copie d'Ogres : le champ Nom montrait « Ogres (copie) ») projet relié à une création : SON nom
+  // dans le champ du nom de l'onglet (les noms des copies ne sont pas dans les champs gardés), et objets : ses réglages
+  if (E.cree) { const c = (HUB.creations || []).find(x => x.mod === E.cree.mod && String(x.code) === String(E.cree.code));
+    const id = c && champNomCreation(c); if (id && $(id) && c.nom) $(id).value = c.nom;
+    if (E.onglet === 'objets' && window.ojPreparer && E.cree.mod === 'MesObjets') try { ojPreparer(); } catch (er) { console.error('objet', er); } }
 }
 
 // ------------------------------------------------------------------ HUB « MES CRÉATIONS » (15/11/2026)
@@ -1561,9 +1667,13 @@ function dessinerHub() {
   };
   dessinerMenuJeu();                // (15/11/2026) en-tête, bannières, tuiles et filtres façon menus du jeu
   // chiffres
-  const nAttente = HUB.creations.filter(c => c.attente).length, nFinies = HUB.creations.length - nAttente;    // (22/11)
+  // (26/11, demande de muku : « le cosmétique, ce sera l'étape en attente de stats mais pour les objets ; à la fin tout va dans
+  // Terminées ») objets, tenues et maillots qui attendent leur étape « Cosmétique » (prix, icône…), puis Terminées
+  const estCosm = c => ['MesObjets', 'MesTenues', 'MesMaillots'].includes(c.mod) && !!c.attenteCosm;
+  const nAttente = HUB.creations.filter(c => c.attente).length, nCosm = HUB.creations.filter(c => !c.attente && estCosm(c)).length,
+    nFinies = HUB.creations.length - nAttente - nCosm;    // (22/11)
   const nProjets = HUB.projets.filter(p => !projetLieExistant(p)).length;   // (22/11) sans les projets des créations
-  $('hub-stats').innerHTML = [[nProjets, 'à continuer'], [nAttente, 'en attente de stats / cosmétique'], [nFinies, 'terminées'], [PREREG.length, 'préréglages']]
+  $('hub-stats').innerHTML = [[nProjets, 'à continuer'], [nAttente, 'en attente de stats'], [nCosm, 'cosmétique'], [nFinies, 'terminées'], [PREREG.length, 'préréglages']]
     .map(([n, t]) => `<div class="hub-stat"><b>${n}</b><span>${t}</span></div>`).join('');
   $('hub-n-projets').textContent = nProjets; $('hub-n-creations').textContent = nFinies; $('hub-n-prereglages').textContent = PREREG.length;
   // à continuer
@@ -1573,8 +1683,8 @@ function dessinerHub() {
   for (const p of pl) {
     const tags = [[p.textures, 'texture'], [p.materiaux, 'matériau'], [p.teintes, 'teinte'], [p.remplacements, 'remplacement']].filter(x => x[0])
       .map(([n, m]) => `<span>${n} ${m}${n > 1 ? (m === 'matériau' ? 'x' : 's') : ''}</span>`).join('');
-    const d = carte({ onglet: p.onglet, vignette: p.vignette, estTexture: p.vignetteTexture, badge: 'En cours', badgeCl: 'encours', titre: p.titre, couleurs: p.couleurs, lecture: true,
-      sousImg: `${genre(p.onglet)} · d'après ${echapper(p.base)}`, sous: `Modifié le ${dateCourte(p.date)}`, tags: tags || '<span>rien de changé</span>',
+    const d = carte({ onglet: p.onglet, vignette: p.vignette, estTexture: p.vignetteTexture, badge: 'En cours', badgeCl: 'encours', titre: tradNom(p.titre), couleurs: p.couleurs, lecture: true,
+      sousImg: `${genre(p.onglet)} · d'après ${echapper(tradNom(p.base))}`, sous: `Modifié le ${dateCourte(p.date)}`, tags: tags || '<span>rien de changé</span>',
       boutons: '<button class="primaire" data-a="reprendre">Continuer</button><button data-a="renommer" title="Renommer">✎</button><button data-a="supprimer" title="Retirer de la liste (rangé dans projets/corbeille)">🗑</button>' });
     d.querySelector('.hub-image').onclick = () => reprendreDepuisHub(p);
     d.querySelector('[data-a="reprendre"]').onclick = () => reprendreDepuisHub(p);
@@ -1588,8 +1698,11 @@ function dessinerHub() {
   const l = $('hub-creations'); l.innerHTML = '';
   const la = $('hub-attente'); la.innerHTML = '';          // (22/11) en attente de stats
   $('jm-s-attente').style.display = la.style.display = HUB.creations.some(c => c.attente) ? '' : 'none';
+  const lc = $('hub-cosmetique'); lc.innerHTML = '';       // (26/11) cosmétique
   const cr = HUB.creations.filter(c => ok(c.nom, c.base, c.code, c.nom_base) && (!HUB.filtre || c.onglet === HUB.filtre));
-  if (!cr.length) l.innerHTML = `<div class="hub-vide"><b>${HUB.creations.length ? 'Aucune création ne correspond' : 'Aucun mod créé pour l’instant'}</b>${HUB.creations.length ? 'Essaie un autre mot.' : 'Quand une technique te plaît : « Créer le mod » dans le panneau de droite.'}</div>`;
+  $('jm-s-cosmetique').style.display = lc.style.display = cr.some(c => !c.attente && estCosm(c)) ? '' : 'none';
+  { const autres = HUB.creations.some(c => !c.attente && !estCosm(c));    // (26/11) cosmétiques à part : pas comptées ici
+    if (!cr.some(c => !c.attente && !estCosm(c))) l.innerHTML = `<div class="hub-vide"><b>${autres ? 'Aucune création ne correspond' : 'Aucun mod créé pour l’instant'}</b>${autres ? 'Essaie un autre mot.' : 'Quand une technique te plaît : « Créer le mod » dans le panneau de droite.'}</div>`; }
   for (const c of cr) {
     const proj = projetDe(c);
     // (22/11) joueur sans projet à lui : son portrait recoloré (celui des cartes du jeu)
@@ -1597,18 +1710,21 @@ function dessinerHub() {
       || (c.mod === 'MesPersonnages' && c.code ? '/api/portrait?code=' + encodeURIComponent(c.code) : null);
     const st = c.jeuSeul ? ['Dans le jeu', 'oui'] : c.installe ? ['Installé', 'oui'] : ['Pas installé', 'non'];
     const d = carte({ onglet: c.onglet, vignette: vign, estTexture: !c.vignette && proj && proj.vignetteTexture, badge: st[0], badgeCl: st[1], titre: c.nom, couleurs: proj && proj.couleurs, lecture: true,
-      sousImg: `${genre(c.genre)} · copie de ${echapper(c.nom_base || c.base)}`,
-      sous: `<span class="avance">Code ${echapper(c.code)} · </span>${dateCourte(c.date)}${c.jeuSeul ? '<br>Plus dans la sortie de l’Atelier, mais toujours dans le jeu.' : ''}`,
+      sousImg: `${genre(c.genre)} · copie de ${echapper(tradNom(c.nom_base || c.base))}`,
+      sous: `<span class="avance"><span>Code</span> ${echapper(c.code)} · </span>${dateCourte(c.date)}${c.jeuSeul ? '<br>Plus dans la sortie de l’Atelier, mais toujours dans le jeu.' : ''}`,
       boutons: (c.attente ? '<button class="primaire" data-a="stats" title="Puissance, PT, élément… (ou garder ceux de l’original)">Régler les stats</button>' : '')
-        + `<button${c.attente ? '' : ' class="primaire"'} data-a="modifier" title="${proj ? 'Reprendre le projet qui a servi à la créer' : 'Projet d’origine introuvable : rouvre la technique de départ'}">Modifier</button>`
+        + (estCosm(c) ? '<button class="primaire" data-a="cosm" title="Prix en boutique, icône… (ou garder ceux de la création)">Régler la cosmétique</button>' : '')
+        + `<button${c.attente || estCosm(c) ? '' : ' class="primaire"'} data-a="modifier" title="${proj ? 'Reprendre le projet qui a servi à la créer' : 'Projet d’origine introuvable : rouvre la technique de départ'}">Modifier</button>`
         + (!c.attente && aDesStats(c) ? '<button data-a="stats" title="Changer ses valeurs (puissance, PT, élément…)">Stats</button>' : '')
         + (c.mod === 'MesPersonnages' && c.cle ? `<button data-a="coups" title="Choisir ses techniques et son esprit guerrier">Techniques${c.nb_coups ? ' (' + c.nb_coups + ')' : ''}</button>` : '')
         + (c.mod === 'MesEsprits' && (c.genre === 'esprit' || c.genre === 'totem') ? `<button data-a="liee" title="${c.liee ? 'Technique liée : ' + echapper(c.liee) : 'Choisir la technique de cet esprit guerrier'}">Technique liée${c.liee ? ' ✓' : ''}</button>` : '')
         // (22/11, demande de muku) « Installer » seulement dans Terminées (pas en attente de stats) ; « Supprimer » dans Terminées
-        + (c.installe || c.attente ? '' : '<button data-a="installer" title="Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)">Installer</button>')
-        + (c.attente ? '' : '<button data-a="supprimer" class="supprimer" title="Retirer cette création (ses fichiers sont rangés à part, récupérables)">Supprimer</button>') });
+        + (['MesObjets', 'MesTenues', 'MesMaillots'].includes(c.mod) && !estCosm(c) ? '<button data-a="cosm" title="Prix en boutique, icône…">Cosmétique</button>' : '')
+        + (c.installe || c.attente || estCosm(c) ? '' : '<button data-a="installer" title="Copier dans le mod du jeu (sauvegarde avant ; ce qui y est déjà reste)">Installer</button>')
+        + (c.attente || estCosm(c) ? '' : '<button data-a="supprimer" class="supprimer" title="Retirer cette création (ses fichiers sont rangés à part, récupérables)">Supprimer</button>') });
     const bc = d.querySelector('[data-a="coups"]'); if (bc) bc.onclick = () => ouvrirStats(c);     // (24/11) un seul écran : stats + techniques
     const bs = d.querySelector('[data-a="stats"]'); if (bs) bs.onclick = () => ouvrirStats(c);
+    const bk = d.querySelector('[data-a="cosm"]'); if (bk) bk.onclick = () => ouvrirCosmetique(c);     // (26/11)
     const bx = d.querySelector('[data-a="supprimer"]'); if (bx) bx.onclick = () => supprimerCreation(c);
     const bl = d.querySelector('[data-a="liee"]'); if (bl) bl.onclick = () => ouvrirTechniqueLiee(c);
     const ouvrirC = c.mod === 'MesMaillots' && c.maillot ? async () => { window.changerOnglet('maillots'); await mmOuvrir(c.maillot); }   // (15/11) un de mes maillots
@@ -1618,7 +1734,7 @@ function dessinerHub() {
     if (bi) bi.onclick = async () => {
       await installer(c.mod);              // (21/11) créations du jeu qui seraient retirées : demandé par installer()
       $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub(); };
-    (c.attente ? la : l).appendChild(d); }
+    (c.attente ? la : estCosm(c) ? lc : l).appendChild(d); }
   // préréglages
   const pr = $('hub-prereglages'); pr.innerHTML = '';
   if (!PREREG.length) pr.innerHTML = '<div class="hub-vide"><b>Aucun préréglage</b>Fais un remplacement de couleur dans une technique, puis « Garder ».</div>';
@@ -1627,6 +1743,15 @@ function dessinerHub() {
       + ` <b>${echapper(p.nom)}</b> <small>· ${r.length} remplacement${r.length > 1 ? 's' : ''}</small>`;
     pr.appendChild(s); }
 }
+// (27/11) nom d'origine (« Tenue · gris et bleu 2 », « Armure · Ogre ») placé DANS une phrase : traduit avant, sinon il reste en français
+// (27/11, essai profond EN / ES) nom par couleurs gardé en français dans la création (« gris et bleu 2 ») : mots traduits
+// comme moteur/jeu.py COULEURS_MOTS (le catalogue, lui, est déjà fait dans la langue)
+const COUL_MOTS = { en: { noir: 'black', blanc: 'white', gris: 'grey', rouge: 'red', orange: 'orange', jaune: 'yellow', vert: 'green', turquoise: 'turquoise', bleu: 'blue', violet: 'purple', rose: 'pink', et: 'and' },
+  es: { noir: 'negro', blanc: 'blanco', gris: 'gris', rouge: 'rojo', orange: 'naranja', jaune: 'amarillo', vert: 'verde', turquoise: 'turquesa', bleu: 'azul', violet: 'morado', rose: 'rosa', et: 'y' } };
+const tradCouleurs = x => { const M = COUL_MOTS[document.documentElement.lang]; if (!M) return x;
+  const m = /^([a-z]+(?: [a-z]+)*)( \d+)?$/.exec(x); if (!m || !m[1].split(' ').every(w => M[w])) return x;
+  return m[1].split(' ').map(w => M[w]).join(' ') + (m[2] || ''); };
+const tradNom = n => (window.I18N && n ? String(n).split(' · ').map(x => { const t = I18N.trad(x); return t === x ? tradCouleurs(x) : t; }).join(' · ') : n);
 async function ouvrirDepuisHub(onglet, code, reprise) {
   window.changerOnglet(onglet || 'techniques');
   if (reprise) E.repriseAuto = reprise;
@@ -1650,6 +1775,9 @@ function dessinerAuras() {
     if (variable) d.title = 'Le jeu met ici l’aura du ballon du moment (sa variante change pendant le match) : aucun nom fixe à recolorer.';
     b.appendChild(d);
   }
+  // (25/11) couleur choisie = vue dans l'aperçu (WebGL et lecteur du jeu) ; le bloc est gardé d'une technique à l'autre : un seul écouteur
+  if (!b._ecoute) { b._ecoute = true; b.addEventListener('input', majAurasVue); b.addEventListener('change', majAurasVue); }
+  majAurasVue();
 }
 
 // ------------------------------------------------------------------ export
@@ -1661,6 +1789,9 @@ function phraseSimple(l) {
     .replace(/^(Copie|Tenue|Armure) créée \(pas encore installée\).*$/, (_, q) => q + ' créée ! Pour la mettre dans le jeu : « Installer » sur sa carte dans Mes créations.')
     .replace(/^Objet créé \(pas encore installé\).*$/, 'Objet créé ! Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.')
     .replace(/^Erreur : /, 'Ça n’a pas marché : ').replace(/^Pas installé : /, 'Pas mis dans le jeu : ')
+    // (25/11, capture de Hibou : « [Errno 2] No such file or directory: ' ») dans une erreur, le NOM du fichier manquant reste
+    // (sans le chemin, qui contient le nom de l'utilisateur) : sinon le message ne dit plus rien
+    .replace(/^(Ça n’a pas marché|Pas mis dans le jeu) : .*$/, m => m.replace(/[A-Za-z]:\\[^\n'"]*/g, c => c.split(/\\+/).filter(Boolean).pop() || ''))
     .replace(CHEMIN_RE, '').trim();
 }
 function majRapport(t) {
@@ -1730,7 +1861,7 @@ const AIDE_ONGLET = {
   tenues: 'Choisis une tenue en haut, recolore-la, puis « Créer ».',
   armures: 'Choisis une armure en haut, recolore-la pour un de tes esprits, puis « Créer ».',
   personnages: 'Choisis un personnage en haut, recolore sa tête, donne-lui un nom, puis « Créer ».',
-  objets: 'Choisis un objet en haut, donne-lui un nom et un prix, puis « Créer ».',
+  objets: 'Choisis un objet en haut, donne-lui un nom, puis « Créer ». Le prix se règle ensuite dans Mes créations (Cosmétique).',
 };
 function habillageJeu() {
   const h = document.querySelector('header'), nav = document.querySelector('header .onglets');
@@ -1756,7 +1887,12 @@ function habillageJeu() {
   maj();
 }
 // titre de l'élément ouvert : en mode simple, sans les codes du jeu (whs00830, c01000300…) ni la cinématique
-function titreSimple(s) { return s.split('·').map(x => x.trim()).filter(x => x && !/^(cinématique|cutscene)\s|^[a-z]{1,4}\d{4,}[a-z0-9_]*$/i.test(x)).join('  ·  '); }
+// (28/11) aussi les codes DANS un morceau (« Chaussures e000401_10 » -> « Chaussures »), les codes de mod (« Mod~nom ») et les
+// morceaux répétés (« Tenue de Axel · InazumaFantasy · InazumaFantasy »)
+function titreSimple(s) { const vus = new Set();
+  return s.split('·').map(x => x.trim().replace(/\b[a-z][a-z_]{0,8}\d{4,}[a-z0-9_]*\b/gi, '').replace(/\S+~\S+/g, '').replace(/\s{2,}/g, ' ').trim())
+    .filter(x => x && !/^(cinématique|cutscene)\b/i.test(x) && !vus.has(x) && vus.add(x)).join('  ·  '); }
+// (28/11) bouton « Créer » fixe du bas RETIRÉ (muku : « il y a des Créer, ce serait mieux de supprimer celui en bas de page »)
 window.addEventListener('load', () => {
   // bouton « Avancé » dans l'en-tête (mode simple par défaut)
   const h = document.querySelector('header');
@@ -1808,6 +1944,16 @@ async function exporter() {
   }
   const auras = {};
   document.querySelectorAll('[data-aura]').forEach(cb => { if (cb.checked) auras[cb.dataset.aura] = hex2rgb(document.querySelector(`[data-aura-c="${CSS.escape(cb.dataset.aura)}"]`).value); });
+  // (25/11, demande de muku) APPARITION d'un esprit guerrier (« invoc_<copie> ») : les couleurs vont dans SA scène d'invocation
+  // à part (serveur : couleurs_apparition), pas dans une technique ; son propre modèle n'est pas pris (couleurs de sa copie)
+  if (E.tech.invocation_de) {
+    for (const o of E.objets) if (o.modeleActeur) delete objets[o.acteur];
+    if (!Object.keys(objets).length && !Object.keys(auras).length) return majRapport('Rien n\'est modifié : change d\'abord des couleurs.');
+    majRapport('Enregistrement des couleurs de l’apparition…');
+    try { const r = await api('/api/couleurs_apparition', { copie: E.tech.invocation_de, objets, auras });
+      majRapport(r.ok ? 'Couleurs de l’apparition enregistrées (pas encore installées) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') : 'Erreur : ' + r.erreur);
+      return r; } catch (e) { return majRapport('Erreur : ' + e.message); }
+  }
   if (!Object.keys(objets).length && !Object.keys(auras).length) return majRapport('Rien n\'est modifié : change d\'abord des couleurs.');
   // (23/11, demande de muku) seulement le nom et la description ici : couleur du tir, traînée, prix et bannière se règlent
   // dans « En attente de stats / cosmétique » (gardés par le serveur quand la technique est refaite ; neuve : en vente à 18 jetons)
@@ -1815,6 +1961,7 @@ async function exporter() {
     banniere: {}, objets, auras };
   if (E.banniereImage && E.banniereImage.projet === E.projet) d.banniere.image = E.banniereImage.image;   // (21/11) liée au projet
   majRapport('Création du mod…');
+  d.cle = creeCode('MesTechniques');                 // (28/11) « Modifier » : LA création (même si le nom change)
   try { const r = await api('/api/exporter', d);
     majRapport(r.ok ? 'Mod créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') : 'Erreur : ' + r.erreur);
     if (r.ok) { const m = /code (\w+)/.exec(r.rapport[0] || ''), v = await faireVignette() || E.vignette;     // (15/11/2026) image pour le hub
@@ -1860,7 +2007,7 @@ async function exporterPerso() {
   if (!Object.keys(textures).length) return majRapport('Rien n\'est modifié : change d\'abord des couleurs.');
   majRapport('Création de la copie (réencodage des textures, environ 45 s)…');
   const nom = $('p-nom').value.trim(); if (!nom) return majRapport('Donne un nom à la copie.');
-  try { const r = await api('/api/exporter_personnage', { code: E.tech.code, textures, nom, description: $('p-desc').value.trim(),
+  try { const r = await api('/api/exporter_personnage', { code: E.tech.code, cle: creeCode('MesEsprits'), textures, nom, description: $('p-desc').value.trim(),
       prix: $('p-prix').value ? +$('p-prix').value : null, icone: await photoIcone('buste') });
     majRapport(r.ok ? 'Mod créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') : 'Erreur : ' + r.erreur);
     return r;
@@ -1923,7 +2070,7 @@ function mmFormulaire(m) {
   // (22/11) police importée pas encore chargée : choisie dès qu'elle arrive (parametres.js : brancherPolices)
   for (const [id, v] of [['mm-num-police', n.chiffres ? 'f:' + n.chiffres : null], ['mm-num-lettres', n.lettres || null]]) if (v && $(id).value !== v) $(id).dataset.voulue = v;
   mmApercuNumero();
-  $('mm-icone-img').src = (m && m.icone) || ''; $('mm-embleme-img').src = (m && m.embleme) || ''; MM.icone = MM.embleme = null; mmOublierDessins();
+  if ($('mm-icone-img')) { $('mm-icone-img').src = (m && m.icone) || ''; $('mm-embleme-img').src = (m && m.embleme) || ''; } MM.icone = MM.embleme = null; mmOublierDessins();
   $('mm-en-cours').textContent = m ? 'Maillot : ' + m.nom : 'Nouveau maillot' + (E.tech ? ' (coupe : ' + E.tech.nom + ')' : '');
 }
 function mmNouveau() { MM.id = null; MM.cote = '10'; MM.base = { '10': {}, '20': {} }; MM.edits = { '10': {}, '20': {} }; mmFormulaire(null); mmListe(); if (E.tech && E.tech.onglet === 'maillots') mmMajCotes(); }
@@ -2039,7 +2186,7 @@ async function mmEnregistrer() {
     if (MM.cote === '10' && r.haut) images.haut_dom = r.haut.x.cur.toDataURL('image/png');
     else return majRapport('Il faut au moins le haut domicile : repasse sur « Domicile » puis enregistre.'); }
   majRapport('Enregistrement du maillot…');
-  const r = await api('/api/maillot', { action: 'enregistrer', id: MM.id, nom: $('mm-nom').value, prix: +$('mm-prix').value || 1, base,
+  const r = await api('/api/maillot', { action: 'enregistrer', id: MM.id, nom: $('mm-nom').value, prix: null, base,
     plis: $('mm-plis').value, numero: mmNumero(), images, accessoires, icone: MM.icone, embleme: MM.embleme, lettres_png: await mmLettresPng(mmNumero()) });
   if (!r.ok) return majRapport('Pas enregistré : ' + r.erreur);
   // ce qui vient d'être envoyé devient « enregistré » (plus renvoyé tant qu'on n'y touche pas)
@@ -2091,9 +2238,10 @@ function mmDessinFini() {      // fermeture du mode dessin (atelier.js) et enreg
 window.addEventListener('load', () => { if (!$('mm-enregistrer')) return;
   $('mm-enregistrer').onclick = () => mmEnregistrer().catch(e => majRapport('Erreur : ' + e.message));
   $('mm-nouveau').onclick = mmNouveau; document.querySelectorAll('[data-mm-cote]').forEach(b => b.onclick = () => mmCote(b.dataset.mmCote).catch(e => majRapport('Erreur : ' + e.message))); $('mm-construire').onclick = () => mmConstruire().catch(e => majRapport('Erreur : ' + e.message));
-  mmFichier($('mm-icone'), 'icone', 'mm-icone-img'); mmFichier($('mm-embleme'), 'embleme', 'mm-embleme-img');
-  $('mm-icone-dessin').onclick = () => mmDessiner('icone').catch(e => majRapport('Erreur : ' + e.message));
-  $('mm-embleme-dessin').onclick = () => mmDessiner('embleme').catch(e => majRapport('Erreur : ' + e.message));
+  // (27/11, muku) icône et emblème : plus ici, dans Mes créations -> Cosmétique (écran de la boutique, ✎ Dessiner / Importer)
+  if ($('mm-icone')) { mmFichier($('mm-icone'), 'icone', 'mm-icone-img'); mmFichier($('mm-embleme'), 'embleme', 'mm-embleme-img');
+    $('mm-icone-dessin').onclick = () => mmDessiner('icone').catch(e => majRapport('Erreur : ' + e.message));
+    $('mm-embleme-dessin').onclick = () => mmDessiner('embleme').catch(e => majRapport('Erreur : ' + e.message)); }
   // (16/11/2026) aperçu du numéro : redessiné à chaque réglage
   // (22/11) polices importées (⚙ Paramètres) dans les deux listes, + « Importer une police… »
   if (window.brancherPolices) { brancherPolices($('mm-num-police'), p => 'f:' + p.nom); brancherPolices($('mm-num-lettres'), p => p.nom); }
@@ -2127,17 +2275,89 @@ async function cpExporter() {
   for (const x of Object.values(E.textures)) if (x.modif && x.cur && x.obj && x.obj.nom === E.objets[0].nom) textures[x.nom] = x.cur.toDataURL('image/png');
   if (!Object.keys(textures).length) return majRapport('Rien n’est modifié : recolore d’abord la tête.');
   majRapport('Création de la copie « ' + nom + ' » (réencodage de ' + Object.keys(textures).length + ' texture(s))…');
-  const r = await api('/api/copie_personnage', { code: E.tech.code, nom, description: $('cp-desc').value.trim(), textures, portrait: await photoIcone('visage') });
+  if (CP_PEAU.auto) cpPeauAuto();
+  const r = await api('/api/copie_personnage', { code: E.tech.code, cle: creeCode('MesPersonnages'), nom, description: $('cp-desc').value.trim(), textures, portrait: await photoIcone('visage'),
+    // (26/11) automatique : la peau du visage recoloré ('' si le visage n'est pas recoloré) ; une couleur gardée à la main avant
+    // (« Garder », champ) n'est pas remplacée par l'automatique (serveur : peau_main)
+    peau: $('cp-peau') ? (CP_PEAU.auto && CP_PEAU.inchange ? '' : $('cp-peau').value) : undefined, peau_auto: CP_PEAU.auto,
+    corps: $('cp-corps') && CP_CORPS.pret ? $('cp-corps').value : undefined });   // (27/11) morphologie ('' = l'original)
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
   return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
 window.addEventListener('load', () => { if (!$('cp-exporter')) return;
-  $('cp-exporter').onclick = () => cpExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cp-installer').onclick = () => installer('MesPersonnages'); });
+  $('cp-exporter').onclick = () => cpExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cp-installer').onclick = () => installer('MesPersonnages');
+  if ($('cp-peau')) { $('cp-peau').oninput = () => { CP_PEAU.auto = false; cpPeauEtat(); };
+    $('cp-peau-tete').onclick = () => { CP_PEAU.auto = true; cpPeauAuto(); };
+    $('cp-peau-origine').onclick = () => { CP_PEAU.auto = false; if (CP_PEAU.origine) $('cp-peau').value = CP_PEAU.origine; cpPeauEtat(); }; } });
+// (26/11, retour de jayden / WhiteRabbit : « la peau des bras et des jambes ne va pas avec la tête »). LU : la tête (Chr_ToonMetal)
+// a sa peau peinte dans sa texture ; bras (_uniform/sk…), jambes et cou (c000N01_10) sont BLANCS et le shader Chr_EditToon les
+// multiplie par u_skinColor = chara_model colonne 16 « skin_color » (le corps de l'original, même avec une tête recolorée).
+// MESURÉ : cette couleur = la couleur dominante de l'atlas du visage (_10) -> par défaut, la peau du visage recoloré.
+const CP_PEAU = { origine: null, auto: true, code: null, inchange: true };
+function peauDeTete(o, c) {          // ImageData d'origine / recolorée -> '#RRGGBB' : pixels de la couleur dominante d'origine, lus dans la recolorée
+  const d = o.data, e = (c || o).data, n = d.length / 4, pas = Math.max(1, Math.floor(n / 250000)), H = new Map();
+  const cle = k => (d[k] >> 2) << 12 | (d[k + 1] >> 2) << 6 | (d[k + 2] >> 2);
+  for (let i = 0; i < n; i += pas) { const k = i * 4; if (d[k + 3] < 200) continue; const q = cle(k); H.set(q, (H.get(q) || 0) + 1); }
+  let m = -1, nb = 0; for (const [q, v] of H) if (v > nb) { nb = v; m = q; }
+  if (m < 0) return null;
+  const s = [0, 0, 0], s0 = [0, 0, 0]; let t = 0;
+  for (let i = 0; i < n; i += pas) { const k = i * 4; if (d[k + 3] < 200 || cle(k) !== m) continue;
+    for (let j = 0; j < 3; j++) { s[j] += e[k + j]; s0[j] += d[k + j]; } t++; }
+  // change = la peau du visage a été recolorée (sinon : la peau de l'original reste la bonne, rien à écrire)
+  return { couleur: '#' + s.map(v => Math.round(v / t).toString(16).padStart(2, '0')).join('').toUpperCase(),
+           change: s.some((v, j) => Math.abs(v - s0[j]) / t > 1.5) };
+}
+function cpTextureVisage() {         // atlas du visage de la tête ouverte : <code>_10
+  if (!E.tech || !E.objets || !E.objets[0]) return null;
+  const L = Object.values(E.textures).filter(x => x.orig && x.obj && x.obj.nom === E.objets[0].nom);
+  return L.find(x => x.nom === E.tech.code + '_10') || L.filter(x => /_10$/.test(x.nom)).sort((a, b) => b.orig.width * b.orig.height - a.orig.width * a.orig.height)[0] || null;
+}
+function cpPeauAuto() {
+  const x = cpTextureVisage(); if (!x || !$('cp-peau')) return;
+  const cur = x.modif && x.cur && x.cur.getContext ? x.cur.getContext('2d').getImageData(0, 0, x.orig.width, x.orig.height) : null;
+  const p = peauDeTete(x.orig, cur);
+  CP_PEAU.inchange = !p || !p.change;              // visage non recoloré : la peau de l'original (rien d'écrit dans le mod)
+  const v = CP_PEAU.inchange ? (CP_PEAU.origine || (p && p.couleur)) : p.couleur; if (v) $('cp-peau').value = v;
+  cpPeauEtat();
+}
+function cpPeauEtat() {
+  const el = $('cp-peau-etat'); if (!el) return; const v = ($('cp-peau').value || '').toUpperCase();
+  const o = CP_PEAU.origine || '—';
+  el.textContent = CP_PEAU.auto ? `Automatique : comme la peau du visage (${v}). Original : ${o}.` : `Choisie à la main : ${v}. Original : ${o}.`;
+}
+async function cpPeauOuvrir(code) {
+  CP_PEAU.auto = true; CP_PEAU.inchange = true; CP_PEAU.origine = null; CP_PEAU.code = code;
+  try { const q = await api('/api/peau_perso?tete=' + encodeURIComponent(code)); if (CP_PEAU.code !== code) return; CP_PEAU.origine = q.ok ? q.origine : null; } catch (e) { /* serveur ancien */ }
+  if (CP_PEAU.origine && $('cp-peau')) $('cp-peau').value = CP_PEAU.origine;
+  cpPeauEtat();
+}
+// (27/11, muku : « ajouter une option pour choisir la morphologie quand on fait un joueur ») corps du nouveau joueur : un des
+// corps communs du jeu (CHARA_BODY_INFO, moteur/copies_persos.morphologies), montré avec des joueurs qui l'ont ; « Modifier » le remet
+const CP_CORPS = { jeton: 0, pret: false, origine: null };
+async function cpCorpsOuvrir(code) {
+  const sel = $('cp-corps'); if (!sel) return;
+  const j = ++CP_CORPS.jeton; CP_CORPS.pret = false;
+  const cree = creeCode('MesPersonnages') || '';
+  let q = null;
+  try { q = await api('/api/morphologie_perso?tete=' + encodeURIComponent(code) + '&cree=' + encodeURIComponent(cree)); } catch (e) { /* serveur ancien */ }
+  if (j !== CP_CORPS.jeton) return;
+  const T = s => (window.I18N ? I18N.trad(s) : s);
+  const lib = b => T(b.libelle) + (b.exemples && b.exemples.length ? ' — ' + T('comme') + ' ' + b.exemples.join(', ') : '');
+  const L = q && q.ok ? q.liste : [];
+  CP_CORPS.origine = q && q.ok ? q.origine : null;
+  const o = L.find(b => b.cle === CP_CORPS.origine);
+  sel.innerHTML = `<option value="">${echapper(T("Comme l'original") + (o ? ' (' + T(o.libelle) + ')' : ''))}</option>`
+    + L.map(b => `<option value="${b.cle}"${b.cle === CP_CORPS.origine ? ' disabled' : ''}>${echapper(lib(b))}</option>`).join('');
+  sel.value = q && q.ok && q.copie && L.some(b => b.cle === q.copie) ? String(q.copie) : '';
+  CP_CORPS.pret = !!(q && q.ok);
+}
+let cpPeauMinuteur = null;
+function cpPeauPlusTard() { clearTimeout(cpPeauMinuteur); cpPeauMinuteur = setTimeout(() => { if (CP_PEAU.auto && E.tech && E.tech.onglet === 'personnages') cpPeauAuto(); }, 500); }
 // ------------------------------------------------------------------ (15/11/2026) COPIE D'ARMURE (moteur/armures_copies.py)
 async function caListe() {
   const sel = $('ca-esprit'); if (!sel) return;
   let r = { copies: [] }; try { r = await api('/api/copies_esprits'); } catch (e) { /* serveur absent */ }
-  sel.innerHTML = r.copies.length ? r.copies.map(c => `<option value="${echapper(c.code)}">${echapper(c.nom)} (copie de ${echapper(c.nom_base || c.base)})</option>`).join('')
+  sel.innerHTML = r.copies.length ? r.copies.map(c => `<option value="${echapper(c.code)}">${echapper(c.nom)} (copie de ${echapper(tradNom(c.nom_base || c.base))})</option>`).join('')
     : '<option value="">Aucune copie d’esprit : crée-en une dans l’onglet Esprits guerriers</option>';
   if ($('ca-aucune')) { $('ca-aucune').style.display = r.copies.length ? 'none' : ''; $('ca-formulaire').style.display = r.copies.length ? '' : 'none'; }
 }
@@ -2150,7 +2370,12 @@ async function caExporter() {
   for (const x of Object.values(E.textures)) if (x.modif && x.cur && x.obj && x.obj.nom === E.objets[0].nom) textures[x.nom] = x.cur.toDataURL('image/png');
   if (!Object.keys(textures).length) return majRapport('Rien n’est modifié : recolore d’abord l’armure.');
   majRapport('Création de l’armure (réencodage de ' + Object.keys(textures).length + ' texture(s))…');
-  const r = await api('/api/copie_armure', { code: E.tech.code, esprit: $('ca-esprit').value, nom: $('ca-nom').value.trim(), textures });
+  const dem = { code: E.tech.code, esprit: $('ca-esprit').value, nom: $('ca-nom').value.trim(), textures, cle: creeCode('MesEsprits') };
+  let r = await api('/api/copie_armure', dem);
+  // (28/11) une copie d'esprit n'a qu'UNE armure : en créer une 2e la remplaçait sans rien dire -> on demande
+  if (!r.ok && r.deja) {
+    if (!confirm(`Cette copie d'esprit a déjà une armure : « ${r.deja} ». La remplacer par celle-ci ?`)) return majRapport('Rien n’a changé : l’armure « ' + r.deja + ' » est gardée.');
+    r = await api('/api/copie_armure', Object.assign(dem, { remplacer: true })); }
   majRapport(r.ok ? 'Armure créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesEsprits).' : 'Erreur : ' + r.erreur);
   return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
@@ -2170,10 +2395,18 @@ async function ctPreparer() {
     $('corps-choix').innerHTML = C.map(c => `<option value="${echapper(c.modele)}"${c.modele === E.objets[0].chemin.split('|')[0] ? ' selected' : ''}>${echapper(c.libelle)}</option>`).join('');
     $('co-corps').textContent = C.length ? 'Corpulences : ' + C.map(c => c.libelle).join(' · ') : 'Une seule corpulence (celle du maillage du jeu).';
     // (15/11/2026) choix des corps qui peuvent la mettre
-    const L = r.corps_tenue || [], lib = i => (L.find(c => c.ligne === i) || {}).libelle || 'corps ' + i;
-    $('cu-corps').innerHTML = L.map(c => `<label class="${c.propre ? 'propre' : c.emprunt != null ? 'emprunt' : 'impossible'}" title="${c.nb} personnages">`
-      + `<input type="checkbox" data-corps="${c.ligne}"${c.propre ? ' checked' : ''}${!c.propre && c.emprunt == null ? ' disabled' : ''}> ${echapper(c.libelle)}`
-      + `<small>${c.propre ? 'sa version' : c.emprunt != null ? 'emprunte : ' + echapper(lib(c.emprunt)) : 'pas de version (autre squelette)'}</small></label>`).join('');
+    // (27/11) gabarit (grand, petit…) et exemple dans des nœuds à part : le gabarit se traduit (EN / ES)
+    const L = r.corps_tenue || [], nomCorps = c => c ? `<span class="cu-nom"><span>${echapper(c.gabarit || c.libelle)}</span>${c.exemple ? ' <span>(ex. ' + echapper(c.exemple) + ')</span>' : ''}</span>` : '';
+    // (27/11, muku : « simple à comprendre ») seulement les corpulences possibles ; les autres en une ligne
+    const non = L.filter(c => !c.propre && c.emprunt == null).length;
+    $('cu-corps-non').textContent = non ? non + ' autres corpulences ne peuvent pas la mettre (squelette différent).' : '';
+    $('cu-corps').innerHTML = L.filter(c => c.propre || c.emprunt != null).map(c => `<label class="${c.propre ? 'propre' : c.emprunt != null ? 'emprunt' : 'impossible'}" title="${c.nb} personnages">`
+      + `<input type="checkbox" data-corps="${c.ligne}"${c.propre ? ' checked' : ''}${!c.propre && c.emprunt == null ? ' disabled' : ''}> ${nomCorps(c)}`
+      + `<small>${c.propre ? '<span>sa version</span>' : c.emprunt != null ? '<span>à vérifier en jeu, prend :</span> ' + nomCorps(L.find(x => x.ligne === c.emprunt)) : '<span>pas de version (autre squelette)</span>'}</small></label>`).join('');
+    // (27/11) choix automatiques montrés (règle « tout modifiable ») : chaussures du jeu pour ce vêtement, boutique
+    if ($('cu-chaussures')) { $('cu-chaussures').options[0].textContent = r.chaussures ? 'Celles du jeu pour ce vêtement (' + r.chaussures + ')'
+        : r.kit_jeu && r.kit_jeu.source ? 'Comme dans le jeu (pas de chaussures)' : 'Celles du jeu (aucune pour ce vêtement : crampons de Raimon)';
+      E.cuJoueurs = []; cuJoueursPreparer().catch(() => {}); }
     sel.innerHTML = r.porteurs.length ? r.porteurs.map(p => `<option value="${echapper(p.code)}">${echapper(p.nom)} (${echapper(p.code)})</option>`).join('')
       : '<option value="">Aucun joueur ne porte cette tenue dans le jeu : pas de copie possible</option>'; }
   const acc = E.tech.onglet === 'tenues' && E.tech.genre === 'Accessoire';
@@ -2189,7 +2422,7 @@ async function ctExporter() {
   if (!$('ct-porteur').value) return majRapport('Aucun joueur ne porte cette tenue dans le jeu : pas de copie possible.');
   const textures = texturesModifiees(); if (!Object.keys(textures).length) return majRapport('Rien n’est modifié : recolore d’abord la tenue.');
   majRapport('Création du nouveau joueur…');
-  const r = await api('/api/copie_tenue', { code: E.tech.code, porteur: $('ct-porteur').value, nom: $('ct-nom').value.trim(), description: $('ct-desc').value.trim(), textures });
+  const r = await api('/api/copie_tenue', { code: E.tech.code, cle: creeCode('MesPersonnages'), porteur: $('ct-porteur').value, nom: $('ct-nom').value.trim(), description: $('ct-desc').value.trim(), textures });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
   return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
@@ -2198,7 +2431,7 @@ async function coExporter() {
   const tete = ($('co-tete').value.split('·').pop() || '').trim(); if (!tete) return majRapport('Choisis le personnage qui portera l’objet.');
   const textures = texturesModifiees(); if (!Object.keys(textures).length) return majRapport('Rien n’est modifié : recolore d’abord l’objet.');
   majRapport('Création du nouveau joueur…');
-  const r = await api('/api/copie_objet', { code: E.tech.code, tete, nom: $('co-nom').value.trim(), description: $('co-desc').value.trim(), textures });
+  const r = await api('/api/copie_objet', { code: E.tech.code, cle: creeCode('MesPersonnages'), tete, nom: $('co-nom').value.trim(), description: $('co-desc').value.trim(), textures });
   majRapport(r.ok ? 'Copie créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu », puis tirage Kizuna (ChronicleDeluxe).' : 'Erreur : ' + r.erreur);
   return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
@@ -2212,22 +2445,46 @@ async function changerCorpulence(md) {
   await chargerGeometries(true); E.vue.recadrer(true); teintesPieces(); dessinerPieces(); apresRetouche(); if (window.zonesPreparer) zonesPreparer();
   majRapport('Corpulence : ' + $('corps-choix').selectedOptions[0].textContent + ' (mêmes textures).');
 }
+// (27/11) « Seulement ces joueurs » : noms du jeu (même liste que les conditions des synergies)
+async function cuJoueursPreparer() {
+  const lg = (window.I18N && I18N.langue) || 'fr';
+  if (!OJ_SYN || OJ_SYN.lg !== lg) { const r = await api('/api/synergies_listes?langue=' + lg); OJ_SYN = { lg, effets: r.effets || [], joueurs: r.joueurs || [] }; }
+  if (!$('cu-joueurs-liste').children.length) $('cu-joueurs-liste').innerHTML = OJ_SYN.joueurs.map(j => `<option value="${echapper(j.nom)} · ${echapper(j.code)}"></option>`).join('');
+  cuJoueursDessiner();
+}
+function cuJoueursDessiner() {
+  const l = E.cuJoueurs || (E.cuJoueurs = []);
+  $('cu-joueurs-choisis').innerHTML = l.map((j, i) => `<span class="cu-joueur">${echapper(j.nom)} <button type="button" data-i="${i}" title="Retirer">✕</button></span>`).join('');
+  $('cu-joueurs-choisis').querySelectorAll('button').forEach(b => b.onclick = () => { l.splice(+b.dataset.i, 1); cuJoueursDessiner(); });
+}
+function cuJoueurAjouter() {
+  const v = $('cu-joueurs').value, code = (v.split('·').pop() || '').trim();
+  const j = (OJ_SYN && OJ_SYN.joueurs || []).find(x => x.code === code) || (OJ_SYN && OJ_SYN.joueurs || []).find(x => x.nom.toLowerCase() === v.trim().toLowerCase());
+  if (!j) return; const l = E.cuJoueurs || (E.cuJoueurs = []); if (!l.some(x => x.code === j.code)) l.push(j);
+  $('cu-joueurs').value = ''; cuJoueursDessiner();
+}
 async function cuExporter() {
   if (!E.tech || E.tech.onglet !== 'tenues') return majRapport('Ouvre d’abord une tenue (onglet Tenues).');
   const textures = texturesModifiees(); if (!Object.keys(textures).length) return majRapport('Rien n’est modifié : recolore d’abord la tenue.');
   majRapport('Création de la tenue…');
   const corps = [...document.querySelectorAll('#cu-corps [data-corps]:checked')].map(c => +c.dataset.corps);
   if (!corps.length) return majRapport('Coche au moins une corpulence (« Qui peut la mettre ? »).');
-  const r = await api('/api/copie_outfit', { code: E.tech.code, nom: $('cu-nom').value.trim(), description: $('cu-desc').value.trim(), prix: +$('cu-prix').value || 28, textures, icone: E.cuIcone || null, corps });
+  const r = await api('/api/copie_outfit', { code: E.tech.code, modele: E.cree && E.cree.mod === 'MesTenues' ? E.cree.code : undefined, nom: $('cu-nom').value.trim(), description: $('cu-desc').value.trim(), prix: null, textures, icone: null, corps,
+    chaussures: $('cu-chaussures').value, rarete: +$('cu-rarete').value, max: +$('cu-max').value || 1, joueurs: (E.cuJoueurs || []).map(j => j.code) });
+  // (27/11) icône faite tout de suite : le mannequin qui porte la tenue (comme les icônes du jeu), sauf si muku l'a dessinée
+  if (r.ok && r.cle && !r.icone_perso) {
+    try { const ic = await bqIconeTenueAuto(r.cle); const a = await api('/api/cosmetique', { mod: 'MesTenues', code: r.cle, icone: ic, icone_auto: true });
+      r.rapport.push(...(a.rapport || [])); } catch (e) { r.rapport.push('icône automatique : ' + e.message + ' (la texture réduite reste)'); } }
   majRapport(r.ok ? 'Tenue créée (pas encore installée) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesTenues).' : 'Erreur : ' + r.erreur);
   return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
 window.addEventListener('load', () => { if (!$('cu-exporter')) return;
   $('cu-exporter').onclick = () => cuExporter().catch(e => majRapport('Erreur : ' + e.message)); $('cu-installer').onclick = () => installer('MesTenues');
+  $('cu-joueurs').onchange = cuJoueurAjouter; $('cu-joueurs').onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); cuJoueurAjouter(); } };
   $('corps-choix').onchange = () => changerCorpulence($('corps-choix').value).catch(e => majRapport('Erreur : ' + e.message));
   $('cu-icone').onchange = () => { const f = $('cu-icone').files[0]; if (!f) return; const lr = new FileReader(); lr.onload = () => { E.cuIcone = lr.result; $('cu-icone-img').src = lr.result; }; lr.readAsDataURL(f); }; });
 // ------------------------------------------------------------------ (15/11/2026) OBJETS DU JEU (moteur/objets_jeu.py)
-function ojTexture() { const o = E.objets[0]; const t = o && o.textures && o.textures[0]; return t ? E.textures[o.nom + '/' + t.nom] : null; }
+function ojTexture() { document.body.classList.toggle('objet-3d', E.onglet === 'objets' && E.objets.length > 1); const o = E.objets[0]; const t = o && o.textures && o.textures[0]; return t ? E.textures[o.nom + '/' + t.nom] : null; }
 function ojIcone() { const x = ojTexture(), img = $('objet-grand-img');
   if (x && x.cur) { img.src = x.cur.toDataURL('image/png'); $('objet-grand-txt').textContent = ''; return; }
   // (15/11/2026) pas d'image dans les fichiers du jeu (titres, autocollants, synergies…) : une carte avec son nom
@@ -2240,21 +2497,150 @@ function ojIcone() { const x = ojTexture(), img = $('objet-grand-img');
   g.fillStyle = '#9aa3b5'; g.font = '18px Segoe UI'; g.fillText(E.tech ? E.tech.genre : '', 256, 225);
   img.src = c.toDataURL('image/png'); $('objet-grand-txt').textContent = 'Pas d’image dans les fichiers du jeu : le jeu l’affiche en texte.';
 }
+// (27/11) RÉGLAGES D'UN ÉQUIPEMENT (crampons, bracelets / gants, pendentifs, spéciaux) : les 7 bonus tels qu'en jeu (table construite
+// par VRFW), réglables ; les POSTES ne se choisissent pas : le jeu les déduit des bonus (LU nie.exe 0x140e99e30, appelé par la Lua
+// SetupItemPositionIcon) : pour chaque bonus > 0, dans cet ordre, il ajoute ses postes tant qu'il y a moins de 2 postes, puis les
+// trie ATT, MIL, DÉF, GAR
+const OJ_STATS = [['kick', 'Frappe'], ['control', 'Contrôle'], ['technique', 'Technique'], ['pressure', 'Pression'], ['physical', 'Physique'], ['intelligence', 'Intelligence'], ['agility', 'Agilité']];
+const OJ_POSTES_ORDRE = [['kick', ['ATT']], ['technique', ['ATT', 'MIL']], ['intelligence', ['DÉF', 'MIL']], ['agility', ['GAR']], ['physical', ['GAR', 'DÉF']], ['pressure', ['GAR', 'DÉF']], ['control', ['ATT', 'MIL']]];
+function ojPostes(st) { const l = [];
+  for (const [k, ps] of OJ_POSTES_ORDRE) if ((+st[k] || 0) > 0) for (const p of ps) if (l.length < 2 && !l.includes(p)) l.push(p);
+  return ['ATT', 'MIL', 'DÉF', 'GAR'].filter(p => l.includes(p)); }
+// (27/11) RÉGLAGES D'UNE SYNERGIE (vraie nouvelle synergie : son code, ses effets, ses conditions ; moteur/synergies.py) :
+// effets du jeu (30 blocs, textes du jeu), 3 au plus, lignes du panneau comme le jeu (2 principales + 1 secondaire) ; conditions =
+// joueurs TITULAIRES (ou staff) nécessaires, tous obligatoires, 8 au plus (le panneau du jeu en montre 3)
+let OJ_SYN = null;
+async function ojReglagesSynergie(t, d) {
+  const lg = ['en', 'es'].includes(window.ATELIER_LANGUE) ? window.ATELIER_LANGUE : 'fr';
+  if (!OJ_SYN || OJ_SYN.lg !== lg) { const r = await api('/api/synergies_listes?langue=' + lg); OJ_SYN = { lg, effets: r.effets || [], joueurs: r.joueurs || [] }; }
+  const sy = t.synergie, noms = new Map(OJ_SYN.joueurs.map(j => [j.id, j])), lib = e => (e.textes[lg] || e.textes.fr).replace(/X/g, '…');
+  const effets = sy.effets.map(x => x.slice()), conds = sy.conditions.slice();
+  const commun = d.querySelector('.oj-commun');
+  d.innerHTML = `<h3>Synergie ${sy.offensive ? 'offensive' : 'défensive'}</h3>
+    <p class="aide">Une vraie nouvelle synergie (son propre code) : ses effets et les joueurs qu’il faut dans l’équipe. Offensive ou défensive : comme l’original. On en équipe une de chaque genre par composition d’équipe.</p>
+    <b>Effets (3 au plus)</b><div class="oj-syn-effets"></div><button class="oj-syn-plus-effet">+ Effet</button>
+    <b>Joueurs nécessaires (titulaires ou staff, tous obligatoires, 8 au plus)</b><div class="oj-syn-joueurs"></div>
+    <input class="oj-syn-cherche" list="oj-syn-liste" placeholder="Ajouter un joueur : tape son nom"><datalist id="oj-syn-liste">${OJ_SYN.joueurs.map(j => `<option value="${echapper(j.nom + ' · ' + j.code)}">`).join('')}</datalist>
+    <p class="oj-apercu oj-syn-etat"></p>`;
+  if (commun) d.prepend(commun);
+  const dessiner = () => {
+    d.querySelector('.oj-syn-effets').innerHTML = effets.map((x, i) => `<div class="ligne oj-syn-effet">
+      <select data-i="${i}" data-k="0">${OJ_SYN.effets.map(e => `<option value="${e.id}"${e.id === x[0] ? ' selected' : ''}>${echapper(lib(e))}</option>`).join('')}</select>
+      <label>% <input type="number" min="1" max="100" data-i="${i}" data-k="1" value="${x[1]}"></label>
+      <select data-i="${i}" data-k="2"><option value="1"${x[2] ? ' selected' : ''}>ligne principale</option><option value="0"${x[2] ? '' : ' selected'}>ligne secondaire</option></select>
+      <button data-suppr="${i}" title="Retirer cet effet">✕</button></div>`).join('');
+    d.querySelector('.oj-syn-joueurs').innerHTML = conds.map((c, i) => { const j = noms.get(c);
+      return `<span class="oj-puce">${echapper(j ? j.nom + ' · ' + j.code : 'personnage ' + c)}<button data-jsuppr="${i}" title="Retirer">✕</button></span>`; }).join('') || '<i>aucun</i>';
+    d.querySelectorAll('.oj-syn-effet [data-i]').forEach(el => el.onchange = el.oninput = () => { effets[+el.dataset.i][+el.dataset.k] = +el.value; etat(); });
+    d.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () => { effets.splice(+b.dataset.suppr, 1); dessiner(); });
+    d.querySelectorAll('[data-jsuppr]').forEach(b => b.onclick = () => { conds.splice(+b.dataset.jsuppr, 1); dessiner(); });
+    d.querySelector('.oj-syn-plus-effet').disabled = effets.length >= 3; etat(); };
+  const etat = () => { const p = effets.filter(x => x[2]).length, sc = effets.length - p, m = [];
+    if (!effets.length) m.push('il faut au moins un effet'); if (p > 2) m.push('2 lignes principales au plus'); if (sc > 1) m.push('1 ligne secondaire au plus');
+    if (!conds.length) m.push('il faut au moins un joueur'); if (effets.some(x => x[1] > 10)) m.push('au-dessus de 10 % : jamais vu dans le jeu');
+    d.querySelector('.oj-syn-etat').textContent = m.length ? '⚠ ' + m.join(' · ') : 'Active quand ' + (conds.length > 1 ? 'tous ces joueurs sont' : 'ce joueur est') + ' dans l’équipe (titulaires ou staff).'; };
+  d.querySelector('.oj-syn-plus-effet').onclick = () => { if (effets.length < 3) { effets.push([OJ_SYN.effets[0].id, 5, effets.filter(x => x[2]).length < 2 ? 1 : 0]); dessiner(); } };
+  const ch = d.querySelector('.oj-syn-cherche');
+  ch.onchange = () => { const v = ch.value, j = OJ_SYN.joueurs.find(x => x.nom + ' · ' + x.code === v);
+    if (j && !conds.includes(j.id) && conds.length < 8) { conds.push(j.id); ch.value = ''; dessiner(); } };
+  d.__valeurs = () => ({ synergie: { effets: effets.map(x => [x[0], x[1], x[2] ? 1 : 0]), conditions: conds.slice() } });
+  dessiner();
+}
+// (27/11, recherche de tous les types) réglages COMMUNS à toute copie : rareté (1-2 : au-dessus, icône blanche d'après VRFW) et
+// quantité max dans le sac ; description cachée quand le jeu n'en montre pas pour ce genre (titres, emblèmes, synergies…) ;
+// « Créer » refusé, avec la raison, pour ce qu'une copie ne ferait pas marcher (boîtes, plaques, formations, tenues -> onglet Tenues)
+function ojCommun(t) {                        // (27/11, muku : « comme les techniques ») création : nom + description seulement
+  const c = t.commun || {}, lab = $('oj-desc-copie').closest('label');
+  if (lab) lab.hidden = c.description === false;
+  $('oj-exporter').disabled = !!c.refus;
+  // (27/11, parcours EN) morceaux dans des nœuds à part : chacun se traduit (avant : la raison restait en français)
+  if (c.refus) $('oj-etat').innerHTML = '<span>Pas de copie possible pour cet objet :</span> <span>' + echapper(c.refus) + '</span>.';
+}
+function ojCommunChamps(t) {
+  const c = t.commun || {};
+  const d = document.createElement('div'); d.className = 'oj-commun';
+  // (27/11, vu en jeu) choix seulement là où le jeu en a deux : titres (argenté / doré), consommables (fond normal / brillant)
+  const R = { titre: ['Type de titre', 'Argenté', 'Doré'], fond: ['Fond de l’objet', 'Normal', 'Brillant (rare)'] }[c.choix_rarete];
+  d.innerHTML = (R ? `<label>${R[0]} <select class="oj-rarete"><option value="1">${R[1]}</option><option value="2">${R[2]}</option></select></label>` : '') + `
+    ${c.unique ? '<p class="aide">Une seule : comme dans le jeu, on ne peut l’acheter qu’une fois.</p>'
+      : `<label>Quantité max dans le sac <input type="number" class="oj-max" min="1" max="999999" value="${c.max || 1}"></label>`}`;
+  if (R) d.querySelector('.oj-rarete').value = String(Math.min(2, Math.max(1, c.rarete || 1)));
+  return d;
+}
+function ojReglages(t) {                      // création : plus de réglages ici (ils sont dans Mes créations -> Cosmétique)
+  const d = $('oj-reglages'); d.innerHTML = ''; d.__valeurs = null; ojCommun(t);
+}
+// (27/11) panneau des réglages d'une copie (étape Cosmétique de la boutique) : t = { commun, equipement, synergie }
+function ojReglagesDans(t, d) {
+  d.innerHTML = ''; d.__valeurs = null;
+  d.appendChild(ojCommunChamps(t));
+  if (t.synergie) return ojReglagesSynergie(t, d).catch(e => { d.textContent = 'Réglages de la synergie indisponibles : ' + e.message; });
+  if (!t.equipement) return;
+  const S = t.equipement.S || 70, st = t.equipement.stats || {}, commun = d.querySelector('.oj-commun');
+  d.innerHTML = `<h3>Bonus de l’équipement</h3><p class="aide">Les bonus tels qu’ils sont en jeu pour l’original. Les postes (ATT, MIL, DÉF, GAR) ne se choisissent pas : le jeu les déduit des bonus.</p>
+    <div class="oj-stats">${OJ_STATS.map(([k, n]) => `<label>${n} <input type="number" data-stat="${k}" min="${-S}" max="${S}" value="${+st[k] || 0}"></label>`).join('')}</div>
+    <p class="oj-apercu"></p>`;
+  if (commun) d.prepend(commun);
+  const maj = () => { const v = {}; d.querySelectorAll('[data-stat]').forEach(i => { v[i.dataset.stat] = Math.max(-S, Math.min(S, Math.round(+i.value || 0))); });
+    const T = x => window.trad ? window.trad(x) : x;     // (27/11, parcours EN) noms des stats traduits
+    const txt = OJ_STATS.filter(([k]) => v[k]).map(([k, n]) => `${T(n)} ${v[k] > 0 ? '+' : ''}${v[k]}`).join(' · ') || T('aucun bonus'), ps = ojPostes(v);
+    d.querySelector('.oj-apercu').textContent = `${T('En jeu :')} ${txt}${ps.length ? '  —  ' + T('postes :') + ' ' + ps.map(T).join(' ') : ''} (${T('maximum')} ${S})`; };
+  d.querySelectorAll('[data-stat]').forEach(i => { i.oninput = maj; }); maj();
+}
+function ojValeursReglages(d0) {
+  const d = d0 || $('oj-reglages'), r = d && d.querySelector('.oj-rarete'), m = d && d.querySelector('.oj-max');
+  const commun = Object.assign({}, r ? { rarete: +r.value } : {}, m ? { max: Math.max(1, Math.min(999999, Math.round(+m.value || 1))) } : {});
+  return Object.assign(commun, ojValeursPropres(d));
+}
+function ojValeursPropres(d) {
+  const v = {}; if (d && d.__valeurs) return d.__valeurs();
+  if (!d || !d.querySelector('[data-stat]')) return {};
+  d.querySelectorAll('[data-stat]').forEach(i => { v[i.dataset.stat] = Math.round(+i.value || 0); });
+  return { stats: v };
+}
 function ojPreparer() {
   const t = E.tech; $('oj-nom').textContent = t.nom; $('oj-genre').textContent = t.genre + ' · ' + t.code; $('oj-desc').textContent = t.description || '(pas de description)';
-  $('oj-nom-copie').value = t.nom + ' (copie)'; $('oj-desc-copie').value = t.description || '';
+  // (27/11) « Modifier » d'une copie (E.cree) : son nom, sa description et ses réglages ; sinon ceux de l'original (avant : le nom de
+  // la copie était remplacé par « <original> (copie) » juste après avoir été posé)
+  const copie = E.cree && E.cree.mod === 'MesObjets';
+  if (!copie) { $('oj-nom-copie').value = t.nom + ' (copie)'; $('oj-desc-copie').value = t.description || ''; }
   $('oj-formulaire').style.display = '';                 // (15/11/2026) copie pour TOUS les objets (VRFW : la base suffit)
   const ic = t.icone, fichier = ic && /\/(01_icon_emblem|25_icon_nameplate)$/.test(ic.fichier.replace(/\/[^/]*$/, ''));
-  $('oj-etat').textContent = 'Un NOUVEL objet : ton nom, ta description, ton prix ; les mêmes effets que « ' + t.nom + ' ». L’original ne change pas. '
-    + (!ic ? 'Pas d’image dans le jeu pour ce genre d’objet : la copie s’affiche en texte, comme l’original.'
-      : ic.nb > 1 || fichier ? 'Son icône : celle que tu recolores (✎ Mode dessin).' : 'Son icône : celle de l’original (ce genre d’icône ne se remplace pas encore).');
+  // (27/11) ce que la copie garde : réglable (bonus, synergie) ou les effets de l'original (le reste : le jeu les prend dans sa ligne)
+  const effets = t.synergie ? 'ses effets et ses joueurs : réglables ensuite dans Mes créations (Cosmétique)' : t.equipement ? 'ses bonus : réglables ensuite dans Mes créations (Cosmétique)'
+    : /TACTICS/.test(t.famille || '') ? 'la même tactique que « ' + t.nom + ' » (une copie ne change pas la tactique)' : 'les mêmes effets que « ' + t.nom + ' »';
+  const sp = x => '<span>' + echapper(x) + '</span>';     // (27/11, parcours EN) une phrase par nœud : chacune se traduit
+  $('oj-etat').innerHTML = sp(t.commun && t.commun.description === false ? 'Un NOUVEL objet : ton nom.' : 'Un NOUVEL objet : ton nom et ta description.') + ' '
+    + sp('Prix et réglages : ensuite, dans Mes créations (Cosmétique).') + ' '
+    + (t.synergie ? sp('Ses effets et ses joueurs se règlent dans Cosmétique (une vraie nouvelle synergie).') : t.equipement ? sp('Ses bonus se règlent dans Cosmétique.')
+      : /TACTICS/.test(t.famille || '') ? sp('Même tactique que l’original (une copie ne change pas la tactique).') : sp('Mêmes effets que l’original.')) + ' '
+    + sp('L’original ne change pas.') + ' '
+    + sp(!ic ? 'Pas d’image dans le jeu pour ce genre d’objet : la copie s’affiche en texte, comme l’original.'
+      : (t.commun ? t.commun.icone : ic.nb > 1 || fichier) ? 'Son icône : celle que tu recolores (✎ Mode dessin).' : 'Son icône : celle de l’original (le jeu la prend ailleurs, elle ne se remplace pas).');
   ojIcone();
+  if (String(t.code).includes('~')) {            // (27/11) objet d'un mod : aperçu seulement (le serveur refuse sa copie)
+    ojReglages(t); $('oj-exporter').disabled = true;
+    $('oj-etat').innerHTML = '<span>Objet du mod</span> ' + echapper(t.mod || String(t.code).split('~')[0]) + ' : <span>aperçu et recoloration seulement, sa copie n’est pas encore possible.</span>'; return; }
+  if (!copie) return ojReglages(t);
+  api('/api/cosmetique', { lire: true, mod: 'MesObjets', code: E.cree.code }).then(r => {
+    if (r && r.ok) { if (r.description != null) $('oj-desc-copie').value = r.description;
+      if (r.stats && t.equipement) t.equipement = Object.assign({}, t.equipement, { stats: r.stats });
+      if (r.synergie && t.synergie) t.synergie = Object.assign({}, t.synergie, r.synergie);
+      if (t.commun && (r.rarete || r.max)) t.commun = Object.assign({}, t.commun, r.rarete ? { rarete: r.rarete } : {}, r.max ? { max: r.max } : {}); }
+    ojReglages(t); }).catch(() => ojReglages(t));
 }
+// (28/11) code de la création ouverte par « Modifier » (E.cree) pour ce mod, sinon rien : le moteur met à jour CELLE-LÀ
+const creeCode = mod => E.cree && E.cree.mod === mod ? String(E.cree.code) : undefined;
 async function ojExporter() {
   if (!E.tech || E.tech.onglet !== 'objets') return majRapport('Ouvre d’abord un objet du jeu (onglet Objets).');
   const x = ojTexture();
   majRapport('Création de la copie…');
-  const r = await api('/api/copie_objet_jeu', { code: E.tech.code, nom: $('oj-nom-copie').value.trim(), description: $('oj-desc-copie').value, prix: +$('oj-prix').value || 10, icone: x && x.cur ? x.cur.toDataURL('image/png') : null });
+  // (27/11, muku) crampons / gants : les textures recolorées de leur modèle 3D (2e objet de l'éditeur)
+  const tm = {}; for (const t of Object.values(E.textures)) if (t.modif && t.cur && t.obj && E.objets[1] && t.obj.nom === E.objets[1].nom) tm[t.nom] = t.cur.toDataURL('image/png');
+  // (28/11, muku : « quand on fait Modifier, ça refait des objets en double ») « Modifier » : la clé de LA création (même si le nom change)
+  const cle = E.cree && E.cree.mod === 'MesObjets' ? E.cree.code : undefined;
+  const r = await api('/api/copie_objet_jeu', Object.assign({ code: E.tech.code, cle, nom: $('oj-nom-copie').value.trim(), description: $('oj-desc-copie').value, prix: null,
+    icone: x && x.cur ? x.cur.toDataURL('image/png') : null, textures_modele: tm }, ojValeursReglages()));
   majRapport(r.ok ? 'Objet créé (pas encore installé) : ' + r.dossier + '\n- ' + r.rapport.join('\n- ') + '\n« Installer dans le jeu » (mod MesObjets).' : 'Erreur : ' + r.erreur);
   return r;                                   // (22/11) « Créer » crée seulement : on installe depuis la carte (Mes créations)
 }
@@ -2513,6 +2899,19 @@ function reglagesBanniere() {
   $('b-police').value = p.police;
   for (const k of ['taille', 'espacement', 'saute', 'tourne', 'x', 'y', 'e1', 'e2', 'ombreX', 'ombreY', 'lueurT']) $('b-' + k).value = p[k];
   $('b-penche').value = Math.round(p.penche * 100); $('b-ombreA').value = Math.round(p.ombreA * 100);
+  banniereJeuReglages();
+}
+// (27/11, essai profond des boutons : Penché, contours, ombre… ne faisaient RIEN avec les lettres du jeu) les styles « jeu: »
+// (Lettres du jeu, esprit guerrier, totem, armure) sont des images du jeu (banniere.js _dessinerJeu : texte, x, y seulement) :
+// les autres réglages sont grisés, avec une phrase qui dit pourquoi
+function banniereJeuReglages() {
+  if (!B.ed || !$('b-reglages')) return;
+  const jeu = String(B.ed.p.police || '').startsWith('jeu:');
+  const garde = new Set(['b-texte', 'b-police', 'b-x', 'b-y']);
+  for (const el of document.querySelectorAll('#b-reglages input, #b-reglages select, #b-reglages button, #b-styles button')) {
+    if (garde.has(el.id)) continue;
+    el.disabled = jeu; const l = el.closest('.ligne'); if (l) l.classList.toggle('b-inutile', jeu); }
+  if ($('b-jeu-note')) $('b-jeu-note').hidden = !jeu;
 }
 async function ouvrirBannieres() {
   if (!B.ed) {
@@ -2543,7 +2942,8 @@ async function ouvrirBannieres() {
       b.onclick = () => { Object.assign(B.ed.p, st); reglagesBanniere(); dessinerBanniere(); }; $('b-styles').appendChild(b); }
     const num = { penche: v => v / 100, ombreA: v => v / 100 };
     document.querySelectorAll('#b-reglages input, #b-reglages select').forEach(el => el.addEventListener('input', () => {
-      const k = el.id.slice(2); B.ed.p[k] = el.type === 'range' ? (num[k] ? num[k](+el.value) : +el.value) : el.value; dessinerBanniere(); }));
+      const k = el.id.slice(2); B.ed.p[k] = el.type === 'range' ? (num[k] ? num[k](+el.value) : +el.value) : el.value;
+      if (k === 'police') banniereJeuReglages(); dessinerBanniere(); }));
     $('b-graine').onclick = () => { B.ed.p.graine = Math.floor(Math.random() * 1e6); dessinerBanniere(); };
     $('b-utiliser').onclick = () => {
       if (!E.tech || E.tech.perso) return $('b-rapport').textContent = "Ouvre d'abord une technique dans l'onglet Techniques.";
@@ -2587,6 +2987,7 @@ function choisirBanniere(c, el) {
   B.choix = c; document.querySelectorAll('#b-choix div').forEach(x => x.classList.toggle('sel', x === el));
   B.ed.p.texte = c.texte; $('b-texte').value = c.texte;
   if (c.style) { B.ed.p.police = 'jeu:' + c.style; $('b-police').value = B.ed.p.police; }   // (24/11) le style du jeu pour ce genre
+  banniereJeuReglages();
   $('b-modele').src = '/api/telop_png?code=' + encodeURIComponent(c.base);
   // (22/11, retour de muku : « pas intuitif ») UN seul bouton, selon ce qui est choisi à gauche, avec le nom écrit dessus
   // (avant : « Utiliser pour la technique ouverte » et « Enregistrer dans la copie choisie » côte à côte, faciles à confondre)
@@ -2641,6 +3042,11 @@ window.addEventListener('load', async () => {
       dessinerPieces(); dessinerTextures(); dessinerMateriaux(); dessinerTeintes(); paletteTech(); majCompteurs(); $('titre-tech').textContent = "Rien d'ouvert"; majRapport(''); }
   };
   document.querySelectorAll('.onglets button').forEach(b => b.onclick = () => changerOnglet(b.dataset.onglet));
+  // (28/11, petits écrans) barre d'onglets qui défile : la molette la fait glisser ; l'onglet ouvert reste en vue
+  { const nav = document.querySelector('header .onglets');
+    if (nav) { nav.addEventListener('wheel', e => { if (nav.scrollWidth > nav.clientWidth + 2) { nav.scrollLeft += e.deltaY || e.deltaX; e.preventDefault(); } }, { passive: false });
+      new MutationObserver(() => { const a = nav.querySelector('button.actif'); if (a && nav.scrollWidth > nav.clientWidth + 2) a.scrollIntoView({ block: 'nearest', inline: 'nearest' }); })
+        .observe(nav, { subtree: true, attributes: true, attributeFilter: ['class'] }); } }
   window.changerOnglet = changerOnglet;
   if ($('hub-cherche')) $('hub-cherche').oninput = dessinerHub;
   if ($('hub-nouveau')) $('hub-nouveau').onclick = () => { changerOnglet('techniques'); $('cherche').focus(); };
@@ -2701,7 +3107,9 @@ window.addEventListener('load', async () => {
   $('tout-voir').onclick = () => { for (const o of E.objets) for (const p of o.pieces || []) if (p.vue) p.vue.visible = true; E.vue.recadrer(); dessinerPieces(); };
   $('recadrer').onclick = () => E.vue.recadrer(true);
   $('additif').onchange = e => E.vue.additif = e.target.checked;
-  $('fil').onchange = e => E.vue.fil = e.target.checked;
+  $('fil').onchange = e => { E.vue.fil = e.target.checked; optionsNatif();   // (25/11) aussi le lecteur du jeu
+    // (25/11, retour de muku : « le fil de fer ne marche pas » : options.json avait « fil » vide = aucune pièce choisie)
+    if (e.target.checked && E.vue && !E.vue.pieces.some(p => p.sel && !p.ptl)) majRapport('Fil de fer : choisis une pièce (liste des pièces, ou clic sur l’aperçu) pour la voir en traits blancs.'); };
   $('filtre-sel').onchange = () => { dessinerTextures(); dessinerMateriaux(); dessinerTeintes(); };
   $('tex-tout').onclick = () => { for (const c of texturesVisibles()) { const x = E.textures[c]; if (x && x.cur && !x.info.donnees) E.selTex.add(c); } dessinerTextures(); };
   $('tex-rien').onclick = () => { E.selTex.clear(); dessinerTextures(); };
@@ -2725,7 +3133,8 @@ window.addEventListener('load', async () => {
   E.vue.surImage = (f, res) => { majTelop(f); majSon(f); $('vue').classList.toggle('ciel', !!E.vue.lecteur && $('l-terrain').checked && res.decor !== false);
     if (NATIF.actif) return;                   // (14/11/2026) lecteur natif ouvert : barre et texte suivent SON image (suivreNatif)
     if (document.activeElement !== $('l-image')) $('l-image').value = f;
-    $('l-info').textContent = `image ${f} / ${E.lecteur ? E.lecteur.duree : 0}${res.plan ? ' · plan ' + res.plan.nom : ''}`; $('l-jouer').textContent = E.vue.joue ? '❚❚' : '▶'; };
+    const T_ = s => (window.I18N ? I18N.trad(s) : s);   // (27/11) traduit (avant : « image … · plan c0020 » en français)
+    $('l-info').textContent = `${T_('image')} ${f} / ${E.lecteur ? E.lecteur.duree : 0}${res.plan ? ' · ' + T_('plan') + ' ' + res.plan.nom : ''}`; $('l-jouer').textContent = E.vue.joue ? '❚❚' : '▶'; };
   // (14/11/2026 : l'ancien lecteur, rendu Python à la pause et « Film Direct3D », est retiré : tout passe par le lecteur C++)
   if ($('l-natif-bouton')) $('l-natif-bouton').onclick = () => lecteurNatif();
   $('l-jouer').onclick = () => { if (!E.vue.lecteur) activerAnimation(true); E.vue.joue = false; lecteurNatif(); };   // lecture = lecteur C++
@@ -2796,6 +3205,332 @@ if ($('l-particules')) $('l-particules').onchange = () => { for (const p of E.vu
 // cases 7-8 vides, UNE aura (esprit guerrier / totem…) en case 9 où VRFW la range toute seule, niveaux selon la puissance.
 const libCoup = x => (x.mod ? '★ ' : '') + x.nom + ' — ' + x.genre + ' (' + x.code + ')';
 const AURAS_COUPS = ['Esprit guerrier', 'Totem', 'Armure', 'Aura', 'Miximax', 'Lien', 'Éveil', 'Mode'];
+// (26/11, demande de muku) ÉTAPE « COSMÉTIQUE » d'un objet, d'une tenue ou d'un maillot : prix en boutique et icônes (objet : son
+// icône est son visuel, recolorée dans l'éditeur). « Enregistrer » ou « Garder » : la création passe dans Terminées.
+// (26/11, muku : « pour l'interface on va faire comme dans la boutique du jeu », puis « fais tous les menus que je t'ai envoyés »)
+// ÉCRANS DE LA BOUTIQUE DU JEU, un par catégorie des 7 captures de muku (Boutique générale : Maillots, Emblèmes, Tenues ; Boutique
+// d'entraînement : Crampons, Bracelets, Pendentifs, Spéciaux), avec les images du jeu, places en 1920 × 1080 (1 px du jeu = --u) :
+// - barre d'onglets = cmn06_01 list_tab_base02 (verte) en (-78, 156), case choisie cmn06_20 icon_base01, icônes LUES dans
+//   shop_inc GetTabIconTypeByShopSlotType + listview SetupTabIcon -> 200_icon/16_icon_list_tab « icon_list_tab_* » (teintées
+//   comme sur les captures), nom de l'onglet = menu_text du jeu (GetTabTextIdByShopSlotType) dans la langue de l'Atelier ;
+// - lignes shop01_02 list_base_m02_off / list_base_m01_on (contenu 508 × 88 à (8, 8) dans 524 × 104), tous les 102 px dès y = 285,
+//   compteurs base_have02 / base_equip02 / base_stock01, prix token_list_base01 + jeton tk_bb000001 ; la liste = MES créations de
+//   la même catégorie (ce que notre mod mettra en vente), celle qu'on règle en bleu ;
+// - carte shop01_05 (calques LUS dans le .g4pkm) : win_item01 (962, 338), bandeau base_item01 bleu (boutique générale) ou
+//   base_item02 vert (équipements) en (982, 538), filigrane icon_cate_* (200_icon/17_icon_category) en (1565, 540), icône 240 en
+//   (1099, 436) (emblème) ou 184 en (1127, 478) (équipement), « équipé » base_equip01 (1432, 554), « possédés » base_have01 (1626, 554) ;
+// - maillot : les 4 joueurs habillés + DOMICILE / EXTÉRIEUR ; son EMBLÈME a son propre onglet « Emblèmes » (muku : « on fera des
+//   menus séparés pour les emblèmes ») avec « Changer l'emblème ».
+// PAS montré (non lu dans les fichiers) : bonus des équipements (« Pression +70 ») et postes (ATT / MIL…), jetons du joueur.
+const BQ_ONGLETS = {
+  general: [[1, 'ticket01'], [2, 'uniform01'], [3, 'emblem01'], [8, 'outfit01'], [11, 'kizuna04'], [12, 'town01'], [14, 'sixth01'], [18, 'battle01'], [19, 'nameplate01']],
+  entrainement: [[4, 'equip01'], [5, 'equip02'], [6, 'equip03'], [7, 'equip04'], [13, 'tactics01'], [17, 'power01'], [20, 'synergy01']] };   // T, viseur, drapeau des captures
+const BQ_NOMS = {      // menu_text du jeu (ids de GetTabTextIdByShopSlotType)
+  fr: { 1: 'Tickets', 2: 'Maillots', 3: 'Emblèmes', 4: 'Crampons', 5: 'Bracelets', 6: 'Pendentifs', 7: 'Spéciaux', 8: 'Tenues', 11: 'Autocollant décoratif', 12: 'Objet de lien', 13: 'Tactiques spéciales', 14: 'Passif personnalisé', 15: 'Titres', 17: 'Hyper techniques', 18: 'Consommable', 19: 'Plaques nominatives', 20: 'Synergies' },
+  en: { 1: 'Tickets', 2: 'Kits', 3: 'Emblems', 4: 'Boots', 5: 'Bracelets', 6: 'Pendants', 7: 'Misc.', 8: 'Costumes', 11: 'Deco Stickers', 12: 'Bond Objects', 13: 'Special Tactics', 14: 'Custom Passive', 15: 'Titles', 17: 'Hyper Moves', 18: 'Consumables', 19: 'Nameplates', 20: 'Synergies' },
+  es: { 1: 'Tiques', 2: 'Equipaciones', 3: 'Emblemas', 4: 'Botas', 5: 'Brazaletes', 6: 'Colgantes', 7: 'Especiales', 8: 'Ropa', 11: 'Pegatinas decorativas', 12: 'Objeto de vinculación', 13: 'Tácticas especiales', 14: 'Pasiva personalizada', 15: 'Títulos', 17: 'Hipertécnicas', 18: 'Consumibles', 19: 'Placas', 20: 'Sinergias' } };
+const BQ_CATE = { 1: 'ticket01', 2: 'uniform01', 3: 'emblem01', 4: 'equip01', 5: 'equip02', 6: 'equip03', 7: 'equip04', 8: 'outfit01' };    // filigrane icon_cate_*
+const BQ_FAMILLE = { ITEM_SHOES_INFO: 4, ITEM_MISANGA_INFO: 5, ITEM_ACCESSORY_INFO: 6, ITEM_SPECIAL_INFO: 7, ITEM_EMBLEM_INFO: 3, ITEM_TITLE_INFO: 15, ITEM_CONSUME_INFO: 18,
+  ITEM_SPECIAL_TACTICS_INFO: 13, ITEM_SYNERGY_FLAG_INFO: 20, ITEM_KIZUNA_LINK_INFO: 11, ITEM_NAME_PLATE_INFO: 19,
+  ITEM_COSTUME_INFO: 8, ITEM_CRAFT_OBJ_INFO: 12, ITEM_IMPORTANT_INFO: 1 };      // (27/11, VU EN JEU par muku) objets importants : onglet Tickets          // le reste (animaux, célébrations…) : 31 « Autres »
+// (27/11, essai de tous les types) catégories SANS onglet dans les barres du jeu (titres, objets importants, autres) : leur onglet est
+// ajouté au bout de la barre quand on a une création de ce type (avant : on ne pouvait plus y revenir après avoir changé d'onglet)
+const BQ_EXTRA = { 15: 'title01', 30: 'key01', 31: 'present01' };   // 31 : pas « ALL / TOUT » (lu comme « tout »)
+Object.assign(BQ_NOMS.fr, { 30: 'Objets importants', 31: 'Autres' }); Object.assign(BQ_NOMS.en, { 30: 'Key items', 31: 'Other' }); Object.assign(BQ_NOMS.es, { 30: 'Objetos clave', 31: 'Otros' });
+const bqCode = c => c.mod === 'MesMaillots' ? c.code : (c.cle || c.code);
+const bqSlot = (c, r) => c.mod === 'MesMaillots' ? 2 : c.mod === 'MesTenues' ? 8 : BQ_FAMILLE[r.famille] || 31;
+// (27/11, muku : « le mode automatique ne fait pas une bonne image de maillot ») ICÔNE AUTOMATIQUE d'un maillot = l'ICÔNE DU JEU
+// du maillot de base (même dessin, même style que la boutique), RECOLORÉE avec les couleurs de ton maillot : la texture du haut
+// du maillot de base et ta texture ont la même disposition (tu peins par-dessus) ; on range les couleurs de la texture de base
+// en familles (k-moyennes, 10 familles), chaque famille prend la couleur moyenne de TA texture aux mêmes pixels, puis chaque pixel
+// de l'icône prend la couleur de sa famille la plus proche, en gardant son ombre (rapport de luminosité) ; contours noirs gardés.
+async function bqIconeMaillotAuto(m) {
+  const base = m.base || ('uni_' + m.code), im = m.images || {};
+  if (!im.haut_dom) throw new Error('pas d’image du haut domicile');
+  const buf = await api('/api/modele?quoi=joueur&code=c01000100&maillot=' + encodeURIComponent(m.code) + '&cote=10');
+  const lg = new DataView(buf).getUint32(0, true), meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, lg)));
+  const t = (meta.find(x => x.texture && /(?:^|\/)u\d{6}_20$/.test(x.texture)) || {}).texture;
+  if (!t) throw new Error('texture du maillot de base introuvable');
+  const [I, B, T] = await Promise.all([chargerImage('/api/maillot_icone_base?base=' + encodeURIComponent(base)), chargerImage('/tex/' + t + '.png'), chargerImage(im.haut_dom)]);
+  const W = Math.min(256, B.width), H = Math.min(256, B.height);
+  const lire = (img, w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.drawImage(img, 0, 0, w, h); return g.getImageData(0, 0, w, h); };
+  const b = lire(B, W, H).data, tt = lire(T, W, H).data;
+  // familles de couleurs de la texture de base
+  const pts = []; for (let i = 0; i < b.length; i += 4) if (b[i + 3] > 128) pts.push(i);
+  const K = 6, cen = []; for (let k = 0; k < K; k++) { const i = pts[Math.floor((k + 0.5) * pts.length / K)]; cen.push([b[i], b[i + 1], b[i + 2]]); }
+  const proche = (r, g, bl, C) => { let m_ = 0, d0 = 1e9; for (let k = 0; k < C.length; k++) { const d = (r - C[k][0]) ** 2 + (g - C[k][1]) ** 2 + (bl - C[k][2]) ** 2; if (d < d0) { d0 = d; m_ = k; } } return m_; };
+  let fam = new Uint8Array(pts.length);
+  for (let it = 0; it < 8; it++) {
+    const s = cen.map(() => [0, 0, 0, 0]);
+    pts.forEach((i, j) => { const k = fam[j] = proche(b[i], b[i + 1], b[i + 2], cen); s[k][0] += b[i]; s[k][1] += b[i + 1]; s[k][2] += b[i + 2]; s[k][3]++; });
+    s.forEach((e, k) => { if (e[3]) cen[k] = [e[0] / e[3], e[1] / e[3], e[2] / e[3]]; });
+  }
+  // couleur DOMINANTE de ta texture dans chaque famille (la moyenne mélangeait les motifs en une couleur terne)
+  const hist = cen.map(() => new Map());
+  pts.forEach((i, j) => { const q = ((tt[i] >> 4) << 8) | ((tt[i + 1] >> 4) << 4) | (tt[i + 2] >> 4), h = hist[fam[j]], e = h.get(q) || [0, 0, 0, 0];
+    e[0] += tt[i]; e[1] += tt[i + 1]; e[2] += tt[i + 2]; e[3]++; h.set(q, e); });
+  const dest = hist.map((h, k) => { let m_ = null; for (const e of h.values()) if (!m_ || e[3] > m_[3]) m_ = e; return m_ ? [m_[0] / m_[3], m_[1] / m_[3], m_[2] / m_[3]] : cen[k]; });
+  const lum = c => 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+  // l'icône du jeu, recolorée
+  const out = document.createElement('canvas'); out.width = out.height = 256; const g = out.getContext('2d'); g.drawImage(I, 0, 0, 256, 256);
+  const ic = g.getImageData(0, 0, 256, 256), d = ic.data;
+  // famille de chaque pixel choisie sur l'icône un peu floutée (sinon des points parasites aux limites des couleurs)
+  const fl = document.createElement('canvas'); fl.width = fl.height = 256; const gf = fl.getContext('2d'); gf.filter = 'blur(1.5px)'; gf.drawImage(I, 0, 0, 256, 256);
+  const db = gf.getImageData(0, 0, 256, 256).data;
+  // contours de l'icône gardés : traits très foncés, et bord extérieur (à 4 px du fond transparent) s'il est foncé
+  const loinFond = new Uint8Array(256 * 256).fill(99);
+  for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) if (d[(y * 256 + x) * 4 + 3] < 8)
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < 256 && Y < 256) { const o = Y * 256 + X; loinFond[o] = Math.min(loinFond[o], Math.max(Math.abs(dx), Math.abs(dy))); } }
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 8) continue; const p = [d[i], d[i + 1], d[i + 2]], l = lum(p);
+    if (l < 40 || (loinFond[i / 4] <= 4 && l < 95 && Math.max(...p) - Math.min(...p) < 50)) continue;     // contours
+    // ombres et reflets de l'icône gardés NETS : écart de luminosité au centre de la famille, ajouté à la nouvelle couleur
+    const k = proche(db[i], db[i + 1], db[i + 2], cen), dl = (l - lum(cen[k])) * 0.9;
+    for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, dest[k][c] + dl));
+  }
+  g.putImageData(ic, 0, 0);
+  return out.toDataURL('image/png');
+}
+// ÉMBLÈME AUTOMATIQUE : blason (forme d'écusson) aux deux couleurs principales du haut domicile du maillot, bord doré,
+// initiales du nom du maillot (sans « Maillot »), 512 × 512, fond transparent
+async function bqEmblemeAuto(m, nom) {
+  let cols = [[40, 60, 160], [240, 200, 40]];
+  try { const i_ = await chargerImage((m.images || {}).haut_dom); const t = document.createElement('canvas'); t.width = t.height = 64;
+    const g0 = t.getContext('2d'); g0.drawImage(i_, 0, 0, 64, 64); const d = g0.getImageData(0, 0, 64, 64).data, h = new Map();
+    for (let k = 0; k < d.length; k += 4) { if (d[k + 3] < 128) continue; const q = ((d[k] >> 5) << 6) | ((d[k + 1] >> 5) << 3) | (d[k + 2] >> 5);
+      const e = h.get(q) || [0, 0, 0, 0]; e[0] += d[k]; e[1] += d[k + 1]; e[2] += d[k + 2]; e[3]++; h.set(q, e); }
+    const l = [...h.values()].sort((a, b) => b[3] - a[3]).map(e => [e[0] / e[3], e[1] / e[3], e[2] / e[3]]);
+    const loin = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > 90;
+    if (l[0]) { cols[0] = l[0]; cols[1] = l.find(x => loin(x, l[0])) || [255, 255, 255]; } } catch (e) { /* couleurs par défaut */ }
+  const rgb = c => `rgb(${c.map(v => Math.round(v)).join(',')})`, clair = c => (c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11) > 150;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 512; const g = cv.getContext('2d');
+  const ecusson = (marge) => { g.beginPath(); g.moveTo(256, 30 + marge); g.lineTo(440 - marge, 90 + marge * 0.6); g.lineTo(430 - marge, 270);
+    g.quadraticCurveTo(400 - marge * 0.5, 410 - marge * 0.4, 256, 482 - marge); g.quadraticCurveTo(112 + marge * 0.5, 410 - marge * 0.4, 82 + marge, 270);
+    g.lineTo(72 + marge, 90 + marge * 0.6); g.closePath(); };
+  g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 14; g.shadowOffsetY = 6;
+  ecusson(0); const or = g.createLinearGradient(0, 30, 0, 480); or.addColorStop(0, '#fff3b0'); or.addColorStop(.5, '#e0a82a'); or.addColorStop(1, '#a8701a'); g.fillStyle = or; g.fill();
+  g.shadowColor = 'transparent';
+  ecusson(22); g.fillStyle = rgb(cols[0]); g.fill();
+  g.save(); ecusson(22); g.clip(); g.fillStyle = rgb(cols[1]); g.fillRect(256 - 34, 0, 68, 512); g.globalAlpha = .18; g.fillStyle = '#fff'; g.fillRect(0, 0, 512, 200); g.restore();
+  const ini = String(nom || '').replace(/^(Maillot|Tenue|Kit)\s+/i, '').split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '★';
+  g.font = `900 ${ini.length > 1 ? 170 : 210}px "Inazuma Jeu", "Arial Black", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 16; g.strokeStyle = clair(cols[0]) ? '#1b1b1b' : '#ffffff'; g.lineJoin = 'round'; g.strokeText(ini, 256, 275);
+  g.fillStyle = clair(cols[0]) ? rgb(cols[0].map(v => v * 0.35)) : rgb(cols[1]); g.fillText(ini, 256, 275);
+  return cv.toDataURL('image/png');
+}
+// (27/11, muku : « très mal fait le menu, on ne peut cliquer sur rien et les boutons sont pas intuitifs ») TOUT ce qui a l'air
+// cliquable l'est : onglets (mes créations de cette catégorie ; vide = « aucune création ici »), lignes (choisir une création),
+// touches W / C et flèches (onglet précédent / suivant, ligne au-dessus / en dessous), « Changer de boutique » (générale <->
+// entraînement, comme la touche E du jeu) ; en bas de VRAIS boutons (Fermer, Changer l'icône / l'emblème, Garder tel quel,
+// Enregistrer) ; l'écran reste ouvert après « Enregistrer » (la ligne prend « ✓ Terminé ») pour régler les suivantes.
+async function ouvrirCosmetique(c0) {
+  const Z = (pl, z) => `/ui_jeu/zone/${pl}/${z}.png`;
+  const lgJeu = ['en', 'es'].includes(window.ATELIER_LANGUE) ? window.ATELIER_LANGUE : 'fr';     // textes du jeu dans la langue de l'Atelier
+  const defaut = c => c.mod === 'MesTenues' ? 28 : c.mod === 'MesMaillots' ? 1 : 10;
+  const fiches = new Map(), cle = c => c.mod + '|' + bqCode(c);
+  const charger = async c => {
+    if (!fiches.has(cle(c))) {
+      let r; try { r = await api('/api/cosmetique', { lire: true, mod: c.mod, code: bqCode(c) }); } catch (e) { r = { ok: false, erreur: e.message }; }
+      const t = r.ok && r.reglages ? JSON.parse(JSON.stringify(r.reglages)) : null;     // (27/11) réglages : l'original + ceux de la copie
+      if (t) { if (r.stats && t.equipement) t.equipement.stats = r.stats; if (r.synergie && t.synergie) Object.assign(t.synergie, r.synergie);
+        if (t.commun) { if (r.rarete) t.commun.rarete = r.rarete; if (r.max) t.commun.max = r.max; } }
+      fiches.set(cle(c), r.ok ? { c, r, t, img: {}, prix: r.prix || defaut(c), slot: bqSlot(c, r) } : null);
+    }
+    return fiches.get(cle(c)); };
+  const premiere = await charger(c0);
+  if (!premiere) return alert('création inconnue');
+  await Promise.all((HUB.creations || []).filter(x => ['MesObjets', 'MesTenues', 'MesMaillots'].includes(x.mod)).map(charger));
+  const toutes = () => [...fiches.values()].filter(Boolean);
+  // (27/11, muku : « un maillot ne fait pas forcément un emblème ») emblème FACULTATIF : l'onglet Emblèmes ne montre que les
+  // maillots qui en ont un (+ le maillot qu'on règle, pour lui en ajouter un) et les objets emblèmes ; « Retirer l'emblème »
+  const embImg = x => x.sansEmb ? null : (x.img.embleme || x.r.embleme);
+  // (27/11, initiative) maillot sans icône à toi : celle du maillot de base, que le mod met dans ce cas (avant : case vide)
+  const iconeDe = x => x.img.icone || x.r.icone || (x.c.mod === 'MesMaillots' && x.c.maillot && x.c.maillot.base ? '/api/maillot_icone_base?base=' + encodeURIComponent(x.c.maillot.base) : null);
+  // (27/11, muku : « arrête de faire des emblèmes à chaque maillot ») un maillot sans emblème n'a PAS de ligne ici ; on lui en
+  // n'en ajoute pas (27/11, muku : plus de « Ajouter un emblème » ni « Importer une image » : le mode dessin sait importer)
+  const dansOnglet = s => s === 3 ? toutes().filter(x => (x.c.mod === 'MesMaillots' && (embImg(x) || x.sansEmb)) || x.slot === 3) : toutes().filter(x => x.slot === s);
+  const boutiqueDe = x => x.c.mod === 'MesObjets' && x.r.boutique === 'entrainement' ? 'entrainement' : 'general';
+  const ongletsDe = b => { const l = BQ_ONGLETS[b].slice(), vus = new Set(l.map(([s]) => s));
+    const ext = [];
+    for (const x of toutes()) if (boutiqueDe(x) === b && !vus.has(x.slot) && BQ_EXTRA[x.slot] && !BQ_ONGLETS[b === 'general' ? 'entrainement' : 'general'].some(([s]) => s === x.slot)) { vus.add(x.slot); ext.push([x.slot, BQ_EXTRA[x.slot]]); }
+    return l.concat(ext.sort((p_, q_) => p_[0] - q_[0])); };
+  const bqBoutiqueDe = s => ongletsDe('entrainement').some(([x]) => x === s) ? 'entrainement' : 'general';
+  let sel = premiere, memo = premiere, slot = premiere.slot, boutique = boutiqueDe(premiere), joueursDe = null;
+  let f = $('boutique-cosm');
+  if (!f) { f = document.createElement('dialog'); f.id = 'boutique-cosm'; document.body.appendChild(f); }
+  const vueJ = document.createElement('div'); vueJ.className = 'bq-joueurs'; vueJ.innerHTML = '<canvas class="bq-vue"></canvas><span class="bq-vue-msg"></span>';
+  const nomEmb = x => (x.r.nom_embleme && (x.r.nom_embleme[lgJeu] || x.r.nom_embleme.fr)) || x.c.nom;
+  const compteur = (fond, ic, n, cls) => `<span class="${cls}"><img class="bq-cfond" src="${fond}" alt=""><img class="bq-cic" src="${ic}" alt=""><b>${n}</b></span>`;
+  const ligne = (x, i) => {
+    const on = x === sel, emb = slot === 3 && x.c.mod === 'MesMaillots', icone = emb ? embImg(x) : iconeDe(x);
+    return `<div class="bq-ligne${on ? ' bq-on' : ''}" data-i="${i}" title="${on ? '' : echapper('Choisir « ' + x.c.nom + ' »')}">
+      <img class="bq-lfond" src="${Z('shop01_02', on ? 'list_base_m01_on' : 'list_base_m02_off')}" alt="">${on ? '<i class="bq-fleche"></i>' : ''}
+      <span class="bq-ic">${icone ? `<img src="${icone}" alt="">` : ''}</span>
+      <span class="bq-nom">${echapper(emb ? nomEmb(x) : x.c.nom)}</span>${emb && !icone ? `<span class="bq-fait bq-sans-emb">${x.sansEmb ? 'Emblème retiré' : 'Nouvel emblème'}</span>` : x.r.fait ? '<span class="bq-fait">✓ Terminé</span>' : ''}
+      ${boutique === 'entrainement' ? ([4, 5, 6, 7].includes(x.slot) ? compteur(Z('shop01_02', 'base_equip02'), Z('shop01_05', 'gtxt_equip01'), 0, 'bq-equipe') : '') + compteur(Z('shop01_02', 'base_have02'), Z('shop01_02', 'icon_have01'), 0, [4, 5, 6, 7].includes(x.slot) ? 'bq-avoir bq-avoir2' : 'bq-avoir')
+        : compteur(Z('shop01_02', 'base_have02'), Z('shop01_02', 'icon_have01'), 0, 'bq-avoir') + compteur(Z('shop01_02', 'base_stock01'), Z('shop01_02', 'icon_stock01'), 1, 'bq-stock')}
+      <label class="bq-prix"${on ? ' title="Prix en boutique (jetons) : clique pour le changer"' : ''}><img class="bq-pfond" src="${Z('shop01_02', 'token_list_base01')}" alt="">
+        <img class="bq-jeton" src="${Z('icon_item10', 'tk_bb000001')}" alt="">${on ? `<input type="number" min="1" class="cosm-prix" value="${x.prix}"><i class="bq-crayon">✎</i>` : `<b>${x.prix}</b>`}</label></div>`; };
+  const changerOnglet = s => { slot = s; boutique = bqBoutiqueDe(s); const l = dansOnglet(s); sel = l.includes(memo) ? memo : l.includes(sel) ? sel : l[0] || null; dessiner(); };   // un onglet vide n'oublie pas la création réglée
+  const dessiner = () => {
+    const emb = slot === 3 && !!sel && sel.c.mod === 'MesMaillots', liste = dansOnglet(slot), onglets = ongletsDe(boutique), n = onglets.length;
+    const pas = n > 9 ? 640 / (n - 1) : 80, ech = Math.min(1, (pas - 4) / 76);   // (27/11) plus de 9 onglets : resserrés dans la zone verte
+    const ia = onglets.findIndex(([s]) => s === slot), titre = boutique === 'entrainement' ? 'Boutique d’entraînement' : 'Boutique générale';
+    const equip = boutique === 'entrainement', equipe = [4, 5, 6, 7].includes(slot), kit = sel && sel.c.mod === 'MesMaillots' && !emb, mannequin = sel && sel.c.mod === 'MesTenues';
+    const ic = sel && (emb ? embImg(sel) : iconeDe(sel));
+    const boutons = !sel ? [] : emb ? [['embleme', 'Changer l’emblème', "Emblème d'équipe (512 × 512, fond transparent ; vendu avec le maillot, même prix)"]]
+      : sel.c.mod === 'MesTenues' || sel.c.mod === 'MesMaillots' || (sel.c.mod === 'MesObjets' && sel.r.icone && sel.r.dessin !== false) ? [['icone', 'Changer l’icône', 'Icône de la boutique (256 × 256, fond transparent)']] : [];   // (27/11) objets aussi
+    const note = !sel ? (slot === 3 ? 'Aucun de tes maillots n’a d’emblème.' : 'Aucune de tes créations dans cette catégorie.')
+      : emb ? 'L’emblème est vendu avec le maillot, au même prix.'
+      : 'Clique le prix pour le changer.';   // (27/11, initiative) une ligne : les boutons parlent d'eux-mêmes
+    f.style.backgroundImage = `url('${Z('shop01_00', 'bg01')}')`;      // (27/11) plein écran : le fond du jeu sur toute la fenêtre
+    f.innerHTML = `<div class="bq-ecran" style="background-image:url('${Z('shop01_00', 'bg01')}')">
+      <div class="bq-haut"><span class="bq-coin"><img src="${Z('shop01_00', 'bg_icon_shop01')}" alt=""></span><b>${titre}</b><small>Cosmétique${sel ? ' : ' + echapper(sel.c.nom) : ''}</small>
+        <button class="bq-x cosm-fermer2" title="Fermer (Esc)">✕</button></div>
+      <img class="bq-barre" src="${Z('cmn06_01', 'list_tab_base02')}" alt="">
+      ${ia >= 0 ? `<img class="bq-case" src="${Z('cmn06_20', 'icon_base01')}" alt="" style="left:calc(var(--u) * ${440 + (ia - (n - 1) / 2) * pas - 46 * ech});width:calc(var(--u) * ${92 * ech})">` : ''}
+      ${onglets.map(([s, ico], k) => `<button class="bq-onglet${s === slot ? ' bq-actif' : ''}${dansOnglet(s).length ? '' : ' bq-vide'}" data-slot="${s}"
+        style="left:calc(var(--u) * ${440 + (k - (n - 1) / 2) * pas - pas / 2});width:calc(var(--u) * ${pas})${ech < 1 ? ';--ech:' + ech : ''}" title="${echapper(((BQ_NOMS[lgJeu] || BQ_NOMS.fr)[s] || '') + ' (' + dansOnglet(s).length + ')')}">
+        <i style="-webkit-mask-image:url('${Z('icon_list_tab', 'icon_list_tab_' + ico)}');mask-image:url('${Z('icon_list_tab', 'icon_list_tab_' + ico)}')"></i></button>`).join('')}
+      <img class="bq-tri" src="${Z('cmn06_01', 'icon_sort01')}" alt="">
+      <button class="bq-touche-w" title="Onglet précédent (W)"><img src="${Z('gaiji_key', 'gaiji_w')}" alt="W"></button>
+      <button class="bq-touche-c" title="Onglet suivant (C)"><img src="${Z('gaiji_key', 'gaiji_c')}" alt="C"></button>
+      <div class="bq-categorie">${echapper((BQ_NOMS[lgJeu] || BQ_NOMS.fr)[slot] || '')}</div>
+      <div class="bq-liste">${liste.length ? liste.map(ligne).join('') : `<p class="bq-vide-txt">${echapper('Aucune de tes créations dans cette catégorie.')}</p>`}</div>
+      <img class="bq-tokens-trait" src="${Z('shop01_03', 'token_line01')}" alt=""><img class="bq-tokens" src="${Z('shop01_03', 'gtxt_token01')}" alt="TOKENS">
+      ${kit ? `<div class="bq-cotes"><img src="/ui_jeu/zone/shop01_07/${lgJeu}/gtxt_home01.png" alt=""><img src="/ui_jeu/zone/shop01_07/${lgJeu}/gtxt_away01.png" alt=""></div>` : ''}
+      ${sel && !kit && !mannequin ? `<img class="bq-win" src="${Z('shop01_05', 'win_item01')}" alt="">
+        <img class="bq-bande" src="${Z('shop01_05', equip ? 'base_item02' : 'base_item01')}" alt="">
+        ${BQ_CATE[slot] ? `<img class="bq-filigrane" src="${Z('icon_category', 'icon_cate_' + BQ_CATE[slot])}" alt="">` : ''}
+        ${ic ? `<img class="${emb || !equip ? 'bq-grande-emb' : 'bq-grande-eq'}" src="${ic}" alt="">` : `<span class="bq-sans">${emb ? (sel.sansEmb ? 'Emblème retiré' : 'Nouvel emblème : à faire') : ''}</span>`}
+        <span class="bq-carte-nom">${echapper(emb ? nomEmb(sel) : sel.c.nom)}</span>
+        ${equipe ? compteur(Z('shop01_05', 'base_equip01'), Z('shop01_05', 'gtxt_equip01'), 0, 'bq-c-equipe') : ''}
+        ${compteur(Z('shop01_05', 'base_have01'), Z('shop01_05', 'icon_have01'), 0, 'bq-c-avoir')}` : ''}
+      <div class="bq-message"><span class="cosm-etat">${echapper(note)}</span></div>
+      <div class="bq-bas">
+        <button class="bq-btn cosm-boutique"${ongletsDe(boutique === 'entrainement' ? 'general' : 'entrainement').some(([x]) => dansOnglet(x).length) ? '' : ' hidden'} title="Passer à la ${boutique === 'entrainement' ? 'Boutique générale' : 'Boutique d’entraînement'}">⇄ ${boutique === 'entrainement' ? 'Boutique générale' : 'Boutique d’entraînement'}</button>
+        ${boutons.map(([k, t, aide]) => `${sel.c.mod === 'MesMaillots' || sel.c.mod === 'MesTenues' ? `<button class="bq-btn bq-auto-btn" data-auto="${k}" title="${sel.c.mod === 'MesTenues' ? 'La tenue en croix sur le mannequin, comme les icônes du jeu' : k === 'embleme' ? 'Blason aux couleurs du maillot, avec ses initiales' : 'L’icône du jeu du maillot de base, aux couleurs de ton maillot'}">✨ Automatique</button>` : ''}
+          <button class="bq-btn bq-dessin-btn" data-dessin="${k}" title="${echapper(aide)}">✎ ${k === 'embleme' ? 'Dessiner l’emblème' : 'Dessiner l’icône'}</button>`).join('')}
+        ${sel && sel.c.mod === 'MesObjets' && reglable(sel) ? `<button class="bq-btn bq-regl-btn${sel.ouvert ? ' bq-actif' : ''}" title="Bonus, synergie, type de titre, quantité…">⚙ <span>Réglages</span></button>` : ''}
+        <!-- (27/11, muku) plus de « Retirer l’emblème » -->
+        ${sel ? `<button class="bq-btn bq-ok cosm-ok" title="Enregistrer le prix, les images et les réglages">✔ <span>Enregistrer</span></button>` : ''}</div>
+    </div>`;
+    const ecran = f.querySelector('.bq-ecran');
+    // (27/11, muku : « les stats se choisissent dans Cosmétique ») réglages de la copie : panneau gardé par fiche (rien n'est perdu
+    // en changeant de ligne), résumé façon jeu dans la carte (« Frappe +60 · Agilité +40 »)
+    if (sel && sel.c.mod === 'MesObjets' && reglable(sel)) {
+      if (!sel.panneau) { sel.panneau = document.createElement('div'); sel.panneau.className = 'bq-reglages-corps';
+        ojReglagesDans(sel.t, sel.panneau); bqEmbellir(sel.panneau, sel.t);
+        sel.panneau.addEventListener('input', () => { if (sel) resume(); }); sel.panneau.addEventListener('change', () => { if (sel) resume(); }); }
+      const res = document.createElement('div'); res.className = 'bq-resume'; ecran.appendChild(res);
+      if (sel.ouvert) { const w = document.createElement('div'); w.className = 'bq-reglages';
+        w.innerHTML = `<div class="bq-reglages-titre"><b>Réglages : ${echapper(sel.c.nom)}</b><button class="bq-btn" title="Revenir à la carte">✕</button></div>`;
+        w.appendChild(sel.panneau); w.querySelector('button').onclick = () => { sel.ouvert = false; dessiner(); }; ecran.appendChild(w); }
+      resume(); }
+    const rb = f.querySelector('.bq-regl-btn'); if (rb) rb.onclick = () => { sel.ouvert = !sel.ouvert; dessiner(); };
+    if (mannequin) { ecran.appendChild(vueJ); if (joueursDe !== cle(sel.c)) { joueursDe = cle(sel.c); tenue3D(vueJ.querySelector('.bq-vue'), vueJ.querySelector('.bq-vue-msg'), bqCode(sel.c)); } }
+    if (kit) { ecran.appendChild(vueJ); if (joueursDe !== cle(sel.c)) { joueursDe = cle(sel.c); joueursMaillot(vueJ.querySelector('.bq-vue'), vueJ.querySelector('.bq-vue-msg'), sel.c.maillot); } }
+    const pr = f.querySelector('.cosm-prix'); if (pr) pr.oninput = () => { if (pr.value !== '') sel.prix = +pr.value; };
+    f.querySelectorAll('.bq-onglet').forEach(o => o.onclick = () => changerOnglet(+o.dataset.slot));
+    f.querySelectorAll('.bq-ligne').forEach(l => l.onclick = e => { const x = liste[+l.dataset.i]; if (x && x !== sel && !e.target.closest('.bq-prix')) { sel = memo = x; dessiner(); } });
+    f.querySelector('.bq-touche-w').onclick = () => tourner(-1);
+    f.querySelector('.bq-touche-c').onclick = () => tourner(1);
+    f.querySelectorAll('input[type=file]').forEach(inp => inp.onchange = () => { const fi = inp.files[0]; if (!fi) return; const lr = new FileReader();
+      lr.onload = () => { sel.img[inp.dataset.k] = lr.result; if (inp.dataset.k === 'embleme') sel.sansEmb = false; dessiner(); f.querySelector('.cosm-etat').textContent = 'Image prête : « Enregistrer » pour la garder.'; }; lr.readAsDataURL(fi); });
+    f.querySelectorAll('.bq-auto-btn').forEach(b => b.onclick = () => imageAuto(b.dataset.auto));
+    f.querySelectorAll('.bq-dessin-btn').forEach(b => b.onclick = () => dessinerImage(b.dataset.dessin).catch(e => { f.querySelector('.cosm-etat').textContent = 'Erreur : ' + e.message; }));
+    f.querySelector('.cosm-fermer2').onclick = () => f.close();   // (27/11, initiative) plus de « Fermer » en double : la croix et Échap
+    f.querySelector('.cosm-boutique').onclick = () => { const b = boutique === 'entrainement' ? 'general' : 'entrainement';
+      const s = (ongletsDe(b).find(([x]) => dansOnglet(x).length) || ongletsDe(b)[0])[0]; changerOnglet(s); };
+    const o = f.querySelector('.cosm-ok');      // (27/11, muku) plus de « Garder tel quel » (bouton inutile)
+    if (o) o.onclick = () => envoyer(false);
+  };
+  // (27/11, muku : « on doit pouvoir changer l'image ici » puis « tu as mis le mode dessin de l'Atelier Maillots, moi je veux celui
+  // de l'Atelier Inazuma ») DESSIN DE L'ICÔNE / DE L'EMBLÈME = le MODE DESSIN de l'Atelier (atelier.js : calques, outils façon
+  // Photoshop) : son panneau #atelier-dessin est posé dans l'écran de la boutique le temps du dessin, sur une texture temporaire
+  // 256 × 256 (icône) ou 512 × 512 (emblème) qui part de l'image actuelle (sinon de l'icône du maillot de base, sinon vide) ;
+  // « Terminer » / Échap le remet à sa place et rend le dessin ici (à garder avec « ✔ Enregistrer »).
+  const dessinerImage = async k => {
+    const x = sel; if (!x || window.__bqDessin) return;
+    const taille = k === 'embleme' ? 512 : 256, cv = document.createElement('canvas'); cv.width = cv.height = taille; const g = cv.getContext('2d');
+    const srcs = [x.img[k], k === 'embleme' ? embImg(x) : x.r.icone,
+      k === 'icone' && x.c.maillot && x.c.maillot.base ? '/api/maillot_icone_base?base=' + encodeURIComponent(x.c.maillot.base) : null].filter(Boolean);
+    for (const src of srcs) { try { g.drawImage(await chargerImage(src), 0, 0, taille, taille); break; } catch (e) { /* image suivante */ } }
+    const cleT = 'bq/' + k, orig = g.getImageData(0, 0, taille, taille);
+    E.textures[cleT] = { obj: { nom: 'boutique' }, nom: (k === 'embleme' ? 'Emblème : ' : 'Icône : ') + x.c.nom, info: { w: taille, h: taille }, orig, cur: cv, modif: false, moyenne: moyenne(orig) };
+    const pan = $('atelier-dessin'), place = [pan.parentNode, pan.nextSibling];
+    const o = document.createElement('div'); o.className = 'bq-dessin'; f.querySelector('.bq-ecran').appendChild(o); o.appendChild(pan);
+    window.__bqDessin = { cle: cleT, fini: () => {
+      window.__bqDessin = null; place[0].insertBefore(pan, place[1]); o.remove();
+      const t = E.textures[cleT]; if (t && t.modif) { x.img[k] = t.cur.toDataURL('image/png'); if (k === 'embleme') x.sansEmb = false; }
+      delete E.textures[cleT]; if (typeof A !== 'undefined') { if (A.docs) delete A.docs[cleT]; if (A.doc && A.doc.cle === cleT) A.doc = null; }
+      if (f.open && fiches.get(cle(x.c)) === x) { dessiner(); if (x.img[k]) f.querySelector('.cosm-etat').textContent = 'Dessin prêt : « ✔ Enregistrer » pour le garder.'; } } };
+    const videAvant = $('at-vide') ? $('at-vide').checked : false; if ($('at-vide')) $('at-vide').checked = true;   // (27/11) icône : fond vide
+    const finiBq = window.__bqDessin.fini; window.__bqDessin.fini = () => { if ($('at-vide')) $('at-vide').checked = videAvant; return finiBq(); };
+    document.body.classList.add('dessin'); atActiver(cleT); atOutil(A.outil && A.outil !== 'choisir' ? A.outil : 'pinceau');
+    setTimeout(() => { atPlat(); dispatchEvent(new Event('resize')); }, 80);
+  };
+  // (27/11) « ✨ Automatique » : l'image faite toute seule (bqIconeMaillotAuto / bqEmblemeAuto), à garder avec « ✔ Enregistrer »
+  const imageAuto = async k => {
+    const x = sel; if (!x || !(x.c.maillot || x.c.mod === 'MesTenues')) return; const et = f.querySelector('.cosm-etat'); et.textContent = 'Image automatique en cours…';
+    try { x.img[k] = x.c.mod === 'MesTenues' ? await bqIconeTenueAuto(bqCode(x.c)) : k === 'embleme' ? await bqEmblemeAuto(x.c.maillot, x.c.nom) : await bqIconeMaillotAuto(x.c.maillot); if (k === 'embleme') x.sansEmb = false; }
+    catch (e) { et.textContent = 'Image automatique impossible : ' + e.message; return; }
+    if (sel === x) { dessiner(); f.querySelector('.cosm-etat').textContent = 'Image automatique prête : « ✔ Enregistrer » pour la garder, ou « ✎ Dessiner » pour la retoucher.'; } };
+  // (27/11) ce qui se règle pour un objet : bonus (équipement), synergie, type de titre / fond, quantité (pas « une seule »)
+  const reglable = x => { const t = x && x.t; if (!t) return false; const c = t.commun || {};
+    return !!(t.equipement || t.synergie || c.choix_rarete || !c.unique); };
+  const resume = () => { const res = f.querySelector('.bq-resume'); if (!res || !sel || !sel.panneau) return;
+    const v = ojValeursReglages(sel.panneau), l = [], T = x => window.trad ? window.trad(x) : x;     // (27/11) traduit (EN / ES)
+    if (v.stats) { const t = OJ_STATS.filter(([k]) => v.stats[k]).map(([k, n]) => `${T(n)} ${v.stats[k] > 0 ? '+' : ''}${v.stats[k]}`); l.push(t.join(' · ') || T('aucun bonus'));
+      const ps = ojPostes(v.stats); if (ps.length) l.push(ps.map(T).join(' ')); }
+    if (v.synergie) l.push(v.synergie.effets.length + ' ' + T('effet(s)') + ' · ' + v.synergie.conditions.length + ' ' + T('joueur(s)'));
+    if (v.rarete && sel.t.commun && sel.t.commun.choix_rarete) l.push(T(sel.t.commun.choix_rarete === 'titre' ? (v.rarete === 2 ? 'Titre doré' : 'Titre argenté') : (v.rarete === 2 ? 'Fond brillant' : 'Fond normal')));
+    if (v.max) l.push(T('max') + ' ' + v.max);
+    res.textContent = l.join('  —  '); };
+  // (27/11, muku : « fais un bel affichage dans l'esprit du shop ») bonus en lignes de boutique : nom, − valeur +, barre (0 au
+  // centre, jusqu'au maximum du jeu S) ; les champs d'origine restent (mêmes valeurs lues à l'enregistrement)
+  const bqEmbellir = (d, t) => {
+    const S = (t.equipement && t.equipement.S) || 70;
+    d.querySelectorAll('[data-stat]').forEach(inp => { const lab = inp.closest('label'); if (!lab || lab.classList.contains('bq-stat')) return;
+      lab.classList.add('bq-stat'); const n = lab.firstChild && lab.firstChild.nodeType === 3 ? lab.firstChild.textContent.trim() : '';
+      lab.innerHTML = ''; const nom = document.createElement('span'); nom.className = 'bq-stat-nom'; nom.textContent = n;
+      const moins = document.createElement('button'); moins.type = 'button'; moins.className = 'bq-pm'; moins.textContent = '−'; moins.title = '−5';
+      const plus = document.createElement('button'); plus.type = 'button'; plus.className = 'bq-pm'; plus.textContent = '+'; plus.title = '+5';
+      const barre = document.createElement('span'); barre.className = 'bq-stat-barre'; barre.innerHTML = '<i></i>';
+      lab.append(nom, moins, inp, plus, barre);
+      const maj = () => { const v = Math.max(-S, Math.min(S, Math.round(+inp.value || 0))), i = barre.firstChild;
+        i.style.left = (v >= 0 ? 50 : 50 + 50 * v / S) + '%'; i.style.width = (50 * Math.abs(v) / S) + '%'; i.className = v < 0 ? 'neg' : '';
+        lab.classList.toggle('bq-stat-zero', !v); };
+      const pas = k => { inp.value = Math.max(-S, Math.min(S, Math.round(+inp.value || 0) + k)); inp.dispatchEvent(new Event('input', { bubbles: true })); maj(); };
+      moins.onclick = () => pas(-5); plus.onclick = () => pas(5); inp.addEventListener('input', maj); maj(); });
+  };
+  const tourner = d => { const l = ongletsDe(boutique), i = l.findIndex(([s]) => s === slot); changerOnglet(l[(i + d + l.length) % l.length][0]); };
+  const envoyer = async garder => {
+    const x = sel, et = f.querySelector('.cosm-etat'); et.textContent = 'Écriture…';
+    let rep; try { rep = await api('/api/cosmetique', Object.assign({ mod: x.c.mod, code: bqCode(x.c), garder, prix: x.prix, icone: x.img.icone || null, embleme: x.sansEmb ? null : x.img.embleme || null, sans_embleme: !!x.sansEmb },
+      x.panneau ? ojValeursReglages(x.panneau) : {})); }
+    catch (e) { rep = { ok: false, erreur: e.message }; }
+    if (!rep.ok) { et.textContent = 'Erreur : ' + rep.erreur; return; }
+    majRapport(rep.rapport.join('\n')); chargerHub();
+    fiches.delete(cle(x.c)); const y = await charger(x.c); if (sel === x) sel = y || x;
+    dessiner(); f.querySelector('.cosm-etat').textContent = '✓ ' + rep.rapport[0]; };
+  // clavier comme le jeu : W / C onglets, flèches lignes, Entrée enregistre (Esc ferme : boîte de dialogue)
+  // (le focus se perd quand l'écran est redessiné : écoute sur toute la page, seulement quand la boutique est ouverte)
+  if (!window.__bqClavier) { window.__bqClavier = true; document.addEventListener('keydown', e => { const g = $('boutique-cosm'); if (g && g.open && g.__clavier) g.__clavier(e); }); }
+  f.__clavier = e => {
+    if (window.__bqDessin) return;
+    if (e.target.tagName === 'INPUT') { if (e.key === 'Enter' && !e.target.closest('.bq-reglages')) { e.preventDefault(); envoyer(false); } return; }
+    if (e.target.closest && e.target.closest('.bq-reglages') && e.key !== 'Escape') return;     // (27/11) le panneau des réglages garde ses touches
+    const k = e.key.toLowerCase(), l = dansOnglet(slot), i = l.indexOf(sel);
+    if (k === 'w') tourner(-1); else if (k === 'c') tourner(1);
+    else if ((k === 'arrowdown' || k === 'arrowup') && l.length) { e.preventDefault(); sel = memo = l[(i + (k === 'arrowdown' ? 1 : -1) + l.length) % l.length]; dessiner(); }
+    else return;
+  };
+  f.oncancel = e => { if (window.__bqDessin) e.preventDefault(); };      // Esc pendant le dessin : ne ferme pas la boutique
+  f.onclose = () => { if (window.__bqDessin) atDessinFermer(); };
+  dessiner();
+  if (!f.open) f.showModal();
+}
 function fenetreCoups(titre, html) {
   let f = $('fenetre-coups');
   if (!f) { f = document.createElement('dialog'); f.id = 'fenetre-coups'; document.body.appendChild(f); }
@@ -2830,7 +3565,11 @@ async function ouvrirCoups(c) {
       <div class="tc-corps"><div class="tc-gauche"></div>
         <div class="tc-milieu"><canvas id="tc-vue"></canvas><div class="tc-vue-msg"></div><div class="tc-curseur"></div>
           <div class="tc-maillot-choix"><span>Maillot</span><select class="tc-maillot"></select>
-            <button data-cote="10" title="Domicile">Dom.</button><button data-cote="20" title="Extérieur">Ext.</button></div></div>
+            <button data-cote="10" title="Domicile">Dom.</button><button data-cote="20" title="Extérieur">Ext.</button></div>
+          <div class="tc-maillot-choix tc-peau-choix"><span>Peau des bras et des jambes</span><input type="color" class="tc-peau">
+            <button class="tc-peau-tete" title="La couleur de la peau du visage recoloré">Comme la tête</button>
+            <button class="tc-peau-orig" title="La couleur de peau du personnage d'origine">Original</button>
+            <button class="tc-peau-ok" title="Écrite dans le mod de la copie (skin_color)">Garder</button><span class="tc-peau-etat"></span></div></div>
         <div class="tc-droite"></div></div>
       <div class="tc-aide"><span><i class="jm-touche">Échap</i> Fermer</span><span><i class="jm-touche">🖱</i> Choisir</span><span><i class="jm-touche">Suppr</i> Vider la case</span><span class="tc-aide-note"></span></div>`;
     f.querySelector('.tc-fermer').onclick = () => f.close();
@@ -2885,7 +3624,7 @@ async function ouvrirCoups(c) {
     const q = texte.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     const L = liste.filter(y => (!filtreG || y.genre === filtreG) && (!q || (y.nom + ' ' + y.code).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)))
       .sort((a, b) => (b.mod ? 1 : 0) - (a.mod ? 1 : 0) || (fiche(b)[0] - fiche(a)[0]) || a.nom.localeCompare(b.nom)).slice(0, 150);
-    const tension = F && F[1] ? `<div class="tc-tension"><span>TENSION</span><i style="--t:${Math.min(1, F[1] / 150)}"></i><b>${F[1]}<small>T</small></b></div>` : '';
+    const tension = (F && F[1] ? `<div class="tc-tension"><span>TENSION</span><i style="--t:${Math.min(1, F[1] / 150)}"></i><b>${F[1]}<small>T</small></b></div>` : '') + (F && (F[4] || +F[5]) ? `<div class="tc-recharge">${F[4] ? `<span title="Recharge">⟳ ${F[4]} s</span>` : ''}${+F[5] ? `<span class="tc-evol" title="${echapper(nomEvol(F[5]))}">${marquesEvol(F[5], 18)}</span>` : ''}</div>` : '');   // (25/11) + recharge et marques d'évolution (danifdez)
     D.innerHTML = `<div class="tc-detail">${x ? barre(x, s.level, sel, false) : `<div class="tc-vide-txt">${aura ? 'Case 9 : esprit guerrier ou totem' : 'Case ' + (sel + 1) + ' vide'}</div>`}
         ${x ? `<div class="tc-infos">${tension}
           <label class="tc-niv"><span>Appris au</span> <i class="jm-touche">Lv.</i><input type="number" min="1" max="99" value="${s.level}"></label>
@@ -2927,7 +3666,25 @@ async function ouvrirCoups(c) {
   sm.onchange = () => { TC.maillot = sm.value; garder(); apercuJoueur(r, c.cle, f); };
   f.querySelectorAll('[data-cote]').forEach(b => b.onclick = () => { TC.cote = b.dataset.cote; majCote(); garder(); apercuJoueur(r, c.cle, f); });
   majCote();
+  // (26/11, jayden / WhiteRabbit) peau des bras et des jambes de la copie (chara_model skin_color) : vue en direct, « Garder » l'écrit
+  { const ip = f.querySelector('.tc-peau'), et = f.querySelector('.tc-peau-etat'), voir = v => { TC.peau = v; if (TC.vue) poserPeau(TC.vue, r.base, c.cle, v); };
+    TC.peau = null; TC.peauOrig = null; et.textContent = '';
+    api('/api/peau_perso?cle=' + encodeURIComponent(c.cle)).then(q => { if (!q.ok) return; TC.peauOrig = q.origine; ip.value = q.copie || q.origine || '#F0CFB0';
+      et.textContent = q.copie ? '' : 'celle de l’original'; }).catch(() => {});
+    ip.oninput = () => { voir(ip.value); et.textContent = 'pas encore gardée'; };
+    f.querySelector('.tc-peau-orig').onclick = () => { if (TC.peauOrig) { ip.value = TC.peauOrig; voir(ip.value); et.textContent = 'pas encore gardée'; } };
+    f.querySelector('.tc-peau-tete').onclick = async () => { const v = TC.visage ? await peauVisage(TC.visage) : null;
+      if (v) { ip.value = v; voir(v); et.textContent = 'pas encore gardée'; } else et.textContent = 'tête non recolorée'; };
+    f.querySelector('.tc-peau-ok').onclick = async () => { const q = await api('/api/peau_copie', { cle: c.cle, peau: ip.value.toUpperCase() === (TC.peauOrig || '').toUpperCase() ? '' : ip.value });
+      if (!q.ok) { et.textContent = q.erreur; return; } et.textContent = 'gardée'; majRapport(q.rapport.join('\n'));
+      $('hub-etat').textContent = 'Enregistré. Pour le mettre dans le jeu : « Installer » sur sa carte dans Mes créations.'; chargerHub(); }; }
   apercuJoueur(r, c.cle, f);
+}
+async function peauVisage(v) {      // (26/11) { o: url de l'atlas du visage d'origine, c: url de celui de la copie } -> '#RRGGBB'
+  const lire = async u => { const im = await chargerImage(u), cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height;
+    const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0); return cx.getImageData(0, 0, im.width, im.height); };
+  try { const o = await lire(v.o), c = v.c ? await lire(v.c) : null; if (c && (c.width !== o.width || c.height !== o.height)) return null;
+    const p = peauDeTete(o, c); return p && p.change ? p.couleur : null; } catch (e) { return null; }   // visage non recoloré : « tête non recolorée »
 }
 
 // aperçu 3D du joueur : modèle complet du personnage d'origine (/api/modele?quoi=joueur : tête, maillot, chaussures, peau,
@@ -2956,7 +3713,11 @@ async function apercuJoueur(r, cle, f) {
       if (m.ombre) { try { await tex('peau:' + m.ombre, '/tex/' + m.ombre + '.png'); } catch (e) { /* sans carte d'ombres */ } }
       if (m.texture) { const nom = m.texture.split('/').pop(), url = copie[nom] || '/tex/' + m.texture + '.png';
         try { await tex('peau:' + m.texture + (copie[nom] ? ':copie' : ''), url); v.texCle = 'peau:' + m.texture + (copie[nom] ? ':copie' : ''); } catch (e) { /* sans texture */ } }
+      if (m.masque) { try { await tex('peau:' + m.masque, '/tex/' + m.masque + '.png'); v.masqueCle = 'peau:' + m.masque; } catch (e) { /* sans masque */ } }   // (26/11) peau du corps
     }
+    await poserPeau(V, r.base, cle, TC.peau);
+    { const mv = meta.find(m => m.texture && r.tete && m.texture.split('/').pop() === r.tete + '_10');     // atlas du visage (« Comme la tête »)
+      TC.visage = mv ? { o: '/tex/' + mv.texture + '.png', c: copie[r.tete + '_10'] || null } : null; }
     // pose : un clip des mouvements de sa corpulence, en boucle (la tête n'est mise sur le cou que par l'animation)
     try { const P = await api('/api/pose_joueur?code=' + encodeURIComponent(r.base) + '&paquet=' + TC_POSE.paquet + '&clip=' + TC_POSE.clip);
       if (P.ok) { const sq = new Squelette(P.os, P), inv = sq.mondeRepos.map(Anim3D.inverse), c0 = P.clip, n = Math.max(1, c0.fin - c0.debut);
@@ -2965,6 +3726,144 @@ async function apercuJoueur(r, cle, f) {
     V.recadrer(); V.dist *= 0.95; V.yaw = TC_POSE.yaw; V.pitch = 0.05;
     msg.textContent = r.vetement ? 'Aperçu : le joueur d’origine (la tenue recolorée n’est pas montrée ici)' : Object.keys(copie).length ? '' : 'Aperçu : couleurs d’origine';
   } catch (e) { msg.textContent = 'Aperçu indisponible : ' + e.message; }
+}
+
+// (26/11, jayden / WhiteRabbit : « la peau des bras et des jambes ne va pas avec la tête ») couleur de peau du corps dans la vue :
+// celle de la copie, sinon celle de l'original (chara_model col. 16, LU) ; « couleur » = réglage en cours ('#RRGGBB')
+async function poserPeau(V, base, cle, couleur) {
+  let c = couleur;
+  if (!c) { try { const q = await api('/api/peau_perso?cle=' + encodeURIComponent(cle || '') + '&code=' + encodeURIComponent(base || ''));
+    c = q.ok ? (q.copie || q.origine) : null; } catch (e) { /* serveur ancien */ } }
+  const x = /^#?([0-9a-f]{6})$/i.exec(c || ''), n = x ? parseInt(x[1], 16) : 0;
+  V.peaux = x ? { joueur: [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255] } : null;
+  return x ? '#' + x[1].toUpperCase() : null;
+}
+
+// (26/11, muku : « ajoute les joueurs habillés ») BOUTIQUE, maillot : comme le jeu (capture de muku, onglet Maillots), quatre
+// joueurs qui portent le maillot, deux à domicile et deux à l'extérieur, dans la pose du Tableau des compétences ; chacun = le
+// joueur du jeu (/api/modele?quoi=joueur, coupe du maillot de base m.code, côté 10 / 20) avec les images du maillot (haut = texture
+// « …_20 », short = « …_30 », LU dans les noms des textures du modèle) ; une seule vue, les joueurs décalés en x
+// (26/11, muku : « regarde mieux mes photos ») comme la capture : domicile = un joueur de champ + un GARDIEN, extérieur pareil ; le
+// maillot du gardien est celui du jeu (uniform_config m_UniformModelInfoList : uniformKeeperModelIdCrc, ex. u080101 -> u080151,
+// serveur : /api/maillot_gardien) ; nos maillots ne changent que celui des joueurs de champ ; bras le long du corps (BQ_POSE)
+const BQ_JOUEURS = [['c01000100', '10', false], ['c01000010', '10', true], ['c01000020', '20', false], ['c01000300', '20', true]];   // Axel Blaze, Mark Evans (gardien), Nathan Swift, Jude Sharp (gardien)
+const BQ_POSE = { paquet: 'p010', clip: 4, tourne: 0.35 };   // tourne : chacun pivoté de face (comme la capture)   // debout, bras le long du corps (comme la boutique ; clip 0 = pose en T, 2 = mains sur les hanches)
+async function joueursMaillot(cv, msg, m) {
+  if (!cv || typeof Vue3D === 'undefined' || !m || !m.code) return;
+  msg.textContent = 'Chargement des joueurs…';
+  try {
+    const V = cv.__vue || (cv.__vue = new Vue3D(cv)); V.cameraJeu = false; V.vider(); V.lecteur = null;
+    const im = m.images || {}, poses = {};
+    let gardien = null; try { const g = await api('/api/maillot_gardien?code=' + encodeURIComponent(m.code)); gardien = g.ok ? g.gardien : null; } catch (e) { /* sans gardien */ }
+    const tex = async (cleT, url) => { if (V.textures[cleT]) return; const i_ = await chargerImage(url); const t = document.createElement('canvas');
+      t.width = i_.width; t.height = i_.height; t.getContext('2d').drawImage(i_, 0, 0); V.texture(cleT, t); };
+    const ecart = 1.04;                                  // distance entre deux joueurs (unités du jeu ; capture : 213 px)
+    for (const [k, [code, cote, garde]] of BQ_JOUEURS.entries()) {
+      const acteur = 'bq' + k, mien = garde && gardien ? {} : { '20': im[cote === '10' ? 'haut_dom' : 'haut_ext'], '30': im[cote === '10' ? 'short_dom' : 'short_ext'] };
+      const buf = await api('/api/modele?quoi=joueur&code=' + code + '&maillot=' + encodeURIComponent(garde && gardien ? gardien : m.code) + '&cote=' + cote);
+      const dv = new DataView(buf), lg = dv.getUint32(0, true), meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, lg))); let p = 4 + lg;
+      for (const [i, x] of meta.entries()) {
+        const pos = new Float32Array(buf.slice(p, p + x.nv * 12)); p += x.nv * 12;
+        const normales = new Float32Array(buf.slice(p, p + x.nv * 12)); p += x.nv * 12;
+        const uv = new Float32Array(buf.slice(p, p + x.nv * 8)); p += x.nv * 8;
+        const os = new Uint16Array(buf.slice(p, p + x.nv * 8)); p += x.nv * 8;
+        const poids = new Float32Array(buf.slice(p, p + x.nv * 16)); p += x.nv * 16;
+        const idx = new Uint16Array(buf.slice(p, p + x.ni * 2)); p += x.ni * 2 + ((4 - (x.ni * 2) % 4) % 4);
+        const v = V.ajouterPeau(acteur + '/' + i, { nv: x.nv, ni: x.ni, pos, uv, os, poids, idx, normales, contour: x.contour, ombreCle: x.ombre ? 'peau:' + x.ombre : null, noir: x.noir }, acteur);
+        if (x.ombre) { try { await tex('peau:' + x.ombre, '/tex/' + x.ombre + '.png'); } catch (e) { /* sans carte d'ombres */ } }
+        // (26/11, muku : « les cheveux prennent la couleur du maillot ») la tête a aussi des textures « …_20 » : seulement u<n>_20 / _30
+        if (x.texture) { const suf = (/(?:^|\/)u\d{6}_(20|30)$/.exec(x.texture) || [])[1], url = (suf && mien[suf]) || '/tex/' + x.texture + '.png', cleT = 'peau:' + x.texture + (suf && mien[suf] ? ':' + m.id + cote : '');
+          try { await tex(cleT, url); v.texCle = cleT; } catch (e) { /* sans texture */ } }
+        if (x.masque) { try { await tex('peau:' + x.masque, '/tex/' + x.masque + '.png'); v.masqueCle = 'peau:' + x.masque; } catch (e) { /* sans masque */ } }
+      }
+      try { const P = await api('/api/pose_joueur?code=' + code + '&paquet=' + BQ_POSE.paquet + '&clip=' + BQ_POSE.clip);
+        if (P.ok) { const sq = new Squelette(P.os, P); poses[acteur] = { sq, inv: sq.mondeRepos.map(Anim3D.inverse), clip: P.clip, dx: (k - 1.5) * ecart }; } } catch (e) { /* pose de liaison */ }
+    }
+    V.lecteur = { d: {}, duree: 1000, calculer(f) { const peaux = {};
+      for (const [a_, q] of Object.entries(poses)) { const n = Math.max(1, q.clip.fin - q.clip.debut), co = Math.cos(BQ_POSE.tourne || 0), si = Math.sin(BQ_POSE.tourne || 0), T = new Float32Array([co, 0, -si, 0, 0, 1, 0, 0, si, 0, co, 0, q.dx, 0, 0, 1]);   // chacun tourné sur lui-même
+        peaux[a_] = q.sq.poser(q.clip, q.clip.debut + (f % n)).map((w, b) => Anim3D.mul(T, Anim3D.mul(w, q.inv[b]))); }
+      return { peaux, objets: {} }; } };
+    V.image = 0; V.joue = true; V.boucle = true;
+    // cadrage fixe (MESURÉ sur la capture de muku : têtes vers 40 % de la hauteur de l'écran, pieds vers 73 %)
+    V.recadrer(); V.centre = [0, 0.8, 0]; V.dist = 2.72;   // (26/11) mesuré sur la capture : joueurs de y ≈ 425 à 795, centres x ≈ 1100 / 1310 / 1530 / 1740
+    V.yaw = TC_POSE.yaw; V.pitch = 0.05; Vue3D.activite = performance.now();
+    msg.textContent = '';
+  } catch (e) { msg.textContent = 'Aperçu indisponible : ' + e.message; }
+}
+
+// (27/11, muku : « fais aussi les tenues en 3D comme sur le jeu ») BOUTIQUE, tenue : comme l'onglet Tenues de la boutique du jeu,
+// le MANNEQUIN (tête grise c21000010) qui porte la tenue avec SA texture (/api/modele code « tenue:<copie> », serveur
+// modele_binaire), debout comme les joueurs des maillots (BQ_POSE), seul et au centre ; squelette du corps normal (pose sans code)
+async function tenue3D(cv, msg, cleTenue) {
+  if (!cv || typeof Vue3D === 'undefined') return;
+  msg.textContent = 'Chargement de la tenue…';
+  try {
+    const V = cv.__vue || (cv.__vue = new Vue3D(cv)); V.cameraJeu = false; V.vider(); V.lecteur = null;
+    const tex = async (cleT, url) => { if (V.textures[cleT]) return; const i_ = await chargerImage(url); const t = document.createElement('canvas');
+      t.width = i_.width; t.height = i_.height; t.getContext('2d').drawImage(i_, 0, 0); V.texture(cleT, t); };
+    const buf = await api('/api/modele?quoi=joueur&code=' + encodeURIComponent('tenue:' + cleTenue));
+    const dv = new DataView(buf), lg = dv.getUint32(0, true), meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, lg))); let p = 4 + lg;
+    for (const [i, x] of meta.entries()) {
+      const pos = new Float32Array(buf.slice(p, p + x.nv * 12)); p += x.nv * 12;
+      const normales = new Float32Array(buf.slice(p, p + x.nv * 12)); p += x.nv * 12;
+      const uv = new Float32Array(buf.slice(p, p + x.nv * 8)); p += x.nv * 8;
+      const os = new Uint16Array(buf.slice(p, p + x.nv * 8)); p += x.nv * 8;
+      const poids = new Float32Array(buf.slice(p, p + x.nv * 16)); p += x.nv * 16;
+      const idx = new Uint16Array(buf.slice(p, p + x.ni * 2)); p += x.ni * 2 + ((4 - (x.ni * 2) % 4) % 4);
+      const v = V.ajouterPeau('tn/' + i, { nv: x.nv, ni: x.ni, pos, uv, os, poids, idx, normales, contour: x.contour, ombreCle: x.ombre ? 'peau:' + x.ombre : null, noir: x.noir }, 'tn');
+      if (x.ombre) { try { await tex('peau:' + x.ombre, '/tex/' + x.ombre + '.png'); } catch (e) { /* sans carte d'ombres */ } }
+      if (x.texture) { try { await tex('peau:' + x.texture, '/tex/' + x.texture + '.png'); v.texCle = 'peau:' + x.texture; } catch (e) { /* sans texture */ } }
+      if (x.masque) { try { await tex('peau:' + x.masque, '/tex/' + x.masque + '.png'); v.masqueCle = 'peau:' + x.masque; } catch (e) { /* sans masque */ } }
+    }
+    let pose = null;
+    try { const P = await api('/api/pose_joueur?code=&paquet=' + BQ_POSE.paquet + '&clip=' + BQ_POSE.clip);
+      if (P.ok) { const sq = new Squelette(P.os, P); pose = { sq, inv: sq.mondeRepos.map(Anim3D.inverse), clip: P.clip }; } } catch (e) { /* pose de liaison */ }
+    V.lecteur = { d: {}, duree: 1000, calculer(f) { const peaux = {};
+      if (pose) { const n = Math.max(1, pose.clip.fin - pose.clip.debut), co = Math.cos(BQ_POSE.tourne || 0), si = Math.sin(BQ_POSE.tourne || 0),
+        T = new Float32Array([co, 0, -si, 0, 0, 1, 0, 0, si, 0, co, 0, 0, 0, 0, 1]);
+        peaux.tn = pose.sq.poser(pose.clip, pose.clip.debut + (f % n)).map((w, b) => Anim3D.mul(T, Anim3D.mul(w, pose.inv[b]))); }
+      return { peaux, objets: {} }; } };
+    V.image = 0; V.joue = true; V.boucle = true;
+    // cadrage MESURÉ sur la capture de muku (onglet Tenues) : mannequin de y ≈ 400 à 800, au milieu de la vue
+    V.recadrer(); V.centre = [0, 0.82, 0]; V.dist = 2.15; V.yaw = TC_POSE.yaw; V.pitch = 0.05; Vue3D.activite = performance.now();
+    msg.textContent = '';
+  } catch (e) { msg.textContent = 'Aperçu indisponible : ' + e.message; }
+}
+
+// (27/11, initiative) ICÔNE AUTOMATIQUE d'une tenue : comme les icônes de tenue de la boutique du jeu (la tenue en croix), le
+// mannequin qui porte TA tenue, au repos (bras en croix = pose de liaison), de face, sans la tête, fond transparent, 256 × 256
+// (avant, sans icône dessinée : la texture réduite, illisible)
+async function bqIconeTenueAuto(cleTenue) {
+  let cv = window.__bqVueIcone;
+  if (!cv) { cv = window.__bqVueIcone = document.createElement('canvas'); cv.width = cv.height = 512;
+    cv.style.cssText = 'position:fixed;left:-9999px;top:0;width:512px;height:512px'; document.body.appendChild(cv); }
+  const V = cv.__vue || (cv.__vue = new Vue3D(cv)); V.cameraJeu = false; V.vider(); V.lecteur = null;
+  const tex = async (cleT, url) => { if (V.textures[cleT]) return; const i_ = await chargerImage(url); const t = document.createElement('canvas');
+    t.width = i_.width; t.height = i_.height; t.getContext('2d').drawImage(i_, 0, 0); V.texture(cleT, t); };
+  const buf = await api('/api/modele?quoi=joueur&code=' + encodeURIComponent('tenue:' + cleTenue));
+  const dv = new DataView(buf), lg = dv.getUint32(0, true), meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, lg))); let p = 4 + lg;
+  for (const [i, x] of meta.entries()) {
+    const pos = new Float32Array(buf.slice(p, p + x.nv * 12)); p += x.nv * 12;
+    const normales = new Float32Array(buf.slice(p, p + x.nv * 12)); p += x.nv * 12;
+    const uv = new Float32Array(buf.slice(p, p + x.nv * 8)); p += x.nv * 8;
+    const os = new Uint16Array(buf.slice(p, p + x.nv * 8)); p += x.nv * 8;
+    const poids = new Float32Array(buf.slice(p, p + x.nv * 16)); p += x.nv * 16;
+    const idx = new Uint16Array(buf.slice(p, p + x.ni * 2)); p += x.ni * 2 + ((4 - (x.ni * 2) % 4) % 4);
+    if (x.texture && /c21000010_/.test(x.texture)) continue;            // pas la tête du mannequin
+    const v = V.ajouterPeau('ti/' + i, { nv: x.nv, ni: x.ni, pos, uv, os, poids, idx, normales, contour: x.contour, ombreCle: x.ombre ? 'peau:' + x.ombre : null, noir: x.noir }, 'ti');
+    if (x.ombre) { try { await tex('peau:' + x.ombre, '/tex/' + x.ombre + '.png'); } catch (e) { /* sans carte d'ombres */ } }
+    if (x.texture) { try { await tex('peau:' + x.texture, '/tex/' + x.texture + '.png'); v.texCle = 'peau:' + x.texture; } catch (e) { /* sans texture */ } }
+    if (x.masque) { try { await tex('peau:' + x.masque, '/tex/' + x.masque + '.png'); v.masqueCle = 'peau:' + x.masque; } catch (e) { /* sans masque */ } }
+  }
+  V.recadrer(true); V.dist *= 0.9; V.yaw = 0; V.pitch = 0.05;
+  V._dessinerUne(0);
+  const lu = document.createElement('canvas'); lu.width = lu.height = 512; const g_ = lu.getContext('2d'); g_.drawImage(cv, 0, 0);
+  const d = g_.getImageData(0, 0, 512, 512).data; let x0 = 512, y0 = 512, x1 = -1, y1 = -1;
+  for (let y = 0; y < 512; y++) for (let x = 0; x < 512; x++) if (d[(y * 512 + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) throw new Error('rendu vide');
+  const out = document.createElement('canvas'); out.width = out.height = 256; const c = Math.max(x1 - x0, y1 - y0) * 1.08;
+  out.getContext('2d').drawImage(lu, (x0 + x1) / 2 - c / 2, (y0 + y1) / 2 - c / 2, c, c, 0, 0, 256, 256);
+  return out.toDataURL('image/png');
 }
 
 // (23/11) joueur en 3D au centre de l'écran des stats (comme le jeu) : même chargement qu'apercuJoueur, sur SA propre vue
@@ -2990,7 +3889,9 @@ async function joueur3D(cv, msg, base, cle) {
       if (m.ombre) { try { await tex('peau:' + m.ombre, '/tex/' + m.ombre + '.png'); } catch (e) { /* sans carte d'ombres */ } }
       if (m.texture) { const nom = m.texture.split('/').pop(), url = copie[nom] || '/tex/' + m.texture + '.png';
         try { await tex('peau:' + m.texture + (copie[nom] ? ':copie' : ''), url); v.texCle = 'peau:' + m.texture + (copie[nom] ? ':copie' : ''); } catch (e) { /* sans texture */ } }
+      if (m.masque) { try { await tex('peau:' + m.masque, '/tex/' + m.masque + '.png'); v.masqueCle = 'peau:' + m.masque; } catch (e) { /* sans masque */ } }   // (26/11) peau du corps
     }
+    await poserPeau(V, base, cle);
     try { const P = await api('/api/pose_joueur?code=' + encodeURIComponent(base) + '&paquet=' + TC_POSE.paquet + '&clip=' + TC_POSE.clip);
       if (P.ok) { const sq = new Squelette(P.os, P), inv = sq.mondeRepos.map(Anim3D.inverse), c0 = P.clip, n = Math.max(1, c0.fin - c0.debut);
         V.lecteur = { d: {}, duree: n, calculer(f) { const m = sq.poser(c0, c0.debut + (f % n)); return { peaux: { joueur: m.map((w, b) => Anim3D.mul(w, inv[b])) }, objets: {} }; } };
@@ -3470,7 +4371,7 @@ async function ouvrirStats(c) {
       const q = texte.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
       const L = liste.filter(y => (!filtreG || y.genre === filtreG) && (!q || (y.nom + ' ' + y.code).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)))
         .sort((a, b) => (b.mod ? 1 : 0) - (a.mod ? 1 : 0) || (fiche(b)[0] - fiche(a)[0]) || a.nom.localeCompare(b.nom)).slice(0, 150);
-      const tension = F && F[1] ? `<div class="tc-tension" style="--t:${Math.min(1, F[1] / 150)}"><span>TENSION</span><i></i><b>${F[1]}<small>T</small></b></div>` : '';
+      const tension = (F && F[1] ? `<div class="tc-tension" style="--t:${Math.min(1, F[1] / 150)}"><span>TENSION</span><i></i><b>${F[1]}<small>T</small></b></div>` : '') + (F && (F[4] || +F[5]) ? `<div class="tc-recharge">${F[4] ? `<span title="Recharge">⟳ ${F[4]} s</span>` : ''}${+F[5] ? `<span class="tc-evol" title="${echapper(nomEvol(F[5]))}">${marquesEvol(F[5], 18)}</span>` : ''}</div>` : '');   // (25/11) + recharge et marques d'évolution (danifdez)
       Fi.innerHTML = `<div class="msp-detail">${x ? barre(x, sel, false) : `<div class="tc-vide-txt">${aura ? 'Case de l’esprit guerrier ou du totem : vide' : 'Case ' + (sel + 1) + ' vide'}</div>`}${tension}
           ${x ? `<div class="tc-infos"><label class="tc-niv"><span>Appris au</span> <i class="jm-touche">Lv.</i><input type="number" min="1" max="99" value="${s_.level}"></label>
             <span class="tc-puce">${echapper(x.genre)}</span>${F && TC_EL[F[2]] ? `<span class="tc-puce el-${TC_EL[F[2]][1]}">${TC_EL[F[2]][0]}</span>` : ''}
@@ -3514,8 +4415,8 @@ async function ouvrirStats(c) {
     const catDe = () => V.category || CAT_PREF[(c.code || '').slice(0, 3)] || '';
     const ELS = (champ('element') || { choix: [] }).choix;
     const NOMS = { power_max: 'Puissance au niveau max', power_min: 'Puissance au niveau 1', tp: 'Coût en PT (tension)', users: 'Joueurs pour la lancer',
-      element: 'Élément', growth: 'Courbe de progression', category: 'Type de technique', specialite: 'Spécialité', couleur_tir: 'Couleur du tir', trainee: 'Traînée du ballon', prix: 'Prix en boutique', banniere: 'Bannière' };
-    const MAXI = { power_max: 1500, power_min: 1000, tp: 150 };
+      element: 'Élément', growth: 'Type d’évolution', recast: 'Recharge (secondes)', category: 'Type de technique', specialite: 'Spécialité', couleur_tir: 'Couleur du tir', trainee: 'Traînée du ballon', prix: 'Prix en boutique', banniere: 'Bannière' };
+    const MAXI = { power_max: 1500, power_min: 1000, tp: 150, recast: 180 };
     // (23/11) couleurs du tir LUES (skill_config m_skillColorInfoList) : 0 montagne (jaune-orange), 1 air (bleu), 2 feu
     // (orange-rouge), 3 forêt (vert), 4 néant (violet) ; 6 = bleu de la seule Inazuma Break (whs10180), autres effets de tir
     const COUL_TIR = [['', "Garder celle d'origine"], ['0', 'Montagne'], ['1', 'Air'], ['2', 'Feu'], ['3', 'Forêt'], ['4', 'Néant'], ['6', 'Inazuma Break (bleu)']];
@@ -3549,7 +4450,7 @@ async function ouvrirStats(c) {
     const icSpec = (k, t) => SPEC[k] ? `<img class="msjt-ic-spec" src="/ui_jeu/zone/icon_common/${SPEC[k][1]}.png" alt="" style="width:${t}px;height:${t}px">` : '';
     const TRAIN = [['', 'Celle du jeu'], ['ega0075', 'Tir spécial'], ['ega0080', 'Tir enchaîné'], ['ega0085', 'Tir lointain']];
     const TRAIN_EL = [['void', 'Néant (violet)'], ['wind', 'Air'], ['fire', 'Feu'], ['forest', 'Forêt'], ['mountain', 'Montagne']];
-    const ordre = () => ['category'].concat(specsDe(catDe()).length ? ['specialite'] : [], ['power_max', 'tp', 'users', 'element', 'power_min', 'growth', 'couleur_tir'], r.tir ? ['trainee'] : [], ['prix', 'banniere']);
+    const ordre = () => ['category'].concat(specsDe(catDe()).length ? ['specialite'] : [], ['power_max', 'tp', 'recast', 'users', 'element', 'power_min', 'growth', 'couleur_tir'], r.tir ? ['trainee'] : [], ['prix', 'banniere']);
     let sel = 'power_max';
     const lib = (L, v) => (L.find(x => String(x[0]) === String(v)) || ['', String(v)])[1];
     // (23/11, retour de muku : « la bannière ne change pas dans la preview ») bannière refaite (lettres du jeu / simple) et
@@ -3572,7 +4473,8 @@ async function ouvrirStats(c) {
         <div class="msj-fiche-puces"><span class="msj-ia msjt-clic${s_('users')}" data-k="users">${V.users > 1 ? V.users + ' joueurs' : 'Solo'}</span>
           <span class="tc-puce el-${el} ms2-puce msjt-clic${s_('element')}" data-k="element">${elIcone(V.element, 22)}${echapper(lib(ELS, V.element) || 'Élément')}</span>
           <span class="tc-niv msjt-clic${s_('power_min')}" data-k="power_min"><span>Niv. 1</span>${V.power_min}</span>
-          <span class="tc-niv msjt-clic${s_('growth')}" data-k="growth"><span>Évol.</span>${V.growth !== '' ? V.growth : '—'}</span>
+          <span class="tc-niv msjt-clic${s_('recast')}" data-k="recast"><span>Recharge</span>${V.recast !== '' && V.recast !== undefined ? V.recast + ' s' : '—'}</span>
+          <span class="tc-niv msjt-evol msjt-clic${s_('growth')}" data-k="growth" title="${echapper(nomEvol(V.growth))}"><span>Évol.</span>${V.growth !== '' && +V.growth ? marquesEvol(V.growth, 20) : '—'}</span>
           ${jeu.power_max !== undefined ? `<span class="msj-orig"><small>Original</small><span class="tc-barre petit el-${MS_EL[jeu.element] || 'neutre'}"><span class="msjt-orbe">${orbe(jeu.category || catDe(), 32)}</span><span class="tc-nom">${echapper(nomBase)}</span><span class="tc-pw"><small>${go[1]}</small>${jeu.power_max}</span></span></span>` : ''}</div>
         <div class="msj-fiche-puces msjt-cosm"><span class="msjt-titre-c">Cosmétique</span>
           <span class="msjt-chip msjt-coul-chip msjt-clic${s_('couleur_tir')}" data-k="couleur_tir">${imgCouleur(idxCouleur(C.couleur_tir)) ? `<img src="${imgCouleur(idxCouleur(C.couleur_tir))}" alt="">` : ''}<span><small>Tir</small>${echapper(lib(COUL_TIR, C.couleur_tir))}</span></span>
@@ -3584,7 +4486,7 @@ async function ouvrirStats(c) {
     };
     // détail de ce qui est choisi (comme le détail d'une stat des joueurs)
     const detail = () => {
-      const k = sel, nb = ['power_max', 'power_min', 'tp'].includes(k);
+      const k = sel, nb = ['power_max', 'power_min', 'tp', 'recast'].includes(k);
       let corpsD = '';
       if (nb) {
         const v = V[k] === '' ? 0 : +V[k], o = jeu[k], mx = Math.max(MAXI[k], v, o || 0);
@@ -3596,7 +4498,9 @@ async function ouvrirStats(c) {
         const puces = (L, v, cle, ic) => `<div class="msj-puces" data-c="${cle}">${L.map(([x, n]) => `<button data-v="${x}" class="${String(v) === String(x) ? 'sel' : ''}${cle === k && jeu[k] !== undefined && String(jeu[k]) === String(x) ? ' orig' : ''}">${ic ? ic(x) : ''}${echapper(n)}</button>`).join('')}</div>`;
         if (k === 'users') corpsD = puces([[1, 'Solo'], [2, '2 joueurs'], [3, '3 joueurs'], [4, '4 joueurs']], V.users, 'users');
         else if (k === 'element') corpsD = puces(ELS, V.element, 'element', x => elIcone(x, 24));
-        else if (k === 'growth') corpsD = puces([0, 1, 2, 3, 4, 5, 6, 7].map(n => [n, String(n)]), V.growth, 'growth');
+        // (25/11) type d'évolution : nom du jeu + ses marques (niveaux 2 à 5), comme sur le nom de la technique en jeu
+        else if (k === 'growth') corpsD = `<div class="msj-puces msjt-evols" data-c="growth">${[0, 1, 2, 3, 4, 5, 6, 7].map(n => `<button data-v="${n}" class="${String(V.growth) === String(n) ? 'sel' : ''}${jeu.growth !== undefined && String(jeu.growth) === String(n) ? ' orig' : ''}"><span>${echapper(nomEvol(n))}</span>${marquesEvol(n, 18)}</button>`).join('')}</div>
+          <p class="msj-note msjt-note">La marque ajoutée au nom de la technique quand elle évolue (niveaux 2 à 5), comme en jeu.</p>`;
         else if (k === 'category') corpsD = puces((champ('category') || { choix: [] }).choix, V.category, 'category', x => orbe(x, 34))
           + '<p class="msj-note msjt-note">Le type décide où la technique est proposée en match (tir, dribble, défense, arrêt). La cinématique reste celle de l’original.</p>';
         else if (k === 'couleur_tir') corpsD = `<div class="msj-puces msjt-coul" data-c="couleur_tir">${COUL_TIR.map(([x, n]) => { const im = imgCouleur(idxCouleur(x));
@@ -3756,7 +4660,11 @@ async function ouvrirStats(c) {
             + L.map(x => bouton(x, x.nom + (INV0 && x.esprit === INV0.esprit && x.scene === INV0.scene ? ' (original)' : ''), '',
                 invChoix && invChoix.scene === x.scene && invChoix.esprit === x.esprit)).join('') + '</div>';
         }
-        corpsD = h + '<p class="msj-note msjt-note">Ta copie prend les gestes de l’esprit choisi, dans la scène de son élément. Tous sont proposés : ceux en pointillés n’ont pas tous leurs os chez ta copie (des pièces peuvent rester figées), regarde l’aperçu à gauche avant de choisir. « Enregistrer » garde ton choix.</p>';
+        corpsD = h + '<p class="msj-note msjt-note">Ta copie prend les gestes de l’esprit choisi, dans la scène de son élément. Tous sont proposés : ceux en pointillés n’ont pas tous leurs os chez ta copie (des pièces peuvent rester figées), regarde l’aperçu à gauche avant de choisir. « Enregistrer » garde ton choix.</p>'
+          // (25/11, demande de muku) COULEURS DE L'APPARITION : la scène d'invocation ouverte dans l'éditeur (« invoc_<copie> »)
+          + (!totem && !armure ? `<div class="msjk-app"><button class="msjk-couleurs-app"${invChange ? ' disabled' : ''}>🎨 Couleurs de l’apparition</button>
+            <p class="msj-note msjt-note">${invChange ? '« Enregistrer » d’abord ce choix : les couleurs se font sur l’apparition enregistrée.' : 'Ouvre l’apparition dans l’éditeur : recolore ses effets comme une technique, puis « Enregistrer les couleurs de l’apparition ». Seul ton esprit change, pas les autres de cet élément.'}</p>
+            <p class="msj-note msjt-note">L’aperçu de cette fiche montre l’apparition du jeu : tes couleurs se voient dans l’éditeur, et en jeu après « Installer ».</p></div>` : '');
       } else if (nb) {
         const v = V[k] === '' ? 0 : +V[k], o = jeu[k], mx = Math.max(300, v, o || 0);
         corpsD = `<div class="msj-corps-d"><div class="msj-col"><small>ORIGINAL</small><b>${o !== undefined ? o : '—'}</b></div>
@@ -3788,6 +4696,13 @@ async function ouvrirStats(c) {
       Dt.querySelectorAll('.msj-puces button[data-v]').forEach(b => b.onclick = () => {
         const avant = V.element; V.element = b.dataset.v; dessiner();
         if (!invChoix && !totem && String(avant) !== String(V.element)) relancerApercu(); });
+      const bApp = Dt.querySelector('.msjk-couleurs-app');
+      // (25/11) le projet déjà commencé de cette apparition est REPRIS (sinon un projet neuf repartirait des couleurs du jeu,
+      // et l'enregistrer effacerait les couleurs faites avant)
+      if (bApp) bApp.onclick = () => {
+        const pj = ((window.HUB && HUB.projets) || []).filter(p => p.code === 'invoc_' + c.code && p.onglet === 'techniques')
+          .sort((a, b) => String(b.cle).localeCompare(String(a.cle)))[0];
+        finApercuStats(f); f.close(); pj ? reprendreDepuisHub(pj) : ouvrirDepuisHub('techniques', 'invoc_' + c.code); };
       Dt.querySelectorAll('.msj-puces button[data-inv]').forEach(b => b.onclick = () => {
         const [sc, es] = b.dataset.inv.split('|'); invChoix = sc ? { scene: sc, esprit: es } : null; invChange = true; dessiner();
         relancerApercu(); });
@@ -3866,7 +4781,7 @@ for (const [nom, mod] of [['exporter', 'MesTechniques'], ['exporterPerso', 'MesE
 // Un projet lié à une création qui existe n'est pas dans « À continuer ».
 function champNomCreation(c) {
   return c.mod === 'MesTechniques' ? 'f-nom' : c.mod === 'MesEsprits' ? (c.genre === 'armures' ? 'ca-nom' : 'p-nom')
-    : c.mod === 'MesPersonnages' ? (c.onglet === 'tenues' ? 'ct-nom' : 'cp-nom') : c.mod === 'MesTenues' ? 'cu-nom' : c.mod === 'MesObjets' ? 'oj-nom-copie' : null;
+    : c.mod === 'MesPersonnages' ? (c.copie === 'objet' ? 'co-nom' : c.onglet === 'tenues' ? 'ct-nom' : 'cp-nom') : c.mod === 'MesTenues' ? 'cu-nom' : c.mod === 'MesObjets' ? 'oj-nom-copie' : null;
 }
 const cleCreation = c => ('cree_' + c.mod + '_' + c.code).replace(/[^\w.-]/g, '_');
 async function modifierCreation(c) {

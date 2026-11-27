@@ -415,6 +415,18 @@
       var b = document.createElement('button'); b.id = 'bouton-parametres'; b.textContent = '⚙'; b.title = 'Paramètres : couleurs, musique, polices, dossier du jeu, corbeille, cache';
       b.onclick = window.ouvrirParametres; h.appendChild(b);
     }
+    // (27/11, demande de muku) « Rejoins mon serveur » : le Discord de muku. La fenêtre de l'Atelier (WebView2) n'ouvre pas de
+    // lien : le serveur l'ouvre dans le navigateur (/api/ouvrir_discord, adresse fixe) ; dans un navigateur, nouvel onglet.
+    if (h && !document.getElementById('bouton-discord')) {
+      var d = document.createElement('button'); d.id = 'bouton-discord'; d.title = 'Rejoins mon serveur Discord';
+      d.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18 18 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.4C.6 9 0 13.6.3 18.1a19.7 19.7 0 0 0 6 3l1.3-2.1c-.7-.3-1.4-.6-2-1l.5-.4a14 14 0 0 0 11.8 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.6 19.6 0 0 0 6-3c.5-5.2-.8-9.7-3.4-13.7ZM8.5 15.4c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.2 1.1 2.1 2.4c0 1.3-.9 2.4-2.1 2.4Zm7 0c-1.2 0-2.1-1.1-2.1-2.4s.9-2.4 2.1-2.4 2.2 1.1 2.1 2.4c0 1.3-.9 2.4-2.1 2.4Z"/></svg><span>Rejoins mon serveur</span>';
+      d.onclick = function () {
+        fetch('/api/ouvrir_discord', { method: 'POST' }).then(function (r) { return r.json(); })
+          .then(function (j) { if (!j || !j.ok) { window.open('https://discord.gg/D9DvjdnFVE', '_blank'); } })
+          .catch(function () { window.open('https://discord.gg/D9DvjdnFVE', '_blank'); });
+      };
+      h.insertBefore(d, document.getElementById('bouton-parametres'));
+    }
     if (P.musique) { demarrer(); }        // la fenêtre de l'Atelier (WebView2) laisse souvent jouer sans geste
   });
 })();

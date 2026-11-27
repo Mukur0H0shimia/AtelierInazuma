@@ -3129,6 +3129,8 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/coups':                   # (15/11/2026) choisir les techniques d'une copie de personnage
                 return self._envoyer(200, copies_persos.choisir_coups(CFG, demande.get('cle'), demande.get('coups'),
                                                                       coups.catalogue(CFG['data_dir'], cache_txt()), coups.mes_coups(CFG)))
+            if u.path == '/api/ouvrir_discord':          # (27/11, muku) bouton « Rejoins mon serveur » : adresse FIXE, navigateur par défaut
+                return self._envoyer(200, {'ok': bool(webbrowser.open('https://discord.gg/D9DvjdnFVE'))})
             if u.path == '/api/peau_copie':              # (26/11) peau des bras / jambes d'une copie de personnage déjà créée
                 return self._envoyer(200, copies_persos.regler_peau(CFG, demande.get('cle'), demande.get('peau')))
             if u.path == '/api/technique_liee':          # (15/11/2026) « c'est la technique de cet esprit »

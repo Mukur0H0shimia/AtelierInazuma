@@ -4,6 +4,8 @@
 
 ## 4.0
 
+- **Bouton « Rejoins mon serveur »** en haut à droite : il ouvre le serveur Discord de l'Atelier (https://discord.gg/D9DvjdnFVE).
+
 ### Boutique (étape « Cosmétique »)
 - **Nouvelle étape « Cosmétique »** dans Mes créations pour les objets, tenues et maillots : après « Créer », tu y règles le prix en boutique, l'icône et l'emblème, puis « Enregistrer » → Terminées. « En attente de stats » ne sert plus qu'aux techniques, esprits guerriers… Les formulaires de création n'ont plus le prix.
 - **Écrans faits comme les boutiques du jeu**, en plein écran : Boutique générale et Boutique d'entraînement, avec la barre d'onglets du jeu (icônes et noms du jeu, dans la langue de l'Atelier), toutes tes créations de la catégorie, les compteurs et les prix en jetons. Tout se clique (onglets, lignes, W / C, « ⇄ » pour changer de boutique quand tu y as des créations) ; en bas, seulement « ✨ Automatique », « ✎ Dessiner » et « Enregistrer » ; on ferme avec la croix ou Échap, et l'écran reste ouvert après « Enregistrer ».
@@ -264,6 +266,8 @@
 # Update log — Atelier Inazuma
 
 ## 4.0
+
+- **"Join my server" button** at the top right: it opens the Atelier's Discord server (https://discord.gg/D9DvjdnFVE).
 
 ### Shop ("Cosmetic" step)
 - **New "Cosmetic" step** in My creations for items, outfits and kits: after "Create", you set the shop price, the icon and the crest there, then "Save" → Finished. "Waiting for stats" is now only for techniques, Keshin… The creation forms no longer have the price.

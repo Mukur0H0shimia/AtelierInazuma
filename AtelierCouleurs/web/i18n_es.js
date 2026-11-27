@@ -2057,6 +2057,8 @@ window.I18N_ES = {
 "Code": "Código",
 "textures": "texturas",
 "sommets": "vértices",
+"Rejoins mon serveur": "Únete a mi servidor",
+"Rejoins mon serveur Discord": "Únete a mi servidor de Discord",
 "⬆ Remplacer par une image": "⬆ Reemplazar por una imagen",
 "⬇ Modèle (.glb)": "⬇ Modelo (.glb)",
 "⬇ Enregistrer en PNG": "⬇ Guardar en PNG",

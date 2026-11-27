@@ -1285,3 +1285,7 @@ html header .titre-tech { flex-shrink: 1; min-width: 40px; }
 
 /* (27/11) bannières : réglages sans effet avec les lettres du jeu (app.js banniereJeuReglages) */
 #b-reglages .b-inutile { opacity: .4; }
+/* (27/11, demande de muku) bouton Discord de l'en-tête (parametres.js) : couleur de Discord ; texte caché sur les petits écrans */
+#bouton-discord { font-family: inherit; border-radius: 0; border: 0; background: #5865f2; color: #fff; padding: 5px 10px; cursor: pointer; flex: none; margin-left: 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+#bouton-discord:hover { background: #4752c4; }
+@media (max-width: 1500px) { #bouton-discord span { display: none; } }

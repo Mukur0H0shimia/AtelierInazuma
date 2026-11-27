@@ -1877,6 +1877,8 @@ window.I18N_EN = {
 "les listes ne montrent que leurs couleurs (Ctrl + clic pour en ajouter).": "the lists only show their colours (Ctrl + click to add more).",
 "plan": "shot",
 "sommets": "vertices",
+"Rejoins mon serveur": "Join my server",
+"Rejoins mon serveur Discord": "Join my Discord server",
 "⬆ Remplacer par une image": "⬆ Replace with an image",
 "⬇ Modèle (.glb)": "⬇ Model (.glb)",
 "⬇ Enregistrer en PNG": "⬇ Save as PNG",

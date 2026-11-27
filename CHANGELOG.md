@@ -74,8 +74,6 @@
 - La police du style de bannière « Armure » manquait dans le paquet ; plus d'erreur sur l'icône de l'Atelier à l'ouverture.
 - Anglais / espagnol : les textes restés en français (création d'objet, boutique, Mes créations, compteurs de couleurs changées, pièces sélectionnées, barre de lecture, badges des cartes) sont traduits.
 
-Pas encore vérifiés en jeu : la recharge, la copie de Tiger fang, la peau des bras et des jambes, la morphologie d'un nouveau joueur, les couleurs de l'apparition d'un esprit guerrier, la lueur du contour des auras (3.0.4), la nouvelle création des objets (bonus, synergies…) et leur vente à la Boutique d'entraînement, les boîtes, et pour les tenues : le choix des chaussures, « Seulement ces joueurs » et la vente par la boutique Chronicle sans Inazuma Fantasy.
-
 ## 3.0.4
 - **La lueur des joueurs change vraiment de couleur** (Main céleste de l'amitié, Requin ténébreux…) : une aura a deux couleurs dans le jeu, la teinte du joueur et la **lueur de son contour**. L'Atelier ne changeait que la teinte, donc la lueur restait d'origine en jeu. Il change maintenant les deux, à la même force que le jeu. Une aura dont la teinte était neutre (grise) le reste : seule la lueur prend la couleur choisie.
 - Pour l'essayer : recolore l'aura (bloc « Auras (ballon et joueurs) »), puis « Créer » et « Installer » : ça se voit en jeu (l'aperçu ne montre pas encore les couleurs d'aura).
@@ -336,8 +334,6 @@ Pas encore vérifiés en jeu : la recharge, la copie de Tiger fang, la peau des 
 - Boots, gloves, boxes and item creation: no more error for people without a "Chargeur" folder.
 - The "Armour" banner style's font was missing from the package; no more error on the Atelier's icon when opening.
 - English / Spanish: texts left in French (item creation, shop, My creations, changed-colour counters, selected parts, playback bar, card badges) are translated.
-
-Not yet checked in game: the recast, the Tiger fang copy, arm and leg skin, the body type of a new player, Keshin summon colours, the aura outline glow (3.0.4), the new item creation (bonuses, synergies…) and selling at the Training Shop, boxes, and for outfits: the boots choice, "Only these players" and selling through the Chronicle shop without Inazuma Fantasy.
 
 ## 3.0.4
 - **Player glows really change colour now** (God Hand of Friendship, Shark Shooter…): in the game an aura has two colours, the player's tint and the **glow of their outline**. The Atelier only changed the tint, so the glow stayed the original one in game. It now changes both, at the game's own strength. An aura whose tint was neutral (grey) keeps it: only the glow takes the chosen colour.

@@ -757,6 +757,18 @@ def ecrire(cfg, reg):
         _ecrire(fz, '\n'.join(lignes_z)); tomllib.load(open(fz, 'rb'))
         par_planche.setdefault(pl, []).extend(l)
         zones[pl] = at
+    # (27/11, ménage des essais) planche à zones plus utilisée (dernier autocollant / synergie / tactique supprimé) : son
+    # mesobjets_<planche>.toml et ses png restaient -> le mod citait une image absente
+    utilisees = {p.lstrip('#/') for p in zones}
+    for pl0 in PLANCHES_A_ZONES:
+        if pl0.lstrip('#/') in utilisees:
+            continue
+        dossier = os.path.dirname(pl0); fz = os.path.join(sortie, 'content', 'images', *dossier.split('/'), 'mesobjets_' + os.path.basename(pl0)[:-5] + '.toml')
+        if os.path.exists(fz):
+            os.remove(fz)
+        dz = os.path.join(sortie, 'content', 'images', *dossier.split('/'), 'mesobjets')
+        if os.path.isdir(dz):
+            shutil.rmtree(dz, ignore_errors=True)
     sprites = []
     for pl, l in sorted(par_planche.items()):
         sprites += ['[[VRFW.SpriteRedirect]]', 'name = %s' % _q('mes_objets_' + re.sub(r'[^a-z0-9_]', '_', pl.split('/')[-1].split('.')[0])), 'atlas = %s' % _q(pl),

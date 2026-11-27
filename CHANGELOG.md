@@ -5,6 +5,8 @@
 ## 4.0
 
 - **Bouton « Rejoins mon serveur »** en haut à droite : il ouvre le serveur Discord de l'Atelier (https://discord.gg/D9DvjdnFVE).
+- **Partager une création** : clic droit sur une carte de Mes créations → « ⇪ Partager… » → un fichier `.atelier` (dossier `AtelierCouleurs\exports`). Les autres font « ⬆ Importer une création » (ou glissent le fichier sur Mes créations), puis « Continuer » et « Créer » : la création est refaite chez eux avec ses couleurs, sa bannière, ses stats, son élément et ses réglages, sans rien écraser (un nom déjà pris devient « … (2) »). Les maillots arrivent directement dans l'onglet Maillots.
+- **⬇ Rendu vidéo** dans la barre de lecture : la technique en vidéo MP4 (60 images/s, avec le son), dessinée par le lecteur du jeu avec tes couleurs, en 720p ou 1080p. Plus besoin d'enregistrer l'écran.
 
 ### Boutique (étape « Cosmétique »)
 - **Nouvelle étape « Cosmétique »** dans Mes créations pour les objets, tenues et maillots : après « Créer », tu y règles le prix en boutique, l'icône et l'emblème, puis « Enregistrer » → Terminées. « En attente de stats » ne sert plus qu'aux techniques, esprits guerriers… Les formulaires de création n'ont plus le prix.
@@ -54,6 +56,8 @@
 - En mode simple, le panneau de droite ne garde que l'essentiel (le reste est dans « Avancé »), avec des noms clairs au lieu des codes (Partie 1, Couleurs, Contours, Icône…, titres sans codes).
 
 ### Corrections
+- **Filtre des séries** : les techniques, esprits guerriers, totems, armures et tenues étaient rangés dans toutes les séries de leurs porteurs (des esprits de GO 1 dans Victory Road, « Le Mur » dans 8 séries) ; ils sont maintenant dans leur série de départ. Les éléments sans série (185 techniques, 54 esprits et totems, le contenu des mods) étaient cachés par le filtre : ils ont maintenant une série.
+- Objets : supprimer le dernier autocollant (ou la dernière synergie, tactique) laissait son icône dans le mod.
 - **Modifier et copies** : deux copies du même original ne partagent plus leurs textures (chaque création a son projet) ; « Modifier » + nouveau nom ne crée plus de double (techniques, esprits guerriers, totems, joueurs, tenues, objets, armures) ; deux créations aux noms longs presque pareils ne s'écrasent plus.
 - **« Modifier »** : le champ Nom montre le nom de la copie d'un objet ; un joueur créé depuis une tenue ou un accessoire rouvre la bonne tenue ; le nom de la copie précédente ne reste plus dans le champ ; une copie de synergie garde ses effets ; renommer une tenue ne change plus son nom interne.
 - Refaire la copie d'un esprit guerrier garde maintenant ses bonus, son effet unique et ses couleurs d'apparition. Avant de remplacer l'armure d'une copie qui en a déjà une, l'Atelier demande.
@@ -268,6 +272,8 @@
 ## 4.0
 
 - **"Join my server" button** at the top right: it opens the Atelier's Discord server (https://discord.gg/D9DvjdnFVE).
+- **Share a creation**: right-click a card in My creations → "⇪ Share…" → an `.atelier` file (folder `AtelierCouleurs\exports`). Others use "⬆ Import a creation" (or drag the file onto My creations), then "Continue" and "Create": the creation is rebuilt on their side with its colours, banner, stats, element and settings, without overwriting anything (a name already taken becomes "… (2)"). Kits go straight into the Kits tab.
+- **⬇ Render video** in the playback bar: the technique as an MP4 video (60 fps, with sound), drawn by the game player with your colours, in 720p or 1080p. No more screen recording.
 
 ### Shop ("Cosmetic" step)
 - **New "Cosmetic" step** in My creations for items, outfits and kits: after "Create", you set the shop price, the icon and the crest there, then "Save" → Finished. "Waiting for stats" is now only for techniques, Keshin… The creation forms no longer have the price.
@@ -317,6 +323,8 @@
 - In simple mode, the right panel only keeps the essentials (the rest is in "Advanced"), with clear names instead of codes (Part 1, Colours, Outlines, Icon…, titles without codes).
 
 ### Fixes
+- **Series filter**: techniques, Keshin, Totems, armours and outfits were put in every series of the players who have them (GO 1 Keshin under Victory Road, "The Wall" in 8 series); they are now in the series they come from. Items with no series (185 techniques, 54 Keshin and Totems, mod content) were hidden by the filter: they now have one.
+- Items: deleting the last sticker (or synergy, tactic) left its icon in the mod.
 - **Edit and copies**: two copies of the same original no longer share their textures (each creation has its own project); "Edit" + a new name no longer makes a duplicate (techniques, Keshin, Totems, players, outfits, items, armours); two creations with long, almost identical names no longer overwrite each other.
 - **"Edit"**: the Name field shows an item copy's name; a player created from an outfit or accessory reopens the right outfit; the previous copy's name no longer stays in the field; a synergy copy keeps its effects; renaming an outfit no longer changes its internal name.
 - Remaking a Keshin copy now keeps its bonuses, unique effect and summon colours. Before replacing the armour of a copy that already has one, the Atelier asks.

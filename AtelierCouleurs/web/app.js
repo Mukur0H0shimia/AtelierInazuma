@@ -448,6 +448,28 @@ function cleNatif() {
   const versions = Object.entries(E.textures).filter(([, x]) => x.modif).map(([k, x]) => k + JSON.stringify(x.moyenne)).join('|');
   return { caches, cle: [E.tech.code, E.avant ? 'avant' : versions, caches.join(','), JSON.stringify(E.coulMat || {}), JSON.stringify(E.teinteSom || {}), JSON.stringify(E.teintePtl || {}), JSON.stringify(E.lumK || {})].join('#') };
 }
+// (27/11, demande d'enhanc3 : « add a render button… to export a video, instead of doing screen record ») RENDU VIDÉO :
+// mêmes réglages que le lecteur natif (couleurs, pièces cachées, auras…) ; le serveur fait dessiner chaque image par le
+// lecteur du jeu, puis ffmpeg en fait un MP4 60 i/s avec les sons de la technique (ceux de l'aperçu, voix comprise)
+async function renduVideo() {
+  const b = $('l-rendu');
+  if (!E.tech || E.tech.perso || !E.lecteur) return majRapport('Ouvre d’abord une technique (et attends son animation).');
+  if (b.disabled) return;
+  b.disabled = true; const t0 = performance.now(), lib = b.textContent;
+  const minuteur = setInterval(() => { b.textContent = '⏳ ' + Math.round((performance.now() - t0) / 1000) + ' s'; }, 1000);
+  majRapport('Rendu vidéo : le lecteur du jeu dessine chaque image, puis la vidéo est assemblée (1 à 3 minutes)…');
+  try {
+    const opt = optionsActuelles(), perso = $('l-perso') ? $('l-perso').value : '';
+    const sons = $('l-son') && $('l-son').checked ? SON.pistes.filter(p => !p.s.absent).map(p => ({ nom: p.s.nom, image: p.s.image, perso: p.s.voix ? perso : null })) : [];
+    const r = await api('/api/rendu_video', { stade: E.stadeCode || 's10g001', technique: E.tech.code, projet: E.projet, modifs: await modifsNatif(),
+      caches: cleNatif().caches, couleurs: opt.couleurs, sommets: opt.sommets, particules: opt.particules, lumieres: opt.lumieres, auras: opt.auras,
+      images: E.lecteur.duree || 1800, qualite: $('l-rendu-q') ? $('l-rendu-q').value : '720', nom: ($('f-nom') && $('f-nom').value.trim()) || E.tech.nom, sons });
+    majRapport(r.ok ? `Vidéo prête (${String(r.secondes).replace('.', ',')} s${r.sons ? ', avec le son' : ''}) : ${r.chemin}`
+      : 'Rendu vidéo impossible : ' + r.erreur);
+  } catch (e) { majRapport('Rendu vidéo impossible : ' + e.message); }
+  finally { clearInterval(minuteur); b.textContent = lib; b.disabled = false; }
+}
+window.addEventListener('load', () => { if ($('l-rendu')) $('l-rendu').onclick = () => renduVideo(); });
 // (14/11/2026) couleurs de matériau choisies -> par pièce (options.json du lecteur natif : « couleurs »)
 function couleursNatif() {
   const out = {};
@@ -662,7 +684,8 @@ async function ouvrir_(code) {
   // (28/11, banc d'essai) nouvel élément : noms / descriptions des copies vides (avant : ceux de l'élément d'avant restaient ->
   // « Créer » reprenait un ancien nom) ; « Modifier » et la reprise d'un projet les remplissent ensuite
   for (const id of ['ct-nom', 'ct-desc', 'cu-nom', 'cu-desc', 'co-nom', 'co-desc', 'ca-nom']) if ($(id)) $(id).value = '';
-  if (!(E.repriseAuto && E.repriseAuto === E.projet)) E.cree = null;   // (22/11) même projet (côté du maillot) : lien gardé
+  if (!(E.repriseAuto && E.repriseAuto === E.projet)) E.cree = null;
+  E.reglagesImport = null;   // (22/11) même projet (côté du maillot) : lien gardé
   E.avant = false; majBoutonAvant(); E.recette = []; E.pileRc = []; E.rev = 0; E.reprise = false; E.sigProjet = null; E.chargement = true; E.projet = E.repriseAuto || nouvelleCleProjet(E.onglet, code); E.repriseCle = E.repriseAuto; E.repriseAuto = null; E.texturesCachees = new Set(); E.texturesMontrees = new Set(); E.vignette = null; E.vignetteT = 0; E.vignetteManque = false; if ($('reprise')) $('reprise').style.display = 'none';   // (15/11/2026) pas de sauvegarde pendant le chargement
   if (perso) { $('titre-tech').textContent = `${t.nom}  ·  ${t.code}  ·  ${t.genre}`;
     $('p-nom').value = t.nom + ' (couleurs)'; $('p-desc').value = ''; if ($('rt-nom')) $('rt-nom').value = t.nom + ' (couleurs)'; if ($('cp-nom')) { $('cp-nom').value = ''; $('cp-nom').placeholder = t.nom + ' bis'; }
@@ -1567,6 +1590,7 @@ async function verifierProjet() {
 }
 async function reprendreProjet(e) {
   E.cree = e.cree || null;                        // (22/11) lien projet -> création gardé
+  E.reglagesImport = e.reglages || null;          // (27/11) création partagée : stats, bannière… remis après « Créer »
   majRapport('Reprise du projet…');
   for (const [k, url] of Object.entries(e.textures || {})) { const x = E.textures[k]; if (!x || !x.cur) continue;
     try { const im = await chargerImage(url), cx = x.cur.getContext('2d');
@@ -1693,6 +1717,7 @@ function dessinerHub() {
     d.querySelector('[data-a="supprimer"]').onclick = async () => {
       if (!confirm(`Retirer « ${p.titre} » de la liste ?\nRien n'est effacé : le projet est rangé dans AtelierCouleurs/projets/corbeille.`)) return;
       await api('/api/projet', { action: 'supprimer', cle: p.cle }); chargerHub(); };
+    d.oncontextmenu = ev => menuCarte(ev, d, () => partagerCreation({ nom: p.titre }, p));   // (27/11) clic droit : Partager
     g.appendChild(d); }
   // terminées
   const l = $('hub-creations'); l.innerHTML = '';
@@ -1734,6 +1759,7 @@ function dessinerHub() {
     if (bi) bi.onclick = async () => {
       await installer(c.mod);              // (21/11) créations du jeu qui seraient retirées : demandé par installer()
       $('hub-etat').textContent = $('rapport').textContent.split('\n')[0]; chargerHub(); };
+    d.oncontextmenu = ev => menuCarte(ev, d, () => partagerCreation(c, proj));   // (27/11, muku) clic droit : Partager, puis les boutons de la carte
     (c.attente ? la : estCosm(c) ? lc : l).appendChild(d); }
   // préréglages
   const pr = $('hub-prereglages'); pr.innerHTML = '';
@@ -3050,6 +3076,11 @@ window.addEventListener('load', async () => {
   window.changerOnglet = changerOnglet;
   if ($('hub-cherche')) $('hub-cherche').oninput = dessinerHub;
   if ($('hub-nouveau')) $('hub-nouveau').onclick = () => { changerOnglet('techniques'); $('cherche').focus(); };
+  if ($('hub-importer')) { $('hub-importer').onclick = () => $('hub-fichier').click();        // (27/11) création partagée
+    $('hub-fichier').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) importerCreation(f); };
+    const h = $('page-hub');                                                       // ou glissée sur Mes créations
+    h.addEventListener('dragover', e => { if ([...(e.dataTransfer.items || [])].some(i => i.kind === 'file')) e.preventDefault(); });
+    h.addEventListener('drop', e => { const f = [...(e.dataTransfer.files || [])].find(x => /\.atelier$/i.test(x.name)); if (f) { e.preventDefault(); importerCreation(f); } }); }
   changerOnglet(new URLSearchParams(location.search).get('essai_natif') ? 'techniques' : 'hub');
   const source = () => E.onglet === 'esprits' ? E.persos.filter(p => p.genre === 'Esprit guerrier')
     : E.onglet === 'totems' ? E.persos.filter(p => p.genre === 'Totem') : ONGLETS_JEU.includes(E.onglet) ? (E.jeu[E.onglet] || []) : E.index;
@@ -4771,7 +4802,7 @@ for (const [nom, mod] of [['exporter', 'MesTechniques'], ['exporterPerso', 'MesE
   ['coExporter', 'MesPersonnages'], ['cuExporter', 'MesTenues'], ['ojExporter', 'MesObjets'], ['caExporter', 'MesEsprits']]) {
   const f0 = window[nom]; if (typeof f0 !== 'function') continue;
   window[nom] = async function (...a) { retirerSuite(); SUITE_N++;
-    const r = await f0.apply(this, a); if (r && r.ok && (r.code || r.key)) { await lierProjetCreation(mod, r.code || r.key); await proposerSuite(mod, r.code); }
+    const r = await f0.apply(this, a); if (r && r.ok && (r.code || r.key)) { await lierProjetCreation(mod, r.code || r.key); await reglagesPartages(mod, r.code || r.key); await proposerSuite(mod, r.code); }
     if (r && r.ok && $('page-hub') && typeof chargerHub === 'function') chargerHub();
     return r; };
 }
@@ -4789,6 +4820,56 @@ async function modifierCreation(c) {
   if (proj) return reprendreDepuisHub(proj);
   E.modifie = { mod: c.mod, code: String(c.code), nom: c.nom, champ: champNomCreation(c) };
   await ouvrirDepuisHub(c.onglet, c.base, cleCreation(c));
+}
+// ------------------------------------------------------------------ (27/11, muku) PARTAGER / IMPORTER UNE CRÉATION (moteur/partage.py)
+// Clic droit sur une carte : petit menu (Partager…, puis les boutons de la carte). « Partager » écrit <nom>.atelier dans
+// AtelierCouleurs\exports (l'Explorateur s'ouvre dessus) : la RECETTE (projet : textures, couleurs, champs ; maillot : ses images),
+// pas le mod -> chez l'autre, « Importer une création » la met dans « À continuer », puis « Créer » avec SES codes.
+function menuCarte(ev, carteEl, partager) {
+  ev.preventDefault(); fermerMenuCarte();
+  const m = document.createElement('div'); m.id = 'menu-carte'; m.className = 'menu-carte';
+  const item = (txt, f, cl) => { const b = document.createElement('button'); b.textContent = txt; if (cl) b.className = cl;
+    b.onclick = () => { fermerMenuCarte(); f(); }; m.appendChild(b); };
+  item('⇪ Partager…', partager, 'primaire');
+  for (const b of carteEl.querySelectorAll('button[data-a]')) if (b.offsetParent) item(b.textContent.trim(), () => b.click(), b.classList.contains('supprimer') ? 'supprimer' : '');
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.min(ev.clientX, innerWidth - r.width - 8) + 'px'; m.style.top = Math.min(ev.clientY, innerHeight - r.height - 8) + 'px';
+  setTimeout(() => { document.addEventListener('mousedown', fermerMenuCarteDehors); document.addEventListener('keydown', fermerMenuCarteEchap); }, 0);
+}
+function fermerMenuCarte() { const m = $('menu-carte'); if (m) m.remove();
+  document.removeEventListener('mousedown', fermerMenuCarteDehors); document.removeEventListener('keydown', fermerMenuCarteEchap); }
+function fermerMenuCarteDehors(e) { if (!e.target.closest('#menu-carte')) fermerMenuCarte(); }
+function fermerMenuCarteEchap(e) { if (e.key === 'Escape') fermerMenuCarte(); }
+async function partagerCreation(c, proj) {
+  $('hub-etat').textContent = 'Préparation du fichier à partager…';
+  let r; try { r = await api('/api/partager_creation', { mod: c.mod || null, code: c.code != null ? String(c.code) : null, projet: proj ? proj.cle : null,
+    nom: c.nom, champ: c.mod ? champNomCreation(c) : null }); } catch (e) { r = { ok: false, erreur: e.message }; }
+  $('hub-etat').textContent = r.ok
+    ? `Fichier prêt : ${r.chemin} (${Math.max(1, Math.round(r.taille / 1048576))} Mo). Envoie-le : l'autre fait « ⬆ Importer une création » dans Mes créations, puis « Continuer » et « Créer ».`
+    : 'Partage impossible : ' + r.erreur;
+}
+async function importerCreation(fichier) {
+  $('hub-etat').textContent = 'Import de « ' + fichier.name + ' »…';
+  // noms de mes créations et projets : un nom déjà pris devient « nom (2) » (sinon « Créer » referait ma création du même nom)
+  const noms = [...(HUB.creations || []).map(c => c.nom), ...(HUB.projets || []).map(p => p.titre)];
+  let r; try { r = await api('/api/importer_creation', { contenu: await fichier.text(), noms }); } catch (e) { r = { ok: false, erreur: e.message }; }
+  if (!r.ok) { $('hub-etat').textContent = 'Import impossible : ' + r.erreur; return; }
+  await chargerHub();
+  $('hub-etat').textContent = r.maillot
+    ? `« ${r.nom} » importé : c'est un nouveau maillot dans l'onglet Maillots.`
+    : `« ${r.nom} » importé : il est dans « À continuer ». « Continuer », puis « Créer » pour en faire ta création (avec tes propres codes).`;
+}
+// (27/11, retour de muku : « le partage ne copie pas les bannières, les stats, l'élément… ») réglages de la création partagée
+// (serveur.reglages_creation), remis UNE fois sur la nouvelle création, juste après « Créer » (le projet ne les garde pas ensuite)
+async function reglagesPartages(mod, code) {
+  const g = E.reglagesImport; if (!g || g.mod !== mod || !code) return;
+  E.reglagesImport = null;
+  try { const r = await api('/api/appliquer_reglages', { mod, code: String(code), reglages: g.valeurs });
+    // (le message de « Créer » reste ; une ligne en plus dans les détails)
+    const t = r.ok ? (r.rapport || []).join(' ; ') : r.erreur;
+    if (t) $('hub-etat').textContent = 'Réglages de la création partagée repris : ' + t; }
+  catch (e) { console.error('réglages partagés', e); }
 }
 function projetLieExistant(p) {
   return !!(p.cree && HUB.creations.some(c => c.mod === p.cree.mod && String(c.code) === String(p.cree.code)));

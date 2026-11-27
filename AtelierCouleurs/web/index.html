@@ -52,7 +52,10 @@
 
     <div class="jm-filtres"><div class="jm-onglets" id="jm-onglets"></div>
       <div class="jm-recherche"><span class="jm-touche">X</span><input id="hub-cherche" placeholder="Chercher par nom" autocomplete="off"></div>
-      <button class="jm-bouton-or" id="hub-nouveau">+ Nouvelle création</button></div>
+      <button class="jm-bouton-or" id="hub-nouveau">+ Nouvelle création</button>
+      <!-- (27/11, muku) création partagée par un autre (fichier .atelier, moteur/partage.py) ; aussi par glisser-déposer -->
+      <button class="jm-bouton-or" id="hub-importer" title="Une création partagée par quelqu'un (fichier .atelier). Tu peux aussi la glisser ici.">⬆ Importer une création</button>
+      <input type="file" id="hub-fichier" accept=".atelier" hidden></div>
     <div id="hub-etat" class="jm-etat"></div>
 
     <div class="hub-section" id="jm-s-continuer"><h2>À continuer</h2><span>sauvegardé tout seul, pas encore transformé en mod</span></div>
@@ -175,6 +178,9 @@
       <label class="avance" title="Stade dessiné avec le vrai shader du jeu (map_pbrt1… traduit de nie.exe / dx11) : soleil, reflets de la cubemap, relief, lumières. Sans ombres portées ni brouillard (pas encore)."><input type="checkbox" id="l-vraistade" checked> Shader du stade</label>
       <button id="l-natif-bouton" class="avance" title="Lecteur natif (C++ / Direct3D 11) : calcule l'animation et dessine EN DIRECT, comme le jeu, avec les vrais shaders. S'affiche dans la vue 3D (comme ▶ et Espace) ; tes couleurs et les pièces décochées sont reprises. Espace ou clic = pause, flèches = image par image, Début = recommencer, E = effets d'écran, Échap = revenir à l'aperçu.">Lecteur natif</button>
       <span id="l-film-info" class="aide"></span>
+      <!-- (27/11, demande d'enhanc3) MP4 de la technique dessiné par le lecteur du jeu, avec ses sons (serveur.py rendu_video) -->
+      <button id="l-rendu" class="primaire" title="Enregistrer la technique en vidéo MP4 (60 images/s, avec le son), dessinée par le lecteur du jeu avec tes couleurs. Plus besoin d'enregistrer l'écran.">⬇ Rendu vidéo</button>
+      <select id="l-rendu-q" title="Taille de la vidéo"><option value="720">720p</option><option value="1080">1080p</option></select>
       <button id="l-video" title="Vidéo officielle de la technique (site zukan.inazuma.jp), pour comparer">Vidéo du jeu</button>
     </div>
     <div id="video-jeu" class="video-jeu" style="display:none">

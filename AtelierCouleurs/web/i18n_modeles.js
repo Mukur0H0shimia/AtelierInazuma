@@ -34,9 +34,18 @@ window.MODELES_FR = [
 "  (totem / esprit du joueur : en jeu, c’est celui du joueur qui lance — pour le recolorer, fais une copie dans Totems ou Esprits)"
 ],
 [
+"Fichier prêt : ",
+" (",
+" Mo). Envoie-le : l'autre fait « ⬆ Importer une création » dans Mes créations, puis « Continuer » et « Créer »."
+],
+[
 "L’apparition ouverte (",
 ") n’est pas celle enregistrée (",
 ") : « Enregistrer » d’abord la fiche de l’esprit, puis rouvre ses couleurs."
+],
+[
+"« ",
+" » importé : il est dans « À continuer ». « Continuer », puis « Créer » pour en faire ta création (avec tes propres codes)."
 ],
 [
 "Image posée sur ",
@@ -182,6 +191,11 @@ window.MODELES_FR = [
 [
 "",
 " techniques : 6 au plus (CharacterReforged : positions 1 à 6, cases 7 et 8 vides)"
+],
+[
+"Cette création part de « ",
+" », un élément du mod ",
+" : installe ce mod, puis réessaie."
 ],
 [
 "armure ",
@@ -375,6 +389,10 @@ window.MODELES_FR = [
 "), photo à la place"
 ],
 [
+"« ",
+" » importé : c'est un nouveau maillot dans l'onglet Maillots."
+],
+[
 "os ",
 " canal ",
 " : valeurs partagées avec d'autres pistes -> laissées"
@@ -441,6 +459,10 @@ window.MODELES_FR = [
 [
 "Installer retirerait du jeu : ",
 " (absents de cet Atelier)."
+],
+[
+"Cette création part de « ",
+" », qui n’est pas dans ton jeu."
 ],
 [
 "modèle 3D recoloré : ",
@@ -632,6 +654,10 @@ window.MODELES_FR = [
 " n’est pas celle de l’accessoire"
 ],
 [
+"Réglages de la création partagée repris : ",
+""
+],
+[
 "armure supprimée (",
 " fichiers rangés dans ",
 ")"
@@ -691,6 +717,11 @@ window.MODELES_FR = [
 "# modèle ",
 " (acteur ",
 ") -> copie recolorée ",
+""
+],
+[
+"Maillot de base absent de ton jeu (",
+") : ",
 ""
 ],
 [
@@ -1010,6 +1041,10 @@ window.MODELES_FR = [
 " » supprimé."
 ],
 [
+"Rendu vidéo impossible : ",
+""
+],
+[
 "bold 100px \"",
 "\", sans-serif"
 ],
@@ -1138,6 +1173,12 @@ window.MODELES_FR = [
 "x",
 " à ",
 "x",
+""
+],
+[
+"Vidéo prête (",
+" s",
+") : ",
 ""
 ],
 [
@@ -1363,6 +1404,10 @@ window.MODELES_FR = [
 "",
 " : ",
 " émetteur",
+""
+],
+[
+"Import de « ",
 ""
 ],
 [

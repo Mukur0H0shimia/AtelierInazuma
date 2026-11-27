@@ -1289,3 +1289,9 @@ html header .titre-tech { flex-shrink: 1; min-width: 40px; }
 #bouton-discord { font-family: inherit; border-radius: 0; border: 0; background: #5865f2; color: #fff; padding: 5px 10px; cursor: pointer; flex: none; margin-left: 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 #bouton-discord:hover { background: #4752c4; }
 @media (max-width: 1500px) { #bouton-discord span { display: none; } }
+/* (27/11, muku) clic droit sur une carte de Mes créations : Partager… et les boutons de la carte (app.js menuCarte) */
+.menu-carte { position: fixed; z-index: 9999; min-width: 190px; display: flex; flex-direction: column; background: #1d2428; border: 1px solid #4b5961; box-shadow: 0 6px 20px rgba(0,0,0,.5); padding: 4px 0; }
+.menu-carte button { font-family: inherit; text-align: left; background: none; border: 0; color: #e9eef0; padding: 7px 14px; cursor: pointer; }
+.menu-carte button:hover { background: #3f6fae; }
+.menu-carte button.primaire { font-weight: bold; color: #ffd36b; border-bottom: 1px solid #4b5961; }
+.menu-carte button.supprimer { color: #ff8a80; }

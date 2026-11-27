@@ -173,20 +173,32 @@ def _depuis(l, premiere):
     return [x for x in l if o.index(x) >= o.index(premiere)]
 
 
-def series_de(cat, x):
+def _series_de_brut(cat, x):
     """(17/11/2026) séries d'un élément de l'Atelier (filtres IE1 … Victory Road)"""
     import re as _re
     base = x.get('base') if x.get('mod') else None             # contenu d'un mod : la série de ce qu'il copie
     if cat == 'techniques':
-        return SERIES['coup'].get(base or x['code'], [])
+        # (27/11, même bug que les esprits : « Le Mur » était dans 8 séries, IE1 … Victory Road) : sa série de DÉPART ; sans carte
+        # (185 techniques, cachées par le filtre) : celle de ses voisins de numéro (_series_voisines) ; technique de mod sans
+        # base connue : Victory Road
+        s_ = SERIES['coup'].get(base or x['code'], [])[:1] or SERIE_VOISINE.get(base or x['code'], [])
+        return s_ or (['Victory Road'] if x.get('mod') else [])
     if cat in ('esprits', 'totems'):
-        return _depuis(_series.de_modele(SERIES, base or x['code']), 'GO 3' if x.get('genre') == 'Totem' else 'GO 1')
+        # (27/11, retour de muku : « le filtre ne marche pas, il propose certains de GO 1 dans Victory Road ») un esprit était de
+        # TOUTES les séries des joueurs qui l'ont sur une carte (Victory Road redonne les esprits de GO à beaucoup de joueurs) :
+        # maintenant sa série de DÉPART (la première) ; sans carte du tout : voir _series_voisines (marquer_series)
+        m_ = x.get('modele') if x.get('mod') and not base else None              # esprit de mod sans base : son modèle
+        s_ = _depuis(_series.de_modele(SERIES, base or m_ or x['code']), 'GO 3' if x.get('genre') == 'Totem' else 'GO 1')
+        if not s_ and x.get('mod'):
+            s_ = SERIE_VOISINE.get(base or m_ or '', [])
+        return s_[:1] if s_ else (['Victory Road'] if x.get('mod') else [])      # esprit d'un mod de Victory Road (Clearbunny…)
     if cat == 'personnages':
         s = _series.de_tete(x.get('chemin_jeu') or x.get('chemin') or '')
         return [s] if s else []
     if cat == 'armures':                                        # celle de son esprit ; armures d'esprits depuis GO 2
         m = _re.match(r'ka(\d{6})', os.path.basename(x.get('chemin_jeu') or x['code'])[:8])     # ka000101 -> k000010
-        return _depuis(_series.de_modele(SERIES, 'k0%s' % m.group(1)[:5]), 'GO 2') if m else []
+        s_ = _depuis(_series.de_modele(SERIES, 'k0%s' % m.group(1)[:5]), 'GO 2') if m else []
+        return s_[:1] if s_ else (SERIE_VOISINE.get('k0%s' % m.group(1)[:5], []) if m else [])   # (27/11) série de départ
     if cat in ('tenues', 'maillots'):
         # LU (même numérotation que les dossiers des têtes chr/_face/01_IE1 … 11_VICTORY) : maillot u<NN>…, ex. u081201 Ombre
         # d'Orion -> 08 = Orion ; sinon (tenues, chaussures…) la série de ceux qui la portent
@@ -200,15 +212,82 @@ def series_de(cat, x):
         parts = (x.get('chemin') or '').split('|')
         t = parts[1] if len(parts) > 1 else ''
         t = t[len('dx11/chr/'):] if t.startswith('dx11/chr/') else t
-        return SERIES.get('tex', {}).get(t, [])
+        return SERIES.get('tex', {}).get(t, [])[:1]          # (27/11) série de départ (avant : toutes celles des porteurs)
     return []
+
+
+def series_de(cat, x):
+    """(17/11/2026) séries d'un élément de l'Atelier (filtres IE1 … Victory Road) ; (27/11, retour de muku : des éléments
+    cachés par le filtre) contenu d'un MOD sans série connue -> Victory Road (les mods sont faits pour Victory Road) ;
+    personnage du jeu sans série (têtes « EDIT » du créateur de joueurs de Victory Road) -> Victory Road"""
+    s = _series_de_brut(cat, x)
+    if not s and (x.get('mod') or cat == 'personnages'):
+        return ['Victory Road']
+    return s
+
+
+SERIE_VOISINE = {}                     # (27/11) code d'un esprit / totem du jeu -> série (la sienne, sinon celle de ses voisins)
+
+
+def _voisins(liste, defaut):
+    """(27/11) éléments du jeu sans série : celle du plus proche voisin de numéro (même préfixe : k, a, whd, whs…), code
+    inférieur d'abord (les codes suivent l'ordre des jeux) -> SERIE_VOISINE[code] ; defaut(x) si aucun voisin"""
+    import re as _re
+    pre = lambda c: _re.match(r'[a-z]+', c).group(0) if _re.match(r'[a-z]+', c) else ''
+    num = lambda c: int(_re.sub(r'\D', '', c) or 0)
+    connus = {}
+    for x in liste:
+        if x.get('series') and not x.get('mod'):
+            connus.setdefault(pre(x['code']), []).append((num(x['code']), x['series'][0]))
+    for v in connus.values():
+        v.sort()
+    for x in liste:
+        if x.get('mod'):
+            continue
+        c = x['code']
+        if x.get('series'):
+            SERIE_VOISINE[c] = x['series'][:1]
+            continue
+        v = connus.get(pre(c), [])
+        bas = [s for n, s in v if n <= num(c)]
+        haut = [s for n, s in v if n > num(c)]
+        s = bas[-1] if bas else haut[0] if haut else defaut(x)
+        if s:
+            SERIE_VOISINE[c] = [s]
+            x['series'] = [s]
+
+
+def _series_voisines():
+    """(27/11, retour de muku : « il n'y a pas tous les esprits guerriers en proposition ») 54 esprits / totems du jeu ne sont
+    sur aucune carte de joueur : sans série, le filtre de série les cachait. DÉDUIT : les modèles sont numérotés dans l'ordre
+    des jeux (k0000NN…) -> la série du plus proche voisin connu (même lettre, code inférieur d'abord) ; totem sans voisin :
+    Victory Road, esprit : GO 1."""
+    import re as _re
+    connus = {}
+    for _p in PERSOS:
+        if _p.get('series'):
+            connus[_p['code']] = _p['series'][0]
+    num = lambda c: int(_re.sub(r'\D', '', c) or 0)
+    for _p in PERSOS:
+        c = _p['code']
+        if c in connus:
+            SERIE_VOISINE[c] = [connus[c]]
+            continue
+        memes = sorted((num(k), s) for k, s in connus.items() if k[:1] == c[:1])
+        bas = [s for n, s in memes if n <= num(c)]
+        haut = [s for n, s in memes if n > num(c)]
+        s = bas[-1] if bas else haut[0] if haut else ('Victory Road' if _p.get('genre') == 'Totem' else 'GO 1')
+        SERIE_VOISINE[c] = [s]
+        _p['series'] = [s]
 
 
 def marquer_series():
     for _t in INDEX:
         _t['series'] = series_de('techniques', _t)
+    _voisins(INDEX, lambda x: None)
     for _p in PERSOS:
         _p['series'] = series_de('esprits', _p)
+    _series_voisines()
     for _c in ('armures', 'personnages', 'tenues', 'maillots'):
         for _x in JEU.get(_c, []):
             _x['series'] = series_de(_c, _x)
@@ -954,6 +1033,221 @@ def lecteur_natif(demande):
         return dict(r, erreur='lecteur.exe absent : lancer AtelierNatif/compiler.bat')
     with _verrou_natif:                          # (14/11/2026) deux lancements simultanés (Espace pendant le chargement) :
         return _lancer_natif(demande, exe, d, s, r, n, t0)   # l'un après l'autre, jamais deux lecteurs
+
+
+def fichier_son(nom, perso=None):
+    """(27/11) fichier d'un son de cinématique (jeu, cinématique de mod, son ajouté par un mod) ou None — comme /api/son"""
+    nom = os.path.basename(str(nom or '')); perso = os.path.basename(str(perso)) if perso else None
+    f = son.en_ogg(CFG['data_dir'], nom, CACHE, perso)
+    if not f:
+        from moteur import racines
+        for _sig, R in list(racines._memo.values()):
+            f = son.en_ogg(R, nom, CACHE, perso)
+            if f:
+                break
+    if not f:
+        from moteur import vrfw_anim
+        f = vrfw_anim.son_mod(CFG, nom)
+    return f
+
+
+# (27/11, retour de muku : « le partage ne copie pas les bannières… regarde s'il copie les stats, l'élément et tout autre
+# chose ») RÉGLAGES d'une création qui ne sont pas dans son projet (registre de la création) : mis dans le fichier .atelier,
+# puis remis chez l'autre juste après son « Créer » (appliquer_reglages). Seulement ce qui a un sens chez un autre : pas les
+# codes / ids (les siens sont neufs), pas les techniques de SES mods (un joueur ne garde que les techniques du jeu).
+REGLAGES_CLES = {'technique': ('stats', 'cosmetique'), 'esprit': ('stats', 'invocation', 'effets', 'description', 'prix'),
+                 'armure': ('stats', 'mise', 'effets'), 'personnages': ('stats', 'coups', 'peau', 'peau_main', 'corps', 'description'),
+                 'MesObjets': ('stats', 'rarete', 'max', 'prix', 'synergie', 'description', 'cosmetique_ok'),
+                 'MesTenues': ('prix', 'rarete', 'max', 'chaussures', 'joueurs', 'description', 'cosmetique_ok')}
+
+
+def _png_url(f):
+    import base64
+    return 'data:image/png;base64,' + base64.b64encode(open(f, 'rb').read()).decode() if f and os.path.isfile(f) else None
+
+
+def _cle_perso(mod, code):
+    """joueurs : _creation_stats veut la CLÉ du registre (test_technique), le partage donne le code (c11980001)"""
+    if mod != 'MesPersonnages':
+        return code
+    reg = copies_persos.registre(CFG)
+    return code if code in reg else next((k for k, v in reg.items() if str(v.get('code')) == str(code)), code)
+
+
+def reglages_creation(mod, code):
+    """-> {genre, <réglages>, banniere_png?} d'une de MES créations (pour le partage)"""
+    out = {}
+    code = _cle_perso(mod, code)
+    if mod in ('MesTechniques', 'MesEsprits', 'MesPersonnages'):
+        c = _creation_stats(mod, code)
+        if not c:
+            return out
+        genre, _reg, k, e, _jeu, _s = c
+        if mod == 'MesPersonnages':
+            e = copies_persos.registre(CFG).get(code, e)
+        out['genre'] = genre
+        for x in REGLAGES_CLES.get(genre, ()):
+            if x in e:
+                out[x] = json.loads(json.dumps(e[x]))
+        if 'coups' in out:
+            out['coups'] = [x for x in out['coups'] if isinstance(x, dict) and not x.get('mod')]
+        if genre == 'technique' and not ((e.get('cosmetique') or {}).get('banniere') or {}).get('auto'):
+            # bannière automatique (suit le nom) : refaite chez l'autre avec SON nom ; sinon (éditeur, d'avant) l'image elle-même
+            out['banniere_png'] = _png_url(os.path.join(ICI, 'sortie', 'MesTechniques', 'content', 'telops', 'any', str(e.get('key')) + '.png'))
+        elif genre == 'esprit':
+            try:
+                suivi = json.load(open(os.path.join(ICI, 'sortie', 'MesEsprits', 'outil_bannieres.json'), encoding='utf-8'))
+            except (OSError, ValueError):
+                suivi = {}
+            if suivi.get(k) == 'editeur':          # bannière faite dans l'éditeur (sinon : refaite depuis le nom)
+                out['banniere_png'] = _png_url(os.path.join(ICI, 'sortie', 'MesEsprits', 'content', 'telops', 'any', k + '.png'))
+        elif genre == 'armure' and armures_copies.banniere_armee_faite(CFG, k):
+            out['banniere_png'] = _png_url(os.path.join(ICI, 'sortie', 'MesEsprits', 'content', 'telops', 'any', armures_copies.id_banniere_armee(k) + '.png'))
+    elif mod in ('MesObjets', 'MesTenues'):
+        _reg, _cle, e, _s = _entree_cosmetique(mod, code)
+        for x in REGLAGES_CLES[mod] if e else ():
+            if x in e:
+                out[x] = json.loads(json.dumps(e[x]))
+    return {k: v for k, v in out.items() if v is not None}
+
+
+def appliquer_reglages(mod, code, rg):
+    """réglages d'une création partagée -> ma nouvelle création (mod, code), juste après « Créer »"""
+    if not isinstance(rg, dict) or not rg:
+        return {'ok': True, 'rapport': []}
+    rap = []
+    code = _cle_perso(mod, code)
+    try:
+        if mod in ('MesTechniques', 'MesEsprits', 'MesPersonnages'):
+            c = _creation_stats(mod, code)
+            if not c:
+                return {'ok': False, 'erreur': 'création inconnue'}
+            genre = c[0]
+            if any(x in rg for x in ('stats', 'cosmetique', 'invocation', 'mise', 'effets')):
+                inv = rg.get('invocation') if genre == 'esprit' else rg.get('mise') if genre == 'armure' else None
+                r = regler_stats(mod, code, rg.get('stats') if isinstance(rg.get('stats'), dict) else {}, rg.get('cosmetique'),
+                                 inv if isinstance(inv, dict) else None, rg.get('effets') if isinstance(rg.get('effets'), dict) else None)
+                rap += r.get('rapport') or ([r['erreur']] if r.get('erreur') else [])
+            if genre == 'esprit' and any(x in rg for x in ('description', 'prix')):
+                _g, reg, k, e, _j, _s = _creation_stats(mod, code)
+                for x in ('description', 'prix'):
+                    if x in rg:
+                        e[x] = str(rg[x])
+                json.dump(reg, open(os.path.join(ICI, 'sortie', 'MesEsprits', 'outil_esprits.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+            if mod == 'MesPersonnages':
+                regp = copies_persos.registre(CFG)
+                cle = code if code in regp else None
+                if cle and isinstance(rg.get('coups'), list) and rg['coups']:
+                    r = copies_persos.choisir_coups(CFG, cle, [{'move': x.get('move'), 'level': x.get('level')} for x in rg['coups'] if isinstance(x, dict)],
+                                                    coups.catalogue(CFG['data_dir'], cache_txt()), coups.mes_coups(CFG))
+                    rap += r.get('rapport') or ([r['erreur']] if r.get('erreur') else [])
+                if cle and rg.get('peau'):
+                    copies_persos.regler_peau(CFG, cle, '#' + str(rg['peau']).lstrip('#'))
+                if cle and rg.get('corps'):
+                    regp = copies_persos.registre(CFG)
+                    if any(b['cle'] == int(rg['corps']) for b in copies_persos.morphologies(CFG['data_dir'])):
+                        regp[cle]['corps'] = int(rg['corps']); copies_persos._sauver(CFG, regp); copies_persos._ecrire_contenu(CFG, regp)
+                if cle and 'description' in rg:
+                    regp = copies_persos.registre(CFG); regp[cle]['description'] = str(rg['description'])
+                    copies_persos._sauver(CFG, regp); copies_persos._ecrire_contenu(CFG, regp)
+            png = rg.get('banniere_png')
+            if isinstance(png, str) and png.startswith('data:image/png;base64,'):
+                c = _creation_stats(mod, code)
+                if genre == 'technique':
+                    e = c[3]; t = PAR_CODE.get(e.get('base', ''))
+                    telop = techniques.lire_cinematique(CFG['data_dir'], t['cinematique'])['telop'] if t else e.get('base')
+                    r = export.enregistrer_banniere(CFG, c[2], png, telop or e.get('base'))      # c[2] = clé du registre
+                    rap.append('bannière reprise' if r.get('ok') else 'bannière : ' + str(r.get('erreur')))
+                elif genre == 'esprit':
+                    cible = next((x for x in bannieres_esprits() if x['id'] == c[2] and x['genre'] in ('esprit', 'totem')), None)
+                    if cible:
+                        enregistrer_banniere_esprit({'id': cible['id'], 'genre': cible['genre'], 'image': png}); rap.append('bannière reprise')
+                elif genre == 'armure':
+                    enregistrer_banniere_esprit({'id': armures_copies.id_banniere_armee(c[2]), 'genre': 'armure', 'image': png}); rap.append('bannière reprise')
+        elif mod in ('MesObjets', 'MesTenues'):
+            reg, cle, e, sauver = _entree_cosmetique(mod, code)
+            if e is None:
+                return {'ok': False, 'erreur': 'création inconnue'}
+            for x in REGLAGES_CLES[mod]:
+                if x in rg:
+                    e[x] = rg[x]
+            sauver(); rap.append('réglages repris (prix, rareté…)')
+    except Exception as ex:
+        traceback.print_exc()
+        return {'ok': False, 'erreur': str(ex), 'rapport': rap}
+    return {'ok': True, 'rapport': rap}
+
+
+RENDU = {'en_cours': False}
+
+
+def rendu_video(demande):
+    """(27/11, demande d'enhanc3 : « add a render button… to export a video, instead of doing screen record ») RENDU VIDÉO :
+    le lecteur du jeu (AtelierNatif/lecteur.exe, vrais shaders) dessine TOUTES les images de la technique avec les couleurs de
+    la page (mêmes réglages que le lecteur natif), --planche -> BMP ; ffmpeg en fait un MP4 60 i/s avec les sons calés
+    (sons = [{nom, image, perso}] de la page). -> exports/<nom>.mp4"""
+    import subprocess, tempfile, shutil, glob as _g
+    from moteur import outils_ext, partage
+    if RENDU['en_cours']:
+        return {'ok': False, 'erreur': 'Un rendu est déjà en cours.'}
+    X = _natif()
+    if X is None:
+        return {'ok': False, 'erreur': 'dossier AtelierNatif introuvable'}
+    d = os.path.dirname(X.__file__); exe = os.path.join(d, 'lecteur.exe')
+    if not os.path.exists(exe):
+        return {'ok': False, 'erreur': 'lecteur.exe absent'}
+    code = demande.get('technique')
+    W, H = (1920, 1080) if str(demande.get('qualite')) == '1080' else (1280, 720)
+    RENDU['en_cours'] = True
+    tmp = tempfile.mkdtemp(prefix='rendu_', dir=CACHE)
+    try:
+        APERCU['projet'] = demande.get('projet') or None
+        with _verrou_d3d:
+            s = X.exporter_stade(demande.get('stade') or 's10g001')
+        r = exporter_technique_natif(code)
+        X.ecrire_modifs(r['dossier'], demande.get('modifs'))
+        json.dump({'caches': demande.get('caches') or [], 'couleurs': demande.get('couleurs') or {},
+                   'sommets': demande.get('sommets') or {}, 'particules': demande.get('particules') or {},
+                   'lumieres': demande.get('lumieres') or {}, 'auras': demande.get('auras') or {}, 'fil': []},
+                  open(os.path.join(r['dossier'], 'options.json'), 'w', encoding='utf-8'))
+        n = max(60, min(int(demande.get('images') or 1800), 3600))       # images demandées (60 i/s) : toute la technique
+        subprocess.run([exe, s['dossier'], r['dossier'], str(W), str(H), '--planche', tmp] + [str(k) for k in range(n)],
+                       cwd=d, timeout=3600, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        nb = len(_g.glob(os.path.join(tmp, 'planche_*.bmp')))
+        if not nb:
+            return {'ok': False, 'erreur': 'Le lecteur du jeu n’a rendu aucune image.'}
+        ff = outils_ext.ffmpeg()
+        cmd = [ff, '-v', 'error', '-y', '-framerate', '60', '-i', os.path.join(tmp, 'planche_%d.bmp')]
+        sons = []
+        for x in demande.get('sons') or []:
+            try:
+                f = fichier_son(x.get('nom'), x.get('perso'))
+            except Exception:
+                f = None
+            if f:
+                sons.append((f, max(0, int(round(float(x.get('image') or 0) / 60 * 1000)))))
+        for f, _ms in sons:
+            cmd += ['-i', f]
+        if sons:
+            filt = ''.join('[%d:a]adelay=%d:all=1[a%d];' % (i + 1, ms, i) for i, (_f, ms) in enumerate(sons))
+            filt += ''.join('[a%d]' % i for i in range(len(sons))) + 'amix=inputs=%d:normalize=0:duration=longest[a]' % len(sons)
+            cmd += ['-filter_complex', filt, '-map', '0:v', '-map', '[a]', '-c:a', 'aac', '-b:a', '192k']
+        nom = partage.nom_fichier(demande.get('nom') or code)[:-len('.atelier')] + '.mp4'
+        os.makedirs(EXPORTS, exist_ok=True)
+        out = os.path.join(EXPORTS, nom)
+        cmd += ['-t', '%.3f' % (nb / 60), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-preset', 'medium', '-movflags', '+faststart', out]
+        p = subprocess.run(cmd, capture_output=True, timeout=3600, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        if p.returncode or not os.path.isfile(out):
+            return {'ok': False, 'erreur': 'ffmpeg : ' + (p.stderr or b'').decode('utf-8', 'replace')[-300:]}
+        if os.name == 'nt' and demande.get('ouvrir', True):
+            try:
+                subprocess.Popen(['explorer', '/select,', out])
+            except Exception:
+                pass
+        return {'ok': True, 'chemin': out, 'images': nb, 'secondes': round(nb / 60, 1), 'sons': len(sons), 'taille': os.path.getsize(out)}
+    finally:
+        RENDU['en_cours'] = False
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def arreter_natifs(pid=None):
@@ -3129,6 +3423,27 @@ class Gestion(BaseHTTPRequestHandler):
             if u.path == '/api/coups':                   # (15/11/2026) choisir les techniques d'une copie de personnage
                 return self._envoyer(200, copies_persos.choisir_coups(CFG, demande.get('cle'), demande.get('coups'),
                                                                       coups.catalogue(CFG['data_dir'], cache_txt()), coups.mes_coups(CFG)))
+            if u.path == '/api/appliquer_reglages':      # (27/11) création partagée : ses réglages remis après « Créer »
+                return self._envoyer(200, appliquer_reglages(str(demande.get('mod') or ''), str(demande.get('code') or ''), demande.get('reglages')))
+            if u.path == '/api/rendu_video':             # (27/11, enhanc3) « Rendu vidéo » : MP4 de la technique, lecteur du jeu
+                return self._envoyer(200, rendu_video(demande))
+            if u.path == '/api/partager_creation':       # (27/11, muku) clic droit -> « Partager » : fichier .atelier (moteur/partage.py)
+                from moteur import partage
+                rg = reglages_creation(demande.get('mod'), str(demande.get('code') or '')) if demande.get('mod') else {}
+                r = partage.exporter(PROJETS, EXPORTS, demande.get('mod'), demande.get('code'), demande.get('projet'),
+                                     demande.get('nom'), demande.get('champ'), version_atelier(), maillots=mes_maillots, reglages=rg)
+                if r.get('ok') and os.name == 'nt' and demande.get('ouvrir', True):     # (essais : ouvrir = false)
+                    try:
+                        subprocess.Popen(['explorer', '/select,', r['chemin']])
+                    except Exception:
+                        pass
+                return self._envoyer(200, r)
+            if u.path == '/api/importer_creation':       # (27/11, muku) « Importer une création » : -> projet « À continuer » (ou maillot)
+                from moteur import partage
+                # techniques : PAR_CODE (jeu) ou un mod (entree_mod) ; esprits / totems : PERSO_CODE ; le reste : JEU_CODE
+                existe = lambda o, c: (c in PAR_CODE or entree_mod(c) is not None) if o == 'techniques'                     else (c in PERSO_CODE) if o in ('esprits', 'totems') else JEU_CODE.get((o, c)) is not None
+                return self._envoyer(200, partage.importer(PROJETS, str(demande.get('contenu') or ''), existe, maillots=mes_maillots, cfg=CFG,
+                                                              noms_pris=demande.get('noms') or []))
             if u.path == '/api/ouvrir_discord':          # (27/11, muku) bouton « Rejoins mon serveur » : adresse FIXE, navigateur par défaut
                 return self._envoyer(200, {'ok': bool(webbrowser.open('https://discord.gg/D9DvjdnFVE'))})
             if u.path == '/api/peau_copie':              # (26/11) peau des bras / jambes d'une copie de personnage déjà créée
